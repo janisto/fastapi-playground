@@ -1,0 +1,55 @@
+[project]
+name = "fastapi-playground"
+version = "0.1.0"
+description = "FastAPI playground for just, uv, ty and Ruff"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.116.1",
+    "firebase-admin>=7.0.0",
+    "google-cloud-firestore>=2.21.0",
+    "google-cloud-logging>=3.12.1",
+    "google-cloud-secret-manager>=2.22.1",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.8.2",
+    "uvicorn[standard]>=0.35.0",
+    "python-jose[cryptography]>=3.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.2.1",
+    "ruff>=0.12.5",
+    "ty>=0.0.1a16",
+]
+
+[tool.ruff]
+# Allow lines to be as long as 120.
+line-length = 120
+
+[tool.ruff.lint]
+# Add type annotation and FastAPI rules
+extend-select = ["ANN", "FAST"]
+
+[tool.ty.environment]
+# Multiple directories (priority order)
+root = ["./app", "./tests"]
+
+[tool.ty.rules]
+unresolved-attribute = "ignore"
+unresolved-import = "ignore"
+
+[tool.pytest.ini_options]
+# addopts = "--maxfail=1 --cov=app"
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["app", "tests"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+omit = ["app/**/asgi.py"]

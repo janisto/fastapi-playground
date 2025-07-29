@@ -1,0 +1,13 @@
+{
+  "python.languageServer": "None",
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll": "explicit"
+    }
+  },
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  "github.copilot.chat.agent.thinkingTool": true,
+}
