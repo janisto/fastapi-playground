@@ -2,13 +2,17 @@
 FastAPI application with Firebase Authentication and Firestore integration.
 """
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.body_limit import BodySizeLimitMiddleware
+from app.core.config import get_settings
 from app.core.firebase import initialize_firebase
 from app.core.logging import RequestContextLogMiddleware, setup_logging
+from app.core.security import SecurityHeadersMiddleware
 from app.routers import profile
 
 
@@ -37,6 +41,34 @@ app.include_router(profile.router, prefix="/profile", tags=["profile"])
 
 # Add logging middleware to capture trace context
 app.add_middleware(RequestContextLogMiddleware)
+app.add_middleware(BodySizeLimitMiddleware)
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    hsts=True,
+    hsts_include_subdomains=True,
+    hsts_preload=False,
+    x_frame_options="DENY",
+    referrer_policy="same-origin",
+)
+
+# CORS with strict allowlist
+settings = get_settings()
+allowed_origins = []  # override via env if needed
+try:
+    # Expect comma-separated origins in CORS_ORIGINS env
+    raw = getattr(settings, "cors_origins", None)  # may not exist yet
+    if isinstance(raw, str) and raw.strip():
+        allowed_origins = [o.strip() for o in raw.split(",") if o.strip()]
+except Exception:
+    allowed_origins = []
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
 @app.get("/", tags=["root"])

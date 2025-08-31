@@ -1,13 +1,13 @@
 """End-to-end tests for the FastAPI application."""
 
 from collections.abc import Generator
+from datetime import UTC
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from datetime import UTC
 
 
 @pytest.fixture
@@ -263,3 +263,11 @@ class TestValidation:
         response = client.post("/profile/", json=invalid_data, headers={"Authorization": "Bearer test-token"})
 
         assert response.status_code == 422  # Validation error
+
+    def test_oversized_request_body_is_rejected(self, client: TestClient) -> None:
+        """Requests exceeding MAX_REQUEST_SIZE_BYTES should get 413."""
+        # Create ~2MB payload
+        big = "x" * (2_000_000)
+        res = client.post("/", content=big, headers={"Content-Type": "application/octet-stream"})
+        assert res.status_code == 413
+        assert res.json()["detail"].lower().startswith("request body too large")

@@ -75,27 +75,27 @@ async def verify_firebase_token(
         logger.warning("Expired Firebase ID token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expired",
+            detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except RevokedIdTokenError:
         logger.warning("Revoked Firebase ID token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token revoked",
+            detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except InvalidIdTokenError:
         logger.warning("Invalid Firebase ID token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as e:
         logger.error(f"Error verifying Firebase token: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication failed",
+            detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
         )

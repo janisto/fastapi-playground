@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Database
     firestore_collection_profiles: str = Field(default="profiles", alias="FIRESTORE_COLLECTION_PROFILES")
 
+    # Security / Limits
+    max_request_size_bytes: int = Field(default=1_000_000, alias="MAX_REQUEST_SIZE_BYTES")
+    cors_origins: str | None = Field(default=None, alias="CORS_ORIGINS")
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

@@ -8,3 +8,4 @@ Perform a REST API security review:
 * Validate all user inputs and sanitize data
 * Implement logging and monitoring for security events
 * Ensure proper error handling to avoid information leakage
+* Do not make changes to the code. Just review it for security issues.
