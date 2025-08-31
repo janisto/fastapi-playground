@@ -27,6 +27,7 @@ RUN uv sync --frozen --no-cache
 FROM ${PYTHON_IMAGE} AS runtime
 
 # OCI provenance label for base image (useful for tooling/visibility)
+ARG PYTHON_IMAGE
 LABEL org.opencontainers.image.base.name="${PYTHON_IMAGE}"
 
 # Copy built app and .venv from builder
