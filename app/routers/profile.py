@@ -4,14 +4,26 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 
-from app.auth.firebase import FirebaseUser, verify_firebase_token
+from app.auth.firebase import FirebaseUser, security, verify_firebase_token
 from app.models.profile import ProfileCreate, ProfileResponse, ProfileUpdate
 from app.services.profile import profile_service
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _current_user_dependency(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> FirebaseUser:
+    """Resolve the current user via Firebase.
+
+    This indirection lets tests patch ``verify_firebase_token`` in this module
+    and have the change take effect at runtime.
+    """
+    return await verify_firebase_token(credentials)
 
 
 @router.post(
@@ -22,7 +34,7 @@ router = APIRouter()
 )
 async def create_profile(
     profile_data: ProfileCreate,
-    current_user: Annotated[FirebaseUser, Depends(verify_firebase_token)],
+    current_user: Annotated[FirebaseUser, Depends(_current_user_dependency)],
 ) -> ProfileResponse:
     """
     Create a new profile for the authenticated user.
@@ -51,6 +63,9 @@ async def create_profile(
     except ValueError as e:
         logger.warning(f"Profile creation failed for user {current_user.uid}: {e}")
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except HTTPException:
+        # Preserve explicit HTTP error responses (e.g., 409 when already exists)
+        raise
     except Exception as e:
         logger.error(f"Error creating profile for user {current_user.uid}: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create profile")
@@ -62,7 +77,7 @@ async def create_profile(
     description="Get the profile of the authenticated user",
 )
 async def get_profile(
-    current_user: Annotated[FirebaseUser, Depends(verify_firebase_token)],
+    current_user: Annotated[FirebaseUser, Depends(_current_user_dependency)],
 ) -> ProfileResponse:
     """
     Get the profile of the authenticated user.
@@ -98,7 +113,7 @@ async def get_profile(
 )
 async def update_profile(
     profile_data: ProfileUpdate,
-    current_user: Annotated[FirebaseUser, Depends(verify_firebase_token)],
+    current_user: Annotated[FirebaseUser, Depends(_current_user_dependency)],
 ) -> ProfileResponse:
     """
     Update the profile of the authenticated user.
@@ -134,7 +149,7 @@ async def update_profile(
     description="Delete the profile of the authenticated user",
 )
 async def delete_profile(
-    current_user: Annotated[FirebaseUser, Depends(verify_firebase_token)],
+    current_user: Annotated[FirebaseUser, Depends(_current_user_dependency)],
 ) -> ProfileResponse:
     """
     Delete the profile of the authenticated user.

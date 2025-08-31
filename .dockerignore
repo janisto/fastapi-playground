@@ -1,0 +1,25 @@
+# Exclude local/dev artifacts from Docker build context
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+
+# Firebase
+firebase-debug.log*
+firebase-debug.*.log
+firestore-debug.log*
+firestore-debug.*.log*
+.firebase/
+
+# VCS and editor files
+.git/
+.gitignore
+.github/
+.vscode/
+
+# Coverage and reports
+.coverage*
+
+# OS cruft
+.DS_Store

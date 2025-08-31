@@ -1,0 +1,42 @@
+name: Check linting, typing, run app unit tests and upload coverage report
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up just
+        uses: extractions/setup-just@v3
+
+      - name: Install dependencies
+        run: just install
+
+      - name: Run checks
+        run: just check-all
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+            name: coverage-report
+            path: htmlcov
