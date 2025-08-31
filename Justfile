@@ -32,6 +32,12 @@ lint:
     uvx ruff check
     uvx ruff format
 
+# Modernize code (PEP 585/604, etc.) via Ruff's pyupgrade
+[group('qa')]
+modernize:
+    uvx ruff check --fix --select UP
+    uvx ruff format
+
 # Check types
 [group('qa')]
 typing:

@@ -2,8 +2,8 @@
 
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Generator
+from datetime import datetime, UTC
+from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,7 +13,7 @@ from app.main import app as base_app
 
 
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
+def client() -> Generator[TestClient]:
     # Ensure logging is configured for tests
     setup_logging()
     # Use app with middleware already added in main.py
@@ -37,7 +37,7 @@ class TestJSONFormatter:
             exc_info=None,
         )
         # Freeze created timestamp
-        fixed = datetime(2025, 1, 1, 0, 0, 0, tzinfo=timezone.utc).timestamp()
+        fixed = datetime(2025, 1, 1, 0, 0, 0, tzinfo=UTC).timestamp()
         record.created = fixed
         out = formatter.format(record)
         data = json.loads(out)

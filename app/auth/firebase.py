@@ -1,7 +1,6 @@
 """Firebase Authentication utilities."""
 
 import logging
-from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -19,7 +18,7 @@ security = HTTPBearer()
 class FirebaseUser:
     """Represents an authenticated Firebase user."""
 
-    def __init__(self, uid: str, email: Optional[str] = None, email_verified: bool = False) -> None:
+    def __init__(self, uid: str, email: str | None = None, email_verified: bool = False) -> None:
         self.uid = uid
         self.email = email
         self.email_verified = email_verified

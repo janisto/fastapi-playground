@@ -1,6 +1,6 @@
 """Unit tests for profile models."""
 
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 
 import pytest
 from pydantic import ValidationError
@@ -110,7 +110,7 @@ class TestProfileModels:
 
     def test_profile_complete_model(self) -> None:
         """Test complete Profile model."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         data = {
             "id": "user-123",
@@ -133,7 +133,7 @@ class TestProfileModels:
 
     def test_profile_response_model(self) -> None:
         """Test ProfileResponse model."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         profile_data = {
             "id": "user-123",

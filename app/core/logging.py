@@ -11,8 +11,8 @@ import json
 import logging
 import sys
 from contextvars import ContextVar
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import datetime, UTC
+from typing import Any
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -54,8 +54,8 @@ class CloudRunJSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:  # noqa: D401
         # Build base payload
-        iso_ts = datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec="microseconds")
-        payload: Dict[str, Any] = {
+        iso_ts = datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="microseconds")
+        payload: dict[str, Any] = {
             "severity": _severity_for_level(record.levelno),
             "message": record.getMessage(),
             # Use record.created for perf; convert to RFC3339 with microseconds

@@ -3,7 +3,7 @@ FastAPI application with Firebase Authentication and Firestore integration.
 """
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
 
@@ -13,7 +13,7 @@ from app.routers import profile
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Application lifespan manager."""
     # Initialize services
     setup_logging()
