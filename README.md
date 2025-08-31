@@ -157,21 +157,6 @@ just docker-logs [name=fastapi-playground]
 
 | Command                                                      | Purpose                                                                 |
 | ------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `just serve`                                                 | Run development server (http://127.0.0.1:${PORT:-8080}).                |
-| `just req <path> [args...]`                                  | Send HTTP request to the dev server via httpie.                         |
-| `just browser`                                               | Open the development server in a browser.                               |
-| `just test [pytest-args...]`                                 | Run tests with pytest.                                                  |
-| `just cov`                                                   | Run tests with coverage and generate HTML report (htmlcov/).            |
-| `just lint`                                                  | Run Ruff linter and formatter.                                          |
-| `just typing`                                                | Type checking via ty.                                                   |
-| `just check-all`                                             | Run lint, typing, and coverage.                                         |
-| `just install`                                               | Install dependencies (uv sync).                                         |
-| `just update`                                                | Upgrade dependencies (uv sync --upgrade).                               |
-| `just clean`                                                 | Remove caches, .venv, and coverage artifacts.                           |
-| `just fresh`                                                 | Clean and reinstall (clean + install).                                  |
-| `just docker-build [image=...] [pyimg=python:3.13-slim]`     | Build Docker image; optionally override base image with `pyimg`.        |
-| `just docker-run [image=...] [env_file=.env] [name=...]`     | Run the container locally (named), mapping `${PORT:-8080}` to 8080.     |
-| `just docker-logs [name=...]`                                | Follow logs (`docker logs -f`) for the named container.                  |
 | `uv sync`                                                    | Install project dependencies without just.                              |
 | `uv run -m pytest`                                           | Run tests without just.                                                 |
 | `uvx ruff check`                                             | Run Ruff linter directly.                                               |
@@ -204,7 +189,7 @@ just test
 just cov
 
 # Run specific test file
-uv run -m pytest tests/test_models.py -v
+just test tests/test_models.py
 ```
 
 ### Code Quality
@@ -305,13 +290,13 @@ The project includes comprehensive testing:
 Run specific test categories:
 ```bash
 # Model tests
-uv run -m pytest tests/test_models.py
+just test tests/test_models.py
 
 # Authentication tests
-uv run -m pytest tests/test_auth.py
+just test tests/test_auth.py
 
 # End-to-end tests
-uv run -m pytest tests/test_e2e.py
+just test tests/test_e2e.py
 ```
 
 ## Container usage (local)
