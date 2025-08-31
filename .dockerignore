@@ -22,7 +22,6 @@ site/
 *.pyo
 *.pyd
 *.pkl
-__pycache__/
 
 # Firebase
 firebase-debug.log*
@@ -36,6 +35,3 @@ firestore-debug.*.log*
 .gitignore
 .github/
 .vscode/
-
-# OS cruft
-.DS_Store
