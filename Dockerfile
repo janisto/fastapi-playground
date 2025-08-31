@@ -8,8 +8,9 @@
 #     --base-image BASE_IMAGE \
 #     --automatic-updates
 #   This links your app image to a managed base so Google can patch it without a new revision.
-
-ARG PYTHON_IMAGE=python:3.13-slim
+#
+# Tip: for smaller images, consider python:3.13-alpine, python:3.13-slim, python:3.13-slim-bookworm or python:3.13-slim-bullseye
+ARG PYTHON_IMAGE=python:3.13-slim-bullseye
 FROM ${PYTHON_IMAGE} AS builder
 
 # Update system packages to address vulnerabilities.
@@ -18,10 +19,17 @@ FROM ${PYTHON_IMAGE} AS builder
 # Install uv.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy the application into the image and install dependencies (locked)
+# Install dependencies into a project venv using only lockfile
 WORKDIR /app
-COPY . /app
-RUN uv sync --frozen --no-cache
+COPY uv.lock pyproject.toml ./
+RUN uv sync --frozen --no-dev --no-cache
+
+# Copy only application source (avoid tests, docs, etc.)
+COPY app ./app
+
+# Prune caches/bytecode to slim the venv
+RUN find .venv -type d -name '__pycache__' -prune -exec rm -rf {} + \
+	&& find .venv -type f -name '*.pyc' -delete
 
 # Final runtime stage (same base by default; can be swapped via --build-arg)
 FROM ${PYTHON_IMAGE} AS runtime
@@ -30,9 +38,16 @@ FROM ${PYTHON_IMAGE} AS runtime
 ARG PYTHON_IMAGE
 LABEL org.opencontainers.image.base.name="${PYTHON_IMAGE}"
 
-# Copy built app and .venv from builder
-COPY --from=builder /app /app
+# Ensure we use the project virtualenv at runtime
+ENV VIRTUAL_ENV=/app/.venv \
+	PATH=/app/.venv/bin:$PATH \
+	PYTHONDONTWRITEBYTECODE=1 \
+	PYTHONUNBUFFERED=1
+
+# Copy only what is needed to run
 WORKDIR /app
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/app /app/app
 
 # Cloud Run expects the server to listen on $PORT (default 8080)
 ENV PORT=8080
