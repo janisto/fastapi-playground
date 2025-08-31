@@ -6,6 +6,13 @@ __pycache__/
 # C extensions
 *.so
 
+# Firebase
+firebase-debug.log*
+firebase-debug.*.log
+firestore-debug.log*
+firestore-debug.*.log*
+.firebase/
+
 # Distribution / packaging
 .Python
 build/
@@ -66,6 +73,7 @@ __pypackages__/
 env/
 venv/
 ENV/
+!.env.example
 
 # Cython debug symbols
 cython_debug/

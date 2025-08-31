@@ -39,8 +39,7 @@ typing:
 
 # Perform all checks
 [group('qa')]
-check-all: lint cov typing
-
+check-all: lint typing cov
 
 # Run development server
 [group('run')]
@@ -59,6 +58,24 @@ _http *args:
 [group('run')]
 browser:
     uv run -m webbrowser -t http://127.0.0.1:{{ PORT }}
+
+
+# Container tasks
+[group('container')]
+docker-build image="fastapi-playground:local" pyimg="":
+        if [ -n "{{ pyimg }}" ]; then \
+            docker build --build-arg PYTHON_IMAGE={{ pyimg }} -t {{ image }} . ;\
+        else \
+            docker build -t {{ image }} . ;\
+        fi
+
+[group('container')]
+docker-run image="fastapi-playground:local" env_file=".env" name="fastapi-playground":
+    docker run --rm --name {{ name }} -p {{ PORT }}:8080 --env-file {{ env_file }} {{ image }}
+
+[group('container')]
+docker-logs name="fastapi-playground":
+    docker logs -f {{ name }}
 
 
 # Update dependencies
