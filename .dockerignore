@@ -4,6 +4,24 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 htmlcov/
+tests/
+*.log
+.mypy_cache/
+.ty-cache/
+.idea/
+.coverage*
+.DS_Store
+dist/
+build/
+site/
+*.tmp
+*.swp
+*.pem
+*.key
+*.env
+*.pyo
+*.pyd
+*.pkl
 
 # Firebase
 firebase-debug.log*
@@ -17,9 +35,3 @@ firestore-debug.*.log*
 .gitignore
 .github/
 .vscode/
-
-# Coverage and reports
-.coverage*
-
-# OS cruft
-.DS_Store
