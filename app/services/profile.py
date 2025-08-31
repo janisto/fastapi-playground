@@ -1,8 +1,7 @@
 """Profile service for Firestore operations."""
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from google.cloud import firestore
 
@@ -48,7 +47,7 @@ class ProfileService:
                 raise ValueError(f"Profile already exists for user {user_id}")
 
             # Create profile document
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             profile_dict = {
                 "id": user_id,
                 "firstname": profile_data.firstname,
@@ -72,7 +71,7 @@ class ProfileService:
             logger.error(f"Error creating profile for user {user_id}: {e}")
             raise
 
-    async def get_profile(self, user_id: str) -> Optional[Profile]:
+    async def get_profile(self, user_id: str) -> Profile | None:
         """
         Get a profile by user ID.
 
@@ -99,7 +98,7 @@ class ProfileService:
             logger.error(f"Error getting profile for user {user_id}: {e}")
             raise
 
-    async def update_profile(self, user_id: str, profile_data: ProfileUpdate) -> Optional[Profile]:
+    async def update_profile(self, user_id: str, profile_data: ProfileUpdate) -> Profile | None:
         """
         Update an existing profile.
 
@@ -130,7 +129,7 @@ class ProfileService:
                 return Profile(**data) if data else None
 
             # Add updated timestamp
-            update_dict["updated_at"] = datetime.now(timezone.utc)
+            update_dict["updated_at"] = datetime.now(UTC)
 
             # Update document
             doc_ref.update(update_dict)

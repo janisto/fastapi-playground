@@ -1,7 +1,6 @@
 """Configuration settings for the application."""
 
 from functools import lru_cache
-from typing import Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -20,7 +19,7 @@ class Settings(BaseSettings):
 
     # Firebase
     firebase_project_id: str = Field(default="test-project", alias="FIREBASE_PROJECT_ID")
-    firebase_credentials_path: Optional[str] = Field(default=None, alias="GOOGLE_APPLICATION_CREDENTIALS")
+    firebase_credentials_path: str | None = Field(default=None, alias="GOOGLE_APPLICATION_CREDENTIALS")
 
     # Google Cloud
     gcp_project_id: str = Field(default="test-project", alias="GCP_PROJECT_ID")

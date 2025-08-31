@@ -30,8 +30,8 @@ dev = [
 line-length = 120
 
 [tool.ruff.lint]
-# Add type annotation and FastAPI rules
-extend-select = ["ANN", "FAST"]
+# Add type annotation and FastAPI rules, plus pyupgrade to modernize typing
+extend-select = ["ANN", "FAST", "UP"]
 
 [tool.ty.environment]
 # Multiple directories (priority order)

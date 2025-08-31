@@ -7,7 +7,7 @@ A small FastAPI app showcasing Firebase Authentication, Firestore CRUD, typed mo
 - FastAPI (Python 3.13+) with async endpoints and automatic OpenAPI docs
 - Firebase Authentication (verify ID tokens via Admin SDK)
 - Firestore for storing user profile data
-- Google Cloud Logging in production environments
+- Structured JSON logging to stdout (Cloud Run friendly)
 - Pydantic v2 models and pydantic-settings for configuration
 - Tests with pytest + pytest-asyncio; coverage reporting
 - Linting/formatting with Ruff and type checking with ty
@@ -278,6 +278,72 @@ Set these environment variables in your deployment:
 - `FIREBASE_PROJECT_ID=your-project-id`
 - `GCP_PROJECT_ID=your-project-id`
  - `GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json` (or use ADC)
+
+## Logging on Cloud Run
+
+This app emits one-line JSON logs to stdout using a lightweight formatter (`app/core/logging.py`). Cloud Run automatically forwards stdout/stderr to Cloud Logging, avoiding the overhead of using Cloud Logging API handlers inside your app process.
+
+What’s in each log line:
+- severity: Cloud Logging severity derived from Python level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- message: the log message
+- time / timestamp: RFC3339 with microseconds (UTC)
+- logger: logger name
+- logging.googleapis.com/sourceLocation: file, line, function (helps in debugging)
+- Optional: trace and spanId (when available)
+
+Trace correlation (X-Cloud-Trace-Context):
+- When a request includes `X-Cloud-Trace-Context: TRACE_ID/SPAN_ID;o=1`, middleware adds:
+   - `trace = projects/<GCP_PROJECT_ID>/traces/<TRACE_ID>`
+   - `spanId = <SPAN_ID>`
+- This lets you filter logs by request and view them alongside Cloud Trace.
+
+Structured extras:
+- You can attach fields via `extra={...}`: `logger.info("created", extra={"user_id": "123"})`.
+- `None` values are coerced to the string "null" to prevent Cloud Logging from nesting labels under `jsonPayload`.
+
+Notes:
+- Uvicorn logs are routed through the same JSON formatter for consistency.
+- No dependency on the Cloud Logging client; safer memory profile under load.
+
+### Example structured log
+
+Emit a log with extra fields:
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)
+logger.info(
+      "created order",
+      extra={
+            "user_id": "u_123",
+            "order_id": "ord_456",
+            "labels": "checkout",
+      },
+)
+```
+
+Cloud Logging ingests the same line from stdout. It will look like this in the Logs Explorer (jsonPayload view simplified):
+
+```json
+{
+   "severity": "INFO",
+   "message": "created order",
+   "time": "2025-01-01T12:00:00.123456+00:00",
+   "timestamp": "2025-01-01T12:00:00.123456+00:00",
+   "logger": "app.routers.example",
+   "logging.googleapis.com/sourceLocation": {
+      "file": "/workspace/app/routers/example.py",
+      "line": 42,
+      "function": "create_order"
+   },
+   "trace": "projects/your-gcp-project-id/traces/0123456789abcdef0123456789abcdef",
+   "spanId": "123456",
+   "user_id": "u_123",
+   "order_id": "ord_456",
+   "labels": "checkout"
+}
+```
 
 ## Testing
 

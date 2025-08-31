@@ -1,16 +1,17 @@
 """End-to-end tests for the FastAPI application."""
 
-from typing import Generator
+from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from datetime import UTC
 
 
 @pytest.fixture
-def client() -> Generator[TestClient, None, None]:
+def client() -> Generator[TestClient]:
     """Create a test client."""
     with patch("app.main.initialize_firebase"), patch("app.main.setup_logging"):
         yield TestClient(app)
@@ -70,7 +71,7 @@ class TestProfileEndpoints:
         mock_get.return_value = None  # No existing profile
 
         # Mock created profile
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.models.profile import Profile
 
@@ -82,8 +83,8 @@ class TestProfileEndpoints:
             phone_number="+1234567890",
             marketing=True,
             terms=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         mock_create.return_value = created_profile
 
@@ -116,7 +117,7 @@ class TestProfileEndpoints:
         # Setup mocks
         mock_verify.return_value = mock_firebase_user
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.models.profile import Profile
 
@@ -128,8 +129,8 @@ class TestProfileEndpoints:
             phone_number="+1234567890",
             marketing=False,
             terms=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         mock_get.return_value = existing_profile
 
@@ -160,7 +161,7 @@ class TestProfileEndpoints:
         # Setup mocks
         mock_verify.return_value = mock_firebase_user
 
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.models.profile import Profile
 
@@ -172,8 +173,8 @@ class TestProfileEndpoints:
             phone_number="+1234567890",
             marketing=True,
             terms=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         mock_get.return_value = profile
 

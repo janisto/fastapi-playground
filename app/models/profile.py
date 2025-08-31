@@ -1,7 +1,6 @@
 """Profile data models."""
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -28,14 +27,12 @@ class ProfileCreate(ProfileBase):
 class ProfileUpdate(BaseModel):
     """Model for updating an existing profile."""
 
-    firstname: Optional[str] = Field(None, min_length=1, max_length=100, description="The first name of the user")
-    lastname: Optional[str] = Field(None, min_length=1, max_length=100, description="The last name of the user")
-    email: Optional[EmailStr] = Field(None, description="The email address of the user")
-    phone_number: Optional[str] = Field(None, min_length=1, max_length=20, description="The phone number of the user")
-    marketing: Optional[bool] = Field(
-        None, description="Indicates if the user has opted in for marketing communications"
-    )
-    terms: Optional[bool] = Field(None, description="Indicates if the user has accepted the terms and conditions")
+    firstname: str | None = Field(None, min_length=1, max_length=100, description="The first name of the user")
+    lastname: str | None = Field(None, min_length=1, max_length=100, description="The last name of the user")
+    email: EmailStr | None = Field(None, description="The email address of the user")
+    phone_number: str | None = Field(None, min_length=1, max_length=20, description="The phone number of the user")
+    marketing: bool | None = Field(None, description="Indicates if the user has opted in for marketing communications")
+    terms: bool | None = Field(None, description="Indicates if the user has accepted the terms and conditions")
 
 
 class Profile(ProfileBase):
@@ -55,4 +52,4 @@ class ProfileResponse(BaseModel):
 
     success: bool = Field(..., description="Indicates if the operation was successful")
     message: str = Field(..., description="A message describing the result")
-    profile: Optional[Profile] = Field(None, description="The profile data if available")
+    profile: Profile | None = Field(None, description="The profile data if available")

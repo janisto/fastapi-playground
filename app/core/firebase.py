@@ -1,7 +1,6 @@
 """Firebase initialization and configuration."""
 
 import logging
-from typing import Optional
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -12,8 +11,8 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 # Global Firebase app instance
-_firebase_app: Optional[firebase_admin.App] = None
-_firestore_client: Optional[firestore_client.Client] = None
+_firebase_app: firebase_admin.App | None = None
+_firestore_client: firestore_client.Client | None = None
 
 
 def initialize_firebase() -> None:
