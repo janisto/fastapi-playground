@@ -104,7 +104,7 @@ class TestVerifyFirebaseToken:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
-        assert exc_info.value.detail == "Invalid token"
+        assert exc_info.value.detail == "Unauthorized"
 
     @patch("app.auth.firebase.auth.verify_id_token")
     @patch("app.auth.firebase.get_firebase_app")
@@ -127,7 +127,7 @@ class TestVerifyFirebaseToken:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
-        assert exc_info.value.detail == "Token expired"
+        assert exc_info.value.detail == "Unauthorized"
 
     @patch("app.auth.firebase.auth.verify_id_token")
     @patch("app.auth.firebase.get_firebase_app")
@@ -150,7 +150,7 @@ class TestVerifyFirebaseToken:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
-        assert exc_info.value.detail == "Token revoked"
+        assert exc_info.value.detail == "Unauthorized"
 
     @patch("app.auth.firebase.auth.verify_id_token")
     @patch("app.auth.firebase.get_firebase_app")
@@ -171,4 +171,4 @@ class TestVerifyFirebaseToken:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
-        assert exc_info.value.detail == "Authentication failed"
+        assert exc_info.value.detail == "Unauthorized"

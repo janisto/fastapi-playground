@@ -11,6 +11,8 @@ A small FastAPI app showcasing Firebase Authentication, Firestore CRUD, typed mo
 - Pydantic v2 models and pydantic-settings for configuration
 - Tests with pytest + pytest-asyncio; coverage reporting
 - Linting/formatting with Ruff and type checking with ty
+- Strict security headers middleware and configurable CORS allowlist (deny-by-default)
+- Request body size limit middleware (413 on exceeding MAX_REQUEST_SIZE_BYTES)
 
 ## Project Structure
 
@@ -26,7 +28,9 @@ A small FastAPI app showcasing Firebase Authentication, Firestore CRUD, typed mo
 │   │   ├── __init__.py
 │   │   ├── config.py           # Application configuration
 │   │   ├── firebase.py         # Firebase initialization
-│   │   └── logging.py          # Logging configuration
+│   │   ├── logging.py          # Logging configuration
+│   │   ├── security.py         # Security headers middleware
+│   │   └── body_limit.py       # Request size limit middleware
 │   ├── models/
 │   │   ├── __init__.py
 │   │   └── profile.py          # Profile data models
@@ -98,7 +102,7 @@ All profile endpoints require Firebase JWT via `Authorization: Bearer <token>`.
 
 2. **Install dependencies**
    ```bash
-   uv sync
+   just install
    ```
 
 3. **Create a .env file** (loaded automatically by pydantic-settings)
@@ -112,6 +116,8 @@ All profile endpoints require Firebase JWT via `Authorization: Bearer <token>`.
    - GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json (optional; uses ADC if unset)
    - SECRET_MANAGER_ENABLED=true|false (optional)
    - FIRESTORE_COLLECTION_PROFILES=profiles (optional)
+   - MAX_REQUEST_SIZE_BYTES=1000000 (optional; default 1,000,000 bytes)
+   - CORS_ORIGINS=https://example.com,https://app.example.com (optional; empty by default denies all origins)
 
 4. **Configure Firebase**
    - Create a Firebase project at https://console.firebase.google.com/
@@ -138,6 +144,7 @@ just req <path> [args...]     # Send HTTP request via httpie (e.g. `just req hea
 just test [pytest-args...]    # Run tests
 just cov                      # Tests with coverage (HTML -> htmlcov/)
 just lint                     # Ruff check + format
+just modernize                # Apply safe modernization via Ruff's pyupgrade rules
 just typing                   # Type checking via ty
 just check-all                # Lint + typing + coverage
 
@@ -178,6 +185,16 @@ The application will be available at:
 - API: http://localhost:8080
 - Documentation: http://localhost:8080/api-docs
 - Health Check: http://localhost:8080/health
+
+### CORS and security headers
+
+- CORS is deny-by-default. To allow specific origins, set `CORS_ORIGINS` to a comma-separated list (no spaces required; spaces are trimmed).
+- Common security headers are added for every response (X-Content-Type-Options, X-Frame-Options, Referrer-Policy). HSTS is added automatically on HTTPS when `DEBUG=false`.
+
+### Request size limits
+
+- Requests exceeding `MAX_REQUEST_SIZE_BYTES` are rejected early with HTTP 413 without buffering the full body.
+- Adjust the limit via the env var if you accept large JSON uploads.
 
 ### Running Tests
 
@@ -365,6 +382,10 @@ just test tests/test_auth.py
 just test tests/test_e2e.py
 ```
 
+Notes:
+- Tests and E2E flows mock Firebase Admin and Firestore; no real network calls are made during `pytest`.
+- Use `just cov` to generate an HTML report in `htmlcov/`.
+
 ## Container usage (local)
 
 ```bash
@@ -397,6 +418,18 @@ just docker-run image=gcr.io/PROJECT/fastapi-playground:local env_file=.env
    - Installs dependencies with uv
    - Runs `just check-all` (lint, typing, tests with coverage)
    - Uploads HTML coverage as an artifact
+
+## Conventions for contributors
+
+- Use FastAPI style: async endpoints, thin routers, business logic in `services/`, shared utilities in `core/`.
+- Type hints everywhere; avoid `Any`. Keep lines ≤120 chars (Ruff). Prefer explicit imports grouped stdlib / third-party / local.
+- Config via `pydantic-settings` only; never read env directly in business logic. Don’t log secrets/PII.
+- Prefer `uv` and `just` for all local tasks. Avoid mixing `pip/poetry` in this repo.
+
+## External integrations
+
+- Firebase Admin SDK for token verification and Firestore client.
+- Google Cloud (optional) for Cloud Run and Cloud Logging ingestion via stdout.
 
 ## Development Guidelines
 

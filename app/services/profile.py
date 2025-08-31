@@ -3,8 +3,6 @@
 import logging
 from datetime import UTC, datetime
 
-from google.cloud import firestore
-
 from app.core.config import get_settings
 from app.core.firebase import get_firestore_client
 from app.models.profile import Profile, ProfileCreate, ProfileUpdate
@@ -19,7 +17,7 @@ class ProfileService:
         self.settings = get_settings()
         self.collection_name = self.settings.firestore_collection_profiles
 
-    def _get_collection(self) -> firestore.CollectionReference:
+    def _get_collection(self) -> object:
         """Get the profiles collection reference."""
         db = get_firestore_client()
         return db.collection(self.collection_name)
