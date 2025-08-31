@@ -3,8 +3,7 @@
 import logging
 
 import firebase_admin
-from firebase_admin import credentials, firestore
-from google.cloud import firestore as firestore_client
+from firebase_admin import credentials
 
 from app.core.config import get_settings
 
@@ -12,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Global Firebase app instance
 _firebase_app: firebase_admin.App | None = None
-_firestore_client: firestore_client.Client | None = None
+_firestore_client: object | None = None
 
 
 def initialize_firebase() -> None:
@@ -34,20 +33,25 @@ def initialize_firebase() -> None:
             # Use default credentials (for Cloud Run)
             _firebase_app = firebase_admin.initialize_app()
 
-        # Initialize Firestore client
-        _firestore_client = firestore.client()
+        # Initialize Firestore client (required)
+        # Import inside function to avoid import-time failure on module import in environments where
+        # Firestore is not needed during testing; failures will surface when initialization runs.
+        from firebase_admin import firestore as _fb_firestore
 
-        logger.info("Firebase initialized successfully")
+        _firestore_client = _fb_firestore.client()
+        logger.info("Firebase initialized successfully (with Firestore)")
 
     except Exception as e:
         logger.error(f"Failed to initialize Firebase: {e}")
         raise
 
 
-def get_firestore_client() -> firestore_client.Client:
+def get_firestore_client() -> object:
     """Get the Firestore client instance."""
     if _firestore_client is None:
-        raise RuntimeError("Firebase not initialized. Call initialize_firebase() first.")
+        raise RuntimeError(
+            "Firestore client is not available. Ensure Firebase is initialized and google-cloud-firestore is installed."
+        )
     return _firestore_client
 
 
