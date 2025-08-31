@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI
 
 from app.core.firebase import initialize_firebase
-from app.core.logging import setup_logging
+from app.core.logging import RequestContextLogMiddleware, setup_logging
 from app.routers import profile
 
 
@@ -34,6 +34,9 @@ app = FastAPI(
 
 # Include routers
 app.include_router(profile.router, prefix="/profile", tags=["profile"])
+
+# Add logging middleware to capture trace context
+app.add_middleware(RequestContextLogMiddleware)
 
 
 @app.get("/", tags=["root"])
