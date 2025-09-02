@@ -19,36 +19,49 @@ A small FastAPI app showcasing Firebase Authentication, Firestore CRUD, typed mo
 ```
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                 # FastAPI application entry point
+│   ├── main.py                 # FastAPI application entry point (docs at /api-docs)
 │   ├── dependencies.py         # Application dependencies
 │   ├── auth/
 │   │   ├── __init__.py
-│   │   └── firebase.py         # Firebase authentication
+│   │   └── firebase.py         # Firebase Authentication helpers
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── config.py           # Application configuration
-│   │   ├── firebase.py         # Firebase initialization
-│   │   ├── logging.py          # Logging configuration
+│   │   ├── config.py           # Pydantic settings (env via .env)
+│   │   ├── firebase.py         # Firebase Admin + Firestore initialization
+│   │   ├── logging.py          # JSON logging (Cloud Run friendly)
 │   │   ├── security.py         # Security headers middleware
 │   │   └── body_limit.py       # Request size limit middleware
 │   ├── models/
 │   │   ├── __init__.py
+│   │   ├── error.py            # Canonical error model
+│   │   ├── health.py           # Health response model
 │   │   └── profile.py          # Profile data models
 │   ├── routers/
-│   │   └── profile.py          # Profile API endpoints
+│   │   └── profile.py          # Profile API endpoints (protected)
 │   └── services/
 │       ├── __init__.py
-│       └── profile.py          # Profile business logic
+│       └── profile.py          # Profile business logic (Firestore)
 ├── tests/
-│   ├── test_e2e.py            # End-to-end tests
-│   ├── test_models.py         # Model validation tests
-│   └── test_auth.py           # Authentication tests
+│   ├── conftest.py             # Shared fixtures (patch init, fake users)
+│   ├── e2e/
+│   │   └── test_profile_happy_paths.py
+│   ├── helpers/                # Test helpers (auth, clients, profiles)
+│   ├── integration/
+│   │   ├── test_api.py
+│   │   ├── test_logging_middleware.py
+│   │   ├── test_profile_validation.py
+│   │   └── test_security.py
+│   └── mocks/                  # Firebase/http mocks for tests
 ├── .github/
-│   └── workflows/
-│       └── check-all.yml      # CI: lint, typing, tests, coverage artifact
-├── pyproject.toml             # Project configuration
-├── Justfile                   # Task runner commands
-├── Dockerfile                 # Container build for deployment
+│   ├── workflows/
+│   │   ├── ci.yml              # CI: lint, typing, tests, coverage artifact
+│   │   ├── labeler.yml         # Auto-label PRs
+│   │   └── labeler-manual.yml  # Manually label PRs over history
+│   ├── instructions/           # Repo-specific Copilot instructions
+│   └── prompts/                # Prompts for docs/security reviews
+├── pyproject.toml              # Project configuration
+├── Justfile                    # Task runner commands
+├── Dockerfile                  # Container build for deployment
 └── README.md
 ```
 
@@ -95,11 +108,12 @@ All profile endpoints require Firebase JWT via `Authorization: Bearer <token>`.
 ## Tech stack and pinned versions
 
 Core dependencies (from uv.lock):
-- FastAPI 0.116.1 (Starlette 0.47.3)
-- Pydantic 2.11.7 and pydantic-settings
-- Uvicorn 0.35.0
-- Firebase Admin SDK 7.1.0 (Firestore client)
-- httpx (used by tools/tests)
+- FastAPI 0.116.1 (with fastapi[standard])
+- Pydantic 2.11.7 and pydantic-settings 2.10.1
+- Uvicorn 0.35.0 (standard extras)
+- Firebase Admin SDK 7.1.0 (uses google-cloud-firestore)
+- httpx 0.28.1
+- python-jose[cryptography] 3.5.0+ (present; not used directly in current code)
 
 ## Setup
 
@@ -114,7 +128,7 @@ Core dependencies (from uv.lock):
    just install
    ```
 
-3. **Create a .env file** (loaded automatically by pydantic-settings)
+3. **Create a .env file** (auto-loaded by pydantic-settings)
    Required/optional keys:
    - ENVIRONMENT=development|production
    - DEBUG=true|false
@@ -375,9 +389,9 @@ Cloud Logging ingests the same line from stdout. It will look like this in the L
 
 The project includes comprehensive testing:
 
-- **Unit Tests**: Model validation, authentication logic
-- **Integration Tests**: API endpoint testing with mocked dependencies
-- **End-to-End Tests**: Full API workflow testing
+- **Unit Tests**: Model validation, small units under `tests/unit/`
+- **Integration Tests**: API endpoint tests with TestClient and mocks under `tests/integration/`
+- **End-to-End Tests**: Happy-path flows in `tests/e2e/`
 
 Run specific test categories:
 ```bash
@@ -392,7 +406,7 @@ just test tests/test_e2e.py
 ```
 
 Notes:
-- Tests and E2E flows mock Firebase Admin and Firestore; no real network calls are made during `pytest`.
+- Firebase Admin and Firestore are mocked; no real network calls are made during `pytest`.
 - Use `just cov` to generate an HTML report in `htmlcov/`.
 
 ## Container usage (local)
@@ -423,11 +437,11 @@ just docker-run image=gcr.io/PROJECT/fastapi-playground:local env_file=.env
 
 ## CI / Automation
 
-- GitHub Actions workflow `.github/workflows/check-all.yml` runs on pull requests to `main`:
+- GitHub Actions workflow `.github/workflows/ci.yml` runs on push/PR to `main`:
    - Installs dependencies with uv
-   - Runs `just check-all` (lint, typing, tests with coverage)
+   - Runs `just lint`, `just typing`, and `just cov`
    - Uploads HTML coverage as an artifact
-   - On pull requests, posts a coverage comment and enforces thresholds (single-file ≥85%, total ≥90%).
+   - On pull requests, posts a coverage comment (thresholds are configurable but currently disabled)
 
 ## Conventions for contributors
 
@@ -452,10 +466,10 @@ just docker-run image=gcr.io/PROJECT/fastapi-playground:local env_file=.env
 ## Integration Notes & Gotchas
 
 - Firebase Admin initialization happens in app lifespan (`app/main.py`). For local dev, set `GOOGLE_APPLICATION_CREDENTIALS` or use gcloud ADC.
-- Missing `Authorization` header yields 403 (HTTPBearer); invalid/expired/revoked tokens return 401.
-- Firestore access in `services/profile.py` is synchronous via the Google client; ensure credentials/project are set when running against real GCP.
+- Missing `Authorization` header yields 403 (HTTPBearer). Token verification errors map to 401; however, since the security dependency guards the route, requests without a valid Bearer token get 403 at the framework layer.
+- Firestore access in `services/profile.py` uses the synchronous Google client inside async functions. It’s acceptable for low load, but consider offloading if heavy usage is expected.
 - Default collection name is `profiles` (override with `FIRESTORE_COLLECTION_PROFILES`).
-- Docker base image default is Alpine. Some uvicorn[standard] extras (uvloop, httptools) may compile on Alpine; if builds fail or are slow, pass `pyimg=python:3.13-slim*` to `just docker-build`.
+- Docker base image default is Alpine. Some `uvicorn[standard]` extras (uvloop, httptools) may compile on Alpine; if builds fail or are slow, pass `pyimg=python:3.13-slim*` to `just docker-build`.
 
 ## Error responses
 
@@ -486,7 +500,7 @@ curl -X POST \
 
 ## GitHub Actions: Manually label PRs
 
-This repository includes a manual workflow to apply labels to existing pull requests using `.github/labeler.yml` rules.
+This repository includes a manual workflow to apply labels to existing pull requests using `.github/labeler.yml` rules. There’s also an automatic PR labeler (`.github/workflows/labeler.yml`).
 
 - Workflow name: "Manually Label PRs"
 - File: `.github/workflows/labeler-manual.yml`
