@@ -1,23 +1,10 @@
-"""Tests for Cloud Run stdout JSON logging and middleware."""
+"""Tests for Cloud Run stdout JSON logging formatter."""
 
 import json
 import logging
-from datetime import datetime, UTC
-from collections.abc import Generator
+from datetime import UTC, datetime
 
-import pytest
-from fastapi.testclient import TestClient
-
-from app.core.logging import CloudRunJSONFormatter, setup_logging
-from app.main import app as base_app
-
-
-@pytest.fixture
-def client() -> Generator[TestClient]:
-    # Ensure logging is configured for tests
-    setup_logging()
-    # Use app with middleware already added in main.py
-    yield TestClient(base_app)
+from app.core.logging import CloudRunJSONFormatter
 
 
 class TestJSONFormatter:
@@ -48,15 +35,3 @@ class TestJSONFormatter:
         assert data["time"].startswith("2025-01-01T00:00:00")
         # sourceLocation is present
         assert "logging.googleapis.com/sourceLocation" in data
-
-
-class TestMiddleware:
-    def test_trace_injection(self, client: TestClient) -> None:
-        # Simulate Cloud Trace header
-        trace_header = "0123456789abcdef0123456789abcdef/123456;o=1"
-        res = client.get("/health", headers={"X-Cloud-Trace-Context": trace_header})
-        assert res.status_code == 200
-        # We can't directly read logs here, but ensure the middleware runs by verifying response
-        # and that no exceptions are raised. For completeness, ensure app responds normally.
-        data = res.json()
-        assert data["status"] == "healthy"

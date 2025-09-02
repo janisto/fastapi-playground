@@ -3,10 +3,11 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.auth.firebase import FirebaseUser, security, verify_firebase_token
+from app.models.error import ErrorResponse
 from app.models.profile import ProfileCreate, ProfileResponse, ProfileUpdate
 from app.services.profile import profile_service
 
@@ -16,7 +17,7 @@ router = APIRouter()
 
 
 async def _current_user_dependency(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials = Security(security),
 ) -> FirebaseUser:
     """Resolve the current user via Firebase.
 
@@ -30,7 +31,52 @@ async def _current_user_dependency(
     "/",
     status_code=status.HTTP_201_CREATED,
     summary="Create user profile",
-    description="Create a new profile for the authenticated user",
+    description="Create a new profile for the authenticated user.",
+    operation_id="profile_create",
+    responses={
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized",
+            "content": {"application/json": {"example": {"detail": "Unauthorized"}}},
+        },
+        403: {
+            "model": ErrorResponse,
+            "description": "Forbidden",
+            "content": {"application/json": {"example": {"detail": "Forbidden"}}},
+        },
+        409: {
+            "model": ErrorResponse,
+            "description": "Profile already exists",
+            "content": {"application/json": {"example": {"detail": "Profile already exists for this user"}}},
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Server error",
+            "content": {"application/json": {"example": {"detail": "Failed to create profile"}}},
+        },
+        201: {
+            "description": "Profile created",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Profile created successfully",
+                        "profile": {
+                            "id": "user-123",
+                            "firstname": "John",
+                            "lastname": "Doe",
+                            "email": "john@example.com",
+                            "phone_number": "+1234567890",
+                            "marketing": True,
+                            "terms": True,
+                            "created_at": "2025-01-01T00:00:00Z",
+                            "updated_at": "2025-01-01T00:00:00Z",
+                        },
+                    }
+                }
+            },
+        },
+    },
 )
 async def create_profile(
     profile_data: ProfileCreate,
@@ -74,7 +120,47 @@ async def create_profile(
 @router.get(
     "/",
     summary="Get user profile",
-    description="Get the profile of the authenticated user",
+    description="Get the profile of the authenticated user.",
+    operation_id="profile_get",
+    responses={
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized",
+            "content": {"application/json": {"example": {"detail": "Unauthorized"}}},
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "Profile not found",
+            "content": {"application/json": {"example": {"detail": "Profile not found"}}},
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Server error",
+            "content": {"application/json": {"example": {"detail": "Failed to retrieve profile"}}},
+        },
+        200: {
+            "description": "Profile retrieved",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Profile retrieved successfully",
+                        "profile": {
+                            "id": "user-123",
+                            "firstname": "John",
+                            "lastname": "Doe",
+                            "email": "john@example.com",
+                            "phone_number": "+1234567890",
+                            "marketing": True,
+                            "terms": True,
+                            "created_at": "2025-01-01T00:00:00Z",
+                            "updated_at": "2025-01-01T00:00:00Z",
+                        },
+                    }
+                }
+            },
+        },
+    },
 )
 async def get_profile(
     current_user: Annotated[FirebaseUser, Depends(_current_user_dependency)],
@@ -109,7 +195,47 @@ async def get_profile(
 @router.put(
     "/",
     summary="Update user profile",
-    description="Update the profile of the authenticated user",
+    description="Update the profile of the authenticated user.",
+    operation_id="profile_update",
+    responses={
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized",
+            "content": {"application/json": {"example": {"detail": "Unauthorized"}}},
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "Profile not found",
+            "content": {"application/json": {"example": {"detail": "Profile not found"}}},
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Server error",
+            "content": {"application/json": {"example": {"detail": "Failed to update profile"}}},
+        },
+        200: {
+            "description": "Profile updated",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Profile updated successfully",
+                        "profile": {
+                            "id": "user-123",
+                            "firstname": "John",
+                            "lastname": "Doe",
+                            "email": "john@example.com",
+                            "phone_number": "+1234567890",
+                            "marketing": True,
+                            "terms": True,
+                            "created_at": "2025-01-01T00:00:00Z",
+                            "updated_at": "2025-01-01T00:00:00Z",
+                        },
+                    }
+                }
+            },
+        },
+    },
 )
 async def update_profile(
     profile_data: ProfileUpdate,
@@ -146,7 +272,37 @@ async def update_profile(
 @router.delete(
     "/",
     summary="Delete user profile",
-    description="Delete the profile of the authenticated user",
+    description="Delete the profile of the authenticated user.",
+    operation_id="profile_delete",
+    responses={
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized",
+            "content": {"application/json": {"example": {"detail": "Unauthorized"}}},
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "Profile not found",
+            "content": {"application/json": {"example": {"detail": "Profile not found"}}},
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Server error",
+            "content": {"application/json": {"example": {"detail": "Failed to delete profile"}}},
+        },
+        200: {
+            "description": "Profile deleted",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "message": "Profile deleted successfully",
+                        "profile": None,
+                    }
+                }
+            },
+        },
+    },
 )
 async def delete_profile(
     current_user: Annotated[FirebaseUser, Depends(_current_user_dependency)],

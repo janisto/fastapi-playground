@@ -13,6 +13,7 @@ from app.core.config import get_settings
 from app.core.firebase import initialize_firebase
 from app.core.logging import RequestContextLogMiddleware, setup_logging
 from app.core.security import SecurityHeadersMiddleware
+from app.models.health import HealthResponse
 from app.routers import profile
 
 
@@ -77,7 +78,19 @@ async def root() -> dict[str, str]:
     return {"message": "Hello World", "docs": "/api-docs"}
 
 
-@app.get("/health", tags=["health"])
-async def health_check() -> dict[str, str]:
+@app.get(
+    "/health",
+    tags=["health"],
+    summary="Service health",
+    description="Lightweight health probe for liveness checks.",
+    operation_id="health_get",
+    responses={
+        200: {
+            "description": "Service is healthy",
+            "content": {"application/json": {"example": {"status": "healthy"}}},
+        }
+    },
+)
+async def health_check() -> HealthResponse:
     """Health check endpoint."""
-    return {"status": "healthy"}
+    return HealthResponse(status="healthy")

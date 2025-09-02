@@ -23,6 +23,11 @@ class ProfileBase(BaseModel):
     )
     terms: bool = Field(..., description="Indicates if the user has accepted the terms and conditions")
 
+    # Forbid unknown/extra fields in requests deriving from this base
+    model_config = {
+        "extra": "forbid",
+    }
+
 
 class ProfileCreate(ProfileBase):
     """Model for creating a new profile."""
@@ -45,6 +50,11 @@ class ProfileUpdate(BaseModel):
     )
     marketing: bool | None = Field(None, description="Indicates if the user has opted in for marketing communications")
     terms: bool | None = Field(None, description="Indicates if the user has accepted the terms and conditions")
+
+    # Forbid unknown/extra fields on updates
+    model_config = {
+        "extra": "forbid",
+    }
 
 
 class Profile(ProfileBase):
