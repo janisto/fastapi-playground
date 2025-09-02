@@ -1,14 +1,17 @@
 name: Check linting, typing, run app unit tests and upload coverage report
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -32,11 +35,27 @@ jobs:
       - name: Install dependencies
         run: just install
 
-      - name: Run checks
-        run: just check-all
+      - name: Run linting checks
+        run: just lint
+
+      - name: Run typing checks
+        run: just typing
+
+      - name: Run test coverage
+        run: just cov
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         with:
-            name: coverage-report
-            path: htmlcov
+          name: coverage-report
+          path: htmlcov
+
+      - name: Pytest coverage reporter (PR only)
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: dima-engineer/pytest-reporter@v4
+        with:
+          cov-omit-list: tests/*
+          cov-threshold-single: 85
+          cov-threshold-total: 90
+          async-tests: true
+          uv-version: latest

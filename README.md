@@ -92,6 +92,15 @@ All profile endpoints require Firebase JWT via `Authorization: Bearer <token>`.
 - Firebase project (Authentication + Firestore)
 - Google Cloud project (optional for Cloud Logging in production)
 
+## Tech stack and pinned versions
+
+Core dependencies (from uv.lock):
+- FastAPI 0.116.1 (Starlette 0.47.3)
+- Pydantic 2.11.7 and pydantic-settings
+- Uvicorn 0.35.0
+- Firebase Admin SDK 7.1.0 (Firestore client)
+- httpx (used by tools/tests)
+
 ## Setup
 
 1. **Clone the repository**
@@ -146,7 +155,7 @@ just cov                      # Tests with coverage (HTML -> htmlcov/)
 just lint                     # Ruff check + format
 just modernize                # Apply safe modernization via Ruff's pyupgrade rules
 just typing                   # Type checking via ty
-just check-all                # Lint + typing + coverage
+just check-all                # Lint + typing + test
 
 # Lifecycle
 just install                  # Install deps (uv sync)
@@ -249,12 +258,12 @@ curl -X POST \
 
 1. **Build container**
    ```bash
-    # default base: python:3.13-slim
+   # default base (Dockerfile ARG): python:3.13-alpine
     docker build -t gcr.io/PROJECT_ID/fastapi-playground .
 
-    # optionally override the base used at build time
+   # optionally override the base used at build time (recommended: slim variants)
     docker build \
-       --build-arg PYTHON_IMAGE=python:3.13-slim-bookworm \
+      --build-arg PYTHON_IMAGE=python:3.13-slim-bookworm \
        -t gcr.io/PROJECT_ID/fastapi-playground .
    ```
 
@@ -418,6 +427,7 @@ just docker-run image=gcr.io/PROJECT/fastapi-playground:local env_file=.env
    - Installs dependencies with uv
    - Runs `just check-all` (lint, typing, tests with coverage)
    - Uploads HTML coverage as an artifact
+   - On pull requests, posts a coverage comment and enforces thresholds (single-file ≥85%, total ≥90%).
 
 ## Conventions for contributors
 
@@ -445,6 +455,17 @@ just docker-run image=gcr.io/PROJECT/fastapi-playground:local env_file=.env
 - Missing `Authorization` header yields 403 (HTTPBearer); invalid/expired/revoked tokens return 401.
 - Firestore access in `services/profile.py` is synchronous via the Google client; ensure credentials/project are set when running against real GCP.
 - Default collection name is `profiles` (override with `FIRESTORE_COLLECTION_PROFILES`).
+- Docker base image default is Alpine. Some uvicorn[standard] extras (uvloop, httptools) may compile on Alpine; if builds fail or are slow, pass `pyimg=python:3.13-slim*` to `just docker-build`.
+
+## Error responses
+
+Canonical error shape returned by the API follows `app/models/error.py`:
+
+```json
+{ "detail": "<message>" }
+```
+
+Examples: `{"detail":"Unauthorized"}`, `{"detail":"Profile not found"}`.
 
 ## Example Requests
 
@@ -462,6 +483,33 @@ curl -X POST \
    -d '{"firstname":"John","lastname":"Doe","email":"john@example.com","phone_number":"+1234567890","terms":true}' \
    http://localhost:8080/profile/
 ```
+
+## GitHub Actions: Manually label PRs
+
+This repository includes a manual workflow to apply labels to existing pull requests using `.github/labeler.yml` rules.
+
+- Workflow name: "Manually Label PRs"
+- File: `.github/workflows/labeler-manual.yml`
+
+How to run
+1. Go to GitHub → Actions tab.
+2. Select "Manually Label PRs".
+3. Click "Run workflow" and set inputs:
+    - maxCount: Max number of PRs to process (default 200). Set 0 to process all found.
+    - scope: Which PRs to consider: `closed` (default) or `all` (includes open and closed).
+4. Start the run.
+
+What it does
+- Collects PR numbers based on the selected scope and caps to `maxCount`.
+- Runs `actions/labeler@v5` for each PR with `sync-labels: true`.
+   - Note: `sync-labels: true` will remove labels that no longer match the rules.
+
+Requirements
+- Ensure `.github/labeler.yml` contains your label rules (v5 format with `any`/`all` match blocks).
+
+Troubleshooting
+- If nothing matches, the matrix step is skipped (workflow succeeds with no changes).
+- Large repos: consider a smaller `maxCount` and rerun if needed.
 
 ## License
 

@@ -106,7 +106,7 @@ Keep routers focused on I/O and validation; put domain logic in `services/`; kee
 | `just cov`        | Run tests with coverage (html report to `htmlcov/`)   |
 | `just lint`       | Ruff check + format                                   |
 | `just typing`     | Type checking via ty                                  |
-| `just check-all`  | Run lint, coverage, and typing                        |
+| `just check-all`  | Run lint, test, and typing                        |
 | `just modernize`  | Apply safe modernization via Ruff's pyupgrade rules   |
 | `just install`    | Sync dependencies with uv                             |
 | `just update`     | Upgrade dependencies with uv                          |

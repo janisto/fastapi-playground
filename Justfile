@@ -25,6 +25,7 @@ _cov *args:
     just _cov combine
     just _cov report
     just _cov html
+    just _cov json -o coverage.json
 
 # Run linters
 [group('qa')]
@@ -45,7 +46,7 @@ typing:
 
 # Perform all checks
 [group('qa')]
-check-all: lint typing cov
+check-all: lint typing test
 
 # Run development server
 [group('run')]
