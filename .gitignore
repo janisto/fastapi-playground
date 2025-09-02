@@ -41,6 +41,7 @@ MANIFEST
 
 # Unit test / coverage reports
 htmlcov/
+coverage.json
 .tox/
 .nox/
 .coverage
