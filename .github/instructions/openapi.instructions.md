@@ -10,7 +10,6 @@ Project facts
 - Auth is Bearer (Firebase). Use the security dependency so endpoints are marked secured in OpenAPI.
 
 When changing an API endpoint
-- Always set `response_model` to the precise output model.
 - Set `status_code` explicitly (e.g., 201 for creates).
 - Provide `summary` and `description` in the decorator; keep them concise and accurate.
 - Include `responses={...}` for non-2xx errors (401/403/404/409/500) with a shared error model and minimal examples.
@@ -20,6 +19,10 @@ When changing an API endpoint
 
 Security
 - Use `HTTPBearer` in a dependency that’s part of the path operation signature. Prefer `Security` over `Depends` when feasible so OpenAPI marks security correctly.
+- Repository-specific imports:
+	- Security scheme: `from app.auth.firebase import security`
+	- Verify function: `from app.auth.firebase import verify_firebase_token` (or `from app.dependencies import get_current_user` wrapper)
+	- If you wrap auth (e.g., `_current_user_dependency`), keep `Security(security)` inside that wrapper so OpenAPI still marks Bearer auth.
 - Document 401/403 in `responses` with a simple error model and examples.
 
 Schemas and examples (Pydantic v2)
@@ -28,8 +31,8 @@ Schemas and examples (Pydantic v2)
 - Keep names consistent with domain models; use `format`/`pattern` where applicable (uuid, date-time, E.164, etc.).
 
 Errors
-- Use a canonical error shape like:
-  - `class ErrorResponse(BaseModel): detail: str`
+- Reuse the canonical error model defined in `app/models/error.py`:
+	- `from app.models.error import ErrorResponse`
 - Reference it in `responses` for 4xx/5xx. Don’t leak secrets/PII in examples.
 - FastAPI automatically documents validation errors (422). Only override if you provide a compatible schema/example.
 
@@ -94,10 +97,9 @@ class ProfileResponse(BaseModel):
 ```python
 from fastapi import APIRouter, status
 from fastapi import Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-router = APIRouter()
-security = HTTPBearer()
+from fastapi.security import HTTPAuthorizationCredentials
+from app.models.error import ErrorResponse
+from app.auth.firebase import security
 
 @router.post(
 	"/",
@@ -160,6 +162,9 @@ async def create_profile(
 
 3) Router docs on GET with not-found example
 ```python
+from app.models.error import ErrorResponse
+from app.auth.firebase import security
+
 @router.get(
 	"/",
 	summary="Get user profile",
