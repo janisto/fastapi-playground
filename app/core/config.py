@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """Application settings."""
 
     # Environment
-    environment: str = Field(default="development", alias="ENVIRONMENT")
+    environment: str = Field(default="production", alias="ENVIRONMENT")
     debug: bool = Field(default=True, alias="DEBUG")
 
     # Server
@@ -20,15 +20,14 @@ class Settings(BaseSettings):
     # Firebase
     firebase_project_id: str = Field(default="test-project", alias="FIREBASE_PROJECT_ID")
     firebase_credentials_path: str | None = Field(default=None, alias="GOOGLE_APPLICATION_CREDENTIALS")
+    firebase_project_number: str | None = Field(default=None, alias="FIREBASE_PROJECT_NUMBER")
 
-    # Google Cloud
-    gcp_project_id: str = Field(default="test-project", alias="GCP_PROJECT_ID")
+    # App metadata (optional / informational)
+    app_environment: str | None = Field(default=None, alias="APP_ENVIRONMENT")
+    app_url: str | None = Field(default=None, alias="APP_URL")
 
     # Secrets
     secret_manager_enabled: bool = Field(default=True, alias="SECRET_MANAGER_ENABLED")
-
-    # Database
-    firestore_collection_profiles: str = Field(default="profiles", alias="FIRESTORE_COLLECTION_PROFILES")
 
     # Security / Limits
     max_request_size_bytes: int = Field(default=1_000_000, alias="MAX_REQUEST_SIZE_BYTES")

@@ -1,8 +1,19 @@
-"""Profile data models."""
+"""Profile data models.
+
+Constants
+---------
+`PROFILE_COLLECTION` is the canonical Firestore collection name for profile documents. It is
+intentionally hard-coded (instead of configurable via environment variable) to reduce
+configuration surface and enforce a single collection naming convention across environments.
+Change here if a rename is ever required; update related tests accordingly.
+"""
 
 from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field
+
+# Firestore collection name for profiles
+PROFILE_COLLECTION = "profiles"
 
 
 class ProfileBase(BaseModel):
