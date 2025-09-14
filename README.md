@@ -1,264 +1,270 @@
 # FastAPI Playground
 
-A small FastAPI app showcasing Firebase Authentication, Firestore CRUD, typed models, and a tidy dev workflow with uv and just.
+A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firestore CRUD, typed Pydantic models, and a tidy development workflow with `uv` (dependency & virtualenv manager) and `just` (task runner). This README is optimized for AI code assistants: it lists actual module locations, environment variables, commands, architectural decisions, and gotchas verified against the current codebase (September 2025).
 
 ## Features
 
-- FastAPI (Python 3.13+) with async endpoints and automatic OpenAPI docs
-- Firebase Authentication (verify ID tokens via Admin SDK)
-- Firestore for storing user profile data
-- Structured JSON logging to stdout (Cloud Run friendly)
-- Pydantic v2 models and pydantic-settings for configuration
-- Tests with pytest + pytest-asyncio; coverage reporting
-- Linting/formatting with Ruff and type checking with ty
-- Strict security headers middleware and configurable CORS allowlist (deny-by-default)
-- Request body size limit middleware (413 on exceeding MAX_REQUEST_SIZE_BYTES)
+- FastAPI (Python 3.13+) with async endpoints and automatic OpenAPI docs (`/api-docs`, `/api-redoc`)
+- Firebase Authentication (ID token verification via Admin SDK)
+- Firestore persistence for user profile documents
+- Firebase Cloud Functions (Python 3.13 runtime) example (`functions/main.py`) with regional config & scaling limits
+- Structured one-line JSON logging (Cloud Run friendly, trace correlation)
+- Pydantic v2 models + `pydantic-settings` for env-driven configuration
+- Custom middlewares: security headers, request body size limiting, request-context logging
+- Strict CORS allowlist (deny-by-default)
+- Tests (unit, integration, e2e happy paths) via `pytest` / `pytest-asyncio` with coverage reports
+- Linting + formatting + modernization via Ruff (`check` + `format` + `UP` rules)
+- Static typing checks via `ty`
+- Reproducible, minimal container build with optional base image auto-updates for Cloud Run
 
 ## Project Structure
 
 ```
 ├── app/
-│   ├── __init__.py
-│   ├── main.py                 # FastAPI application entry point (docs at /api-docs)
-│   ├── dependencies.py         # Application dependencies
+│   ├── main.py                    # FastAPI application factory + lifespan
+│   ├── dependencies.py            # (Currently minimal) shared dependency wiring
 │   ├── auth/
-│   │   ├── __init__.py
-│   │   └── firebase.py         # Firebase Authentication helpers
+│   │   └── firebase.py            # Token verification + security scheme
 │   ├── core/
-│   │   ├── __init__.py
-│   │   ├── config.py           # Pydantic settings (env via .env)
-│   │   ├── firebase.py         # Firebase Admin + Firestore initialization
-│   │   ├── logging.py          # JSON logging (Cloud Run friendly)
-│   │   ├── security.py         # Security headers middleware
-│   │   └── body_limit.py       # Request size limit middleware
+│   │   ├── config.py              # Settings (env -> Settings class)
+│   │   ├── firebase.py            # Firebase Admin & Firestore init/helpers
+│   │   ├── logging.py             # JSON logging + request trace middleware
+│   │   ├── security.py            # Security headers middleware
+│   │   └── body_limit.py          # Request size guard middleware
 │   ├── models/
-│   │   ├── __init__.py
-│   │   ├── error.py            # Canonical error model
-│   │   ├── health.py           # Health response model
-│   │   └── profile.py          # Profile data models
+│   │   ├── error.py               # Canonical error response shape
+│   │   ├── health.py              # Health probe model
+│   │   └── profile.py             # Profile domain models (create/update/response)
 │   ├── routers/
-│   │   └── profile.py          # Profile API endpoints (protected)
+│   │   └── profile.py             # CRUD endpoints (protected by Firebase Auth)
 │   └── services/
-│       ├── __init__.py
-│       └── profile.py          # Profile business logic (Firestore)
+│       └── profile.py             # Firestore-backed profile service
 ├── tests/
-│   ├── conftest.py             # Shared fixtures (patch init, fake users)
-│   ├── e2e/
-│   │   └── test_profile_happy_paths.py
-│   ├── helpers/                # Test helpers (auth, clients, profiles)
-│   ├── integration/
-│   │   ├── test_api.py
-│   │   ├── test_logging_middleware.py
-│   │   ├── test_profile_validation.py
-│   │   └── test_security.py
-│   └── mocks/                  # Firebase/http mocks for tests
+│   ├── conftest.py                # Fixtures / patching
+│   ├── unit/                      # Fine-grained model/auth/core tests
+│   ├── integration/               # API + middleware behavior tests
+│   ├── e2e/                       # Happy path scenario(s)
+│   ├── helpers/                   # Test utility modules
+│   └── mocks/                     # Firebase / HTTP mocks
+├── functions/                     # Firebase Cloud Functions (Python) codebase
+│   ├── main.py                    # Example HTTPS callable (Hello world)
+│   ├── requirements.txt           # Functions-specific deps (pin separately)
+│   └── README.md                  # Deployment quickstart
 ├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml              # CI: lint, typing, tests, coverage artifact
-│   │   ├── labeler.yml         # Auto-label PRs
-│   │   └── labeler-manual.yml  # Manually label PRs over history
-│   ├── instructions/           # Repo-specific Copilot instructions
-│   └── prompts/                # Prompts for docs/security reviews
-├── pyproject.toml              # Project configuration
-├── Justfile                    # Task runner commands
-├── Dockerfile                  # Container build for deployment
+│   ├── workflows/                 # CI + labeling automation
+│   ├── instructions/              # Copilot / contributor guidance
+│   └── prompts/                   # Repo-specific prompt templates
+├── pyproject.toml                 # Dependencies & tool configuration
+├── uv.lock                        # Locked, reproducible dependency versions
+├── Justfile                       # Task automation
+├── Dockerfile                     # Multi-stage build (slim base by default)
 └── README.md
 ```
 
 ## API Endpoints
 
-### Root Endpoints
-- `GET /` - Hello World message with API docs link
-- `GET /health` - Health check endpoint
-- `GET /api-docs` - Interactive API documentation (Swagger UI)
-- `GET /api-redoc` - Alternative API documentation (ReDoc)
+### Root & Health
+- `GET /` — Hello World + link to docs
+- `GET /health` — Liveness probe (returns `{ "status": "healthy" }`)
+- `GET /api-docs` — Swagger UI
+- `GET /api-redoc` — ReDoc
 
-### Profile Endpoints (Protected)
-All profile endpoints require Firebase JWT via `Authorization: Bearer <token>`.
+### Profile (Protected: `Authorization: Bearer <Firebase ID token>`)
+- `POST /profile/` — Create profile
+- `GET /profile/` — Retrieve profile
+- `PUT /profile/` — Update profile (partial via nullable/omitted fields)
+- `DELETE /profile/` — Delete profile
 
-- `POST /profile/` - Create user profile
-- `GET /profile/` - Get user profile
-- `PUT /profile/` - Update user profile
-- `DELETE /profile/` - Delete user profile
+### Profile Model (Response Shape)
 
-## Profile Model
-
-```python
+```jsonc
 {
-  "firstname": str,          # First name (required)
-  "lastname": str,           # Last name (required)
-  "email": EmailStr,         # Email address (required, validated)
-  "phone_number": str,       # Phone number (required)
-  "marketing": bool,         # Marketing opt-in (default: false)
-  "terms": bool,             # Terms acceptance (required)
-  "id": str,                 # User ID (auto-generated)
-  "created_at": datetime,    # Creation timestamp (auto-generated)
-  "updated_at": datetime     # Update timestamp (auto-generated)
+   "firstname": "str",          // Required
+   "lastname": "str",           // Required
+   "email": "EmailStr",         // Required & validated
+   "phone_number": "str",       // Required
+   "marketing": false,           // Boolean opt-in (default false)
+   "terms": true,                // Must be true when creating
+   "id": "<user uid>",          // Firebase user id (doc id)
+   "created_at": "ISO-8601",    // Set at creation
+   "updated_at": "ISO-8601"     // Updated on modification
 }
 ```
 
 ## Prerequisites
 
 - Python 3.13+
-- uv (package manager)
-- just (command runner)
-- Firebase project (Authentication + Firestore)
-- Google Cloud project (optional for Cloud Logging in production)
+- `uv` (dependency & venv manager)
+- `just` (task runner)
+- Firebase project (Authentication + Firestore enabled)
+- Google Cloud project (optional for Cloud Run & trace/log context)
 
-## Tech stack and pinned versions
+## Tech Stack & Dependencies
 
-Core dependencies (from uv.lock):
-- FastAPI 0.116.1 (with fastapi[standard])
-- Pydantic 2.11.7 and pydantic-settings 2.10.1
-- Uvicorn 0.35.0 (standard extras)
-- Firebase Admin SDK 7.1.0 (uses google-cloud-firestore)
-- httpx 0.28.1
-- python-jose[cryptography] 3.5.0+ (present; not used directly in current code)
+Runtime (`pyproject.toml`):
+- `fastapi[standard]` (serving, schema, docs)
+- `uvicorn[standard]` (ASGI server; `fastapi dev` used for hot reload in dev)
+- `firebase-admin` (Auth token verification + Firestore client)
+- `pydantic`, `pydantic-settings` (validation & configuration)
+- `httpx` (currently unused; available for outbound HTTP if needed)
+- `python-jose[cryptography]` (currently unused; consider removal unless future JWT parsing sans Firebase Admin is planned)
 
-## Setup
+Dev / QA:
+- `pytest`, `pytest-asyncio`, `pytest-cov`, `pytest-httpx`
+- `ruff` (lint, format, modernization via `UP` rules)
+- `ty` (static typing / inference checks)
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd fastapi-playground
-   ```
+Unused packages (as of analysis): `python-jose`, `httpx` are not imported anywhere. Prune to reduce supply-chain surface unless slated for upcoming features.
 
-2. **Install dependencies**
-   ```bash
-   just install
-   ```
+## Environment Configuration
 
-3. **Create a .env file** (auto-loaded by pydantic-settings)
-   Required/optional keys:
-   - ENVIRONMENT=development|production
-   - DEBUG=true|false
-   - HOST=0.0.0.0
-   - PORT=8080
-   - FIREBASE_PROJECT_ID=your-firebase-project-id
-   - GCP_PROJECT_ID=your-gcp-project-id
-   - GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json (optional; uses ADC if unset)
-   - SECRET_MANAGER_ENABLED=true|false (optional)
-   - FIRESTORE_COLLECTION_PROFILES=profiles (optional)
-   - MAX_REQUEST_SIZE_BYTES=1000000 (optional; default 1,000,000 bytes)
-   - CORS_ORIGINS=https://example.com,https://app.example.com (optional; empty by default denies all origins)
+Loaded automatically from `.env` (see `config.Settings`).
 
-4. **Configure Firebase**
-   - Create a Firebase project at https://console.firebase.google.com/
-   - Enable Authentication and Firestore Database
-   - Download service account key JSON file
-   - Either set `GOOGLE_APPLICATION_CREDENTIALS` or ensure Application Default Credentials are configured
+| Env Var | Required | Default | Purpose |
+| ------- | -------- | ------- | ------- |
+| `ENVIRONMENT` | No | `development` | Environment label (affects logging posture) |
+| `DEBUG` | No | `True` | Enable debug behaviors (verbosity, reload) |
+| `HOST` | No | `0.0.0.0` | Bind address |
+| `PORT` | No | `8080` | Listen port (Cloud Run uses this) |
+| `FIREBASE_PROJECT_ID` | Yes* | `test-project` | Firebase project id (Auth + Firestore) |
+| `GCP_PROJECT_ID` | Yes* | `test-project` | Used for trace correlation in logs |
+| `GOOGLE_APPLICATION_CREDENTIALS` | No | `None` | Path to service account JSON (else ADC) |
+| `SECRET_MANAGER_ENABLED` | No | `True` | Flag (currently unused placeholder) |
+| `FIRESTORE_COLLECTION_PROFILES` | No | `profiles` | Firestore collection name |
+| `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Request body limit (bytes) |
+| `CORS_ORIGINS` | No | (empty) | Comma-separated allowed origins (deny all if unset) |
 
-5. **Set up Google Cloud** (optional but recommended for prod)
-   - Enable required APIs: Firestore, Cloud Logging, Secret Manager
-   - Ensure your service account has necessary permissions
+(*Provide real values outside tests.)
 
-## Available Commands (via just)
+Example `.env`:
+```env
+ENVIRONMENT=development
+DEBUG=true
+FIREBASE_PROJECT_ID=my-firebase
+GCP_PROJECT_ID=my-gcp
+MAX_REQUEST_SIZE_BYTES=1000000
+CORS_ORIGINS=https://example.com,https://app.example.com
+```
+
+## Quick Start
 
 ```bash
-# Discover all tasks
-just
+git clone <repository-url>
+cd fastapi-playground
+just install
+just serve       # http://127.0.0.1:8080/api-docs
+```
 
-# Development
-just serve                    # Run dev server at http://127.0.0.1:${PORT:-8080}
-just browser                  # Open dev server in browser
-just req <path> [args...]     # Send HTTP request via httpie (e.g. `just req health`)
+## Commands (Justfile)
+
+```bash
+just                # List tasks
+
+# Dev
+just serve          # Dev server (fastapi dev)
+just browser        # Open browser
+just req health     # httpie helper via uvx
 
 # Quality
-just test [pytest-args...]    # Run tests
-just cov                      # Tests with coverage (HTML -> htmlcov/)
-just lint                     # Ruff check + format
-just modernize                # Apply safe modernization via Ruff's pyupgrade rules
-just typing                   # Type checking via ty
-just check-all                # Lint + typing + test
+just lint           # Ruff check + format
+just modernize      # Ruff upgrade rules
+just typing         # Type checking (ty)
+just test           # Pytest
+just cov            # Pytest w/ coverage html/json
+just check-all      # lint + typing + test
 
 # Lifecycle
-just install                  # Install deps (uv sync)
-just update                   # Upgrade deps
-just clean                    # Remove caches/venv/coverage artifacts
-just fresh                    # Clean and reinstall
+just install        # uv sync
+just update         # uv sync --upgrade
+just clean          # Remove caches/venv/coverage
+just fresh          # clean + install
 
-# Container
-just docker-build [image=fastapi-playground:local] [pyimg=python:3.13-slim]
-just docker-run [image=fastapi-playground:local] [env_file=.env] [name=fastapi-playground]
-just docker-logs [name=fastapi-playground]
+# Containers
+just docker-build   # Build image (python:3.13-slim*)
+just docker-run     # Run with env-file + port
+just docker-logs    # Tail logs
 ```
 
-## Useful CLI Commands
-
-| Command                                                      | Purpose                                                                 |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `uv sync`                                                    | Install project dependencies without just.                              |
-| `uv run -m pytest`                                           | Run tests without just.                                                 |
-| `uvx ruff check`                                             | Run Ruff linter directly.                                               |
-| `uvx ruff format`                                            | Apply Ruff formatter.                                                   |
-| `docker build -t fastapi-playground:local .`                 | Build local Docker image.                                               |
-| `docker run --rm -p 8080:8080 --env-file .env IMAGE`         | Run container locally with env file and port mapping.                   |
-| `gcloud run deploy ... --automatic-updates --base-image ...` | Deploy to Cloud Run with automatic base image updates (see Deployment). |
-
-## Development
-
-### Running the Application
-
+Direct equivalents:
 ```bash
-# Start development server
-just serve
+uv sync
+uv run -m pytest
+uvx ruff check && uvx ruff format
+docker build -t fastapi-playground:local .
+docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
 ```
 
-The application will be available at:
-- API: http://localhost:8080
-- Documentation: http://localhost:8080/api-docs
-- Health Check: http://localhost:8080/health
+## Development Workflow
 
-### CORS and security headers
+1. Implement feature (routers thin; logic in `services/`).
+2. Add/adjust Pydantic models in `app/models/`.
+3. Write/extend tests (unit → service/model; integration → API; e2e for flow).
+4. Run `just lint && just typing`.
+5. Run targeted tests (`just test tests/integration/test_api.py::test_health`).
+6. Run `just cov` before PR.
+7. Commit using Conventional Commit style.
 
-- CORS is deny-by-default. To allow specific origins, set `CORS_ORIGINS` to a comma-separated list (no spaces required; spaces are trimmed).
-- Common security headers are added for every response (X-Content-Type-Options, X-Frame-Options, Referrer-Policy). HSTS is added automatically on HTTPS when `DEBUG=false`.
+## CORS & Security Headers
 
-### Request size limits
+- CORS deny-by-default. Set `CORS_ORIGINS` to explicit origins.
+- Middleware adds: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`; HSTS when HTTPS & not debug.
 
-- Requests exceeding `MAX_REQUEST_SIZE_BYTES` are rejected early with HTTP 413 without buffering the full body.
-- Adjust the limit via the env var if you accept large JSON uploads.
+## Request Size Limits
 
-### Running Tests
+`BodySizeLimitMiddleware` aborts with `413` if body exceeds `MAX_REQUEST_SIZE_BYTES` without buffering full body.
 
+## Logging & Trace Correlation
+
+JSON logs (`app/core/logging.py`): keys include `severity`, `message`, `time`, `logger`, source location, optional `trace` / `spanId` derived from `X-Cloud-Trace-Context` (Cloud Run / GCP).
+
+Usage example:
+```python
+logger.info("profile created", extra={"user_id": uid, "profile_id": uid})
+```
+
+## Authentication Flow
+
+Client obtains Firebase ID token → send header:
+```
+Authorization: Bearer <id_token>
+```
+Failure cases:
+- Missing header → 403 (security scheme)
+- Invalid/expired token → 401 `{ "detail": "Unauthorized" }`
+
+## Firestore Service Notes
+
+`ProfileService` uses synchronous Firestore client in async endpoints (acceptable for low concurrency). Consider offloading with `anyio.to_thread.run_sync` or adopting async abstractions for heavier loads.
+
+## Testing
+
+| Category | Path | Focus |
+| -------- | ---- | ----- |
+| Unit | `tests/unit/**` | Models, config, small pure logic |
+| Integration | `tests/integration/**` | API routes, middleware |
+| E2E | `tests/e2e/**` | High-level flows |
+
+Examples:
 ```bash
-# Run all tests
 just test
-
-# Run with coverage
+just test tests/unit/models/test_profile_models.py
+just test tests/integration/test_api.py::test_health
 just cov
-
-# Run specific test file
-just test tests/test_models.py
 ```
+Notes: Firebase/Firestore interactions patched; no real network calls.
 
-### Code Quality
+## Error Responses
 
-```bash
-# Lint and format code
-just lint
-
-# Type checking
-just typing
-
-# Run all quality checks
-just check-all
+Standard business error shape:
+```json
+{ "detail": "<message>" }
 ```
+Validation errors keep FastAPI default list form.
 
-## Authentication
+## Example Requests
 
-The API uses Firebase Authentication with JWT ID tokens. To access protected endpoints:
-
-1. Authenticate users through Firebase Auth (frontend/mobile app)
-2. Obtain ID token from Firebase
-3. Include token in requests: `Authorization: Bearer <id_token>`
-
-Example using curl:
+Create a profile:
 ```bash
-# Get profile (replace <token> with actual Firebase ID token)
-curl -H "Authorization: Bearer <token>" http://localhost:8080/profile/
-
-# Create profile
 curl -X POST \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
@@ -266,265 +272,205 @@ curl -X POST \
   http://localhost:8080/profile/
 ```
 
-## Deployment
-
-### Google Cloud Run
-
-1. **Build container**
-   ```bash
-   # default base (Dockerfile ARG): python:3.13-alpine
-    docker build -t gcr.io/PROJECT_ID/fastapi-playground .
-
-   # optionally override the base used at build time (recommended: slim variants)
-    docker build \
-      --build-arg PYTHON_IMAGE=python:3.13-slim-bookworm \
-       -t gcr.io/PROJECT_ID/fastapi-playground .
-   ```
-
-2. **Push to Container Registry**
-   ```bash
-   docker push gcr.io/PROJECT_ID/fastapi-playground
-   ```
-
-3. **Deploy to Cloud Run**
-   ```bash
-   gcloud run deploy fastapi-playground \
-     --image gcr.io/PROJECT_ID/fastapi-playground \
-     --platform managed \
-     --region us-central1 \
-     --allow-unauthenticated
-   ```
-
-#### Enable automatic base image updates
-
-Link your service to a managed base and let Cloud Run apply security patches automatically without creating new revisions:
+## Container Usage (Local)
 
 ```bash
+just docker-build
+just docker-run
+
+# Or manual
+docker build -t fastapi-playground:local .
+docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
+```
+Override base image:
+```bash
+just docker-build pyimg=python:3.13-slim-bookworm
+```
+
+## Deployment (Cloud Run)
+
+```bash
+docker build -t gcr.io/PROJECT_ID/fastapi-playground .
+docker push gcr.io/PROJECT_ID/fastapi-playground
 gcloud run deploy fastapi-playground \
-   --image gcr.io/PROJECT_ID/fastapi-playground:TAG \
-   --base-image python:3.13-slim \
-   --automatic-updates
+  --image gcr.io/PROJECT_ID/fastapi-playground \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated
+```
+Automatic base updates:
+```bash
+gcloud run deploy fastapi-playground \
+  --image gcr.io/PROJECT_ID/fastapi-playground:TAG \
+  --base-image python:3.13-slim \
+  --automatic-updates
+```
+Production env vars:
+```text
+ENVIRONMENT=production
+DEBUG=false
+FIREBASE_PROJECT_ID=<real>
+GCP_PROJECT_ID=<real>
 ```
 
-Notes
-- Keep `PYTHON_IMAGE` used at build time aligned with `--base-image` to avoid surprises.
-- For source-based deploys, you can also do: `gcloud run deploy --source . --base-image python:3.13-slim --automatic-updates`.
+## Firebase Cloud Functions (Python)
 
-### Environment Variables for Production
+This repo also includes a minimal Firebase Cloud Functions (2nd gen) Python codebase under `functions/`, showcasing how to deploy auxiliary HTTP endpoints alongside (or instead of) the FastAPI service.
 
-Set these environment variables in your deployment:
-- `ENVIRONMENT=production`
-- `DEBUG=false`
-- `FIREBASE_PROJECT_ID=your-project-id`
-- `GCP_PROJECT_ID=your-project-id`
- - `GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json` (or use ADC)
+Key points:
 
-## Logging on Cloud Run
+- Runtime: Python 3.13 (`"runtime": "python313"` in `firebase.json`).
+- Region: `europe-west4` (set globally via `options.set_global_options`).
+- Memory: 128 MB (`memory=options.MemoryOption.MB_128`).
+- Scaling limits (env-configurable):
+  - `MIN_INSTANCES` (default 0)
+  - `MAX_INSTANCES` (default 2)
+- Example function: `on_request_example` returns a simple "Hello world!" response.
+- Dependencies isolated in `functions/requirements.txt` (keep aligned with top-level deps where overlap exists, but pin separately to control cold start variance).
 
-This app emits one-line JSON logs to stdout using a lightweight formatter (`app/core/logging.py`). Cloud Run automatically forwards stdout/stderr to Cloud Logging, avoiding the overhead of using Cloud Logging API handlers inside your app process.
+### Project Config (firebase.json excerpt)
 
-What’s in each log line:
-- severity: Cloud Logging severity derived from Python level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-- message: the log message
-- time / timestamp: RFC3339 with microseconds (UTC)
-- logger: logger name
-- logging.googleapis.com/sourceLocation: file, line, function (helps in debugging)
-- Optional: trace and spanId (when available)
-
-Trace correlation (X-Cloud-Trace-Context):
-- When a request includes `X-Cloud-Trace-Context: TRACE_ID/SPAN_ID;o=1`, middleware adds:
-   - `trace = projects/<GCP_PROJECT_ID>/traces/<TRACE_ID>`
-   - `spanId = <SPAN_ID>`
-- This lets you filter logs by request and view them alongside Cloud Trace.
-
-Structured extras:
-- You can attach fields via `extra={...}`: `logger.info("created", extra={"user_id": "123"})`.
-- `None` values are coerced to the string "null" to prevent Cloud Logging from nesting labels under `jsonPayload`.
-
-Notes:
-- Uvicorn logs are routed through the same JSON formatter for consistency.
-- No dependency on the Cloud Logging client; safer memory profile under load.
-
-### Example structured log
-
-Emit a log with extra fields:
-
-```python
-import logging
-
-logger = logging.getLogger(__name__)
-logger.info(
-      "created order",
-      extra={
-            "user_id": "u_123",
-            "order_id": "ord_456",
-            "labels": "checkout",
-      },
-)
-```
-
-Cloud Logging ingests the same line from stdout. It will look like this in the Logs Explorer (jsonPayload view simplified):
-
-```json
+```jsonc
 {
-   "severity": "INFO",
-   "message": "created order",
-   "time": "2025-01-01T12:00:00.123456+00:00",
-   "timestamp": "2025-01-01T12:00:00.123456+00:00",
-   "logger": "app.routers.example",
-   "logging.googleapis.com/sourceLocation": {
-      "file": "/workspace/app/routers/example.py",
-      "line": 42,
-      "function": "create_order"
-   },
-   "trace": "projects/your-gcp-project-id/traces/0123456789abcdef0123456789abcdef",
-   "spanId": "123456",
-   "user_id": "u_123",
-   "order_id": "ord_456",
-   "labels": "checkout"
+  "functions": [
+    {
+      "source": "functions",
+      "location": "europe-west4",
+      "codebase": "default",
+      "runtime": "python313"
+    }
+  ],
+  "emulators": {
+    "auth": { "port": 7010 },
+    "functions": { "port": 7020 },
+    "firestore": { "port": 7030 },
+    "storage": { "port": 7040 },
+    "ui": { "enabled": true },
+    "singleProjectMode": true
+  }
 }
 ```
 
-## Testing
+### Deployment
 
-The project includes comprehensive testing:
-
-- **Unit Tests**: Model validation, small units under `tests/unit/`
-- **Integration Tests**: API endpoint tests with TestClient and mocks under `tests/integration/`
-- **End-to-End Tests**: Happy-path flows in `tests/e2e/`
-
-Run specific test categories:
-```bash
-# Model tests
-just test tests/test_models.py
-
-# Authentication tests
-just test tests/test_auth.py
-
-# End-to-end tests
-just test tests/test_e2e.py
-```
-
-Notes:
-- Firebase Admin and Firestore are mocked; no real network calls are made during `pytest`.
-- Use `just cov` to generate an HTML report in `htmlcov/`.
-
-## Container usage (local)
+From repository root (or `cd functions` first):
 
 ```bash
-# Build (Docker must be running)
-docker build -t fastapi-playground:local .
-
-# Run on localhost:8080 (loads .env if needed via --env-file)
-docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
+python3 -m venv venv                # (Optional: isolate build env for dependency resolution)
+source venv/bin/activate
+pip install -r functions/requirements.txt
+export FUNCTIONS_DISCOVERY_TIMEOUT=30  # Helps CLI module scan (avoid premature timeout)
+firebase deploy --only functions
+deactivate
 ```
 
-Using just
-
+Common one-liner (already have an active virtualenv):
 ```bash
-# Build with default base and tag
-just docker-build
-
-# Build with a specific Python base
-just docker-build pyimg=python:3.13-slim-bookworm
-
-# Run on http://127.0.0.1:${PORT:-8080} with .env
-just docker-run
-
-# Use a custom image tag and env file
-just docker-run image=gcr.io/PROJECT/fastapi-playground:local env_file=.env
+pip install -r functions/requirements.txt && firebase deploy --only functions
 ```
 
-## CI / Automation
-
-- GitHub Actions workflow `.github/workflows/ci.yml` runs on push/PR to `main`:
-   - Installs dependencies with uv
-   - Runs `just lint`, `just typing`, and `just cov`
-   - Uploads HTML coverage as an artifact
-   - On pull requests, posts a coverage comment (thresholds are configurable but currently disabled)
-
-## Conventions for contributors
-
-- Use FastAPI style: async endpoints, thin routers, business logic in `services/`, shared utilities in `core/`.
-- Type hints everywhere; avoid `Any`. Keep lines ≤120 chars (Ruff). Prefer explicit imports grouped stdlib / third-party / local.
-- Config via `pydantic-settings` only; never read env directly in business logic. Don’t log secrets/PII.
-- Prefer `uv` and `just` for all local tasks. Avoid mixing `pip/poetry` in this repo.
-
-## External integrations
-
-- Firebase Admin SDK for token verification and Firestore client.
-- Google Cloud (optional) for Cloud Run and Cloud Logging ingestion via stdout.
-
-## Development Guidelines
-
-- Follow FastAPI style: async endpoints, thin routers; business logic in `services/`; shared config/logging in `core/`.
-- Pydantic v2 models with explicit types; avoid `Any`.
-- Never hardcode secrets. Load via env or Secret Manager. The app auto-loads `.env`.
-- Logging configured via `app/core/logging.py`; Cloud Logging is enabled when `ENVIRONMENT=production`.
-- For tests, external Firebase/Firestore calls are mocked; do not rely on real network during unit tests.
-
-## Integration Notes & Gotchas
-
-- Firebase Admin initialization happens in app lifespan (`app/main.py`). For local dev, set `GOOGLE_APPLICATION_CREDENTIALS` or use gcloud ADC.
-- Missing `Authorization` header yields 403 (HTTPBearer). Token verification errors map to 401; however, since the security dependency guards the route, requests without a valid Bearer token get 403 at the framework layer.
-- Firestore access in `services/profile.py` uses the synchronous Google client inside async functions. It’s acceptable for low load, but consider offloading if heavy usage is expected.
-- Default collection name is `profiles` (override with `FIRESTORE_COLLECTION_PROFILES`).
-- Docker base image default is Alpine. Some `uvicorn[standard]` extras (uvloop, httptools) may compile on Alpine; if builds fail or are slow, pass `pyimg=python:3.13-slim*` to `just docker-build`.
-
-## Error responses
-
-Canonical error shape returned by the API follows `app/models/error.py`:
-
-```json
-{ "detail": "<message>" }
-```
-
-Examples: `{"detail":"Unauthorized"}`, `{"detail":"Profile not found"}`.
-
-## Example Requests
-
+Set scaling overrides per deployment (bash examples):
 ```bash
-# Using just + httpie helper to check health
-just req health
-
-# Using curl with auth token
-curl -H "Authorization: Bearer <token>" http://localhost:8080/profile/
-
-# Create profile
-curl -X POST \
-   -H "Authorization: Bearer <token>" \
-   -H "Content-Type: application/json" \
-   -d '{"firstname":"John","lastname":"Doe","email":"john@example.com","phone_number":"+1234567890","terms":true}' \
-   http://localhost:8080/profile/
+export MIN_INSTANCES=0
+export MAX_INSTANCES=3
+firebase deploy --only functions
 ```
 
-## GitHub Actions: Manually label PRs
+### Emulator Suite
 
-This repository includes a manual workflow to apply labels to existing pull requests using `.github/labeler.yml` rules. There’s also an automatic PR labeler (`.github/workflows/labeler.yml`).
+Run local emulators (functions + auth + firestore + storage) with ports defined in `firebase.json`:
+```bash
+firebase emulators:start
+```
+Or just functions:
+```bash
+firebase emulators:start --only functions
+```
+Access the Emulator UI (auto-listed in terminal) to inspect requests, Firestore docs, and Auth users.
 
-- Workflow name: "Manually Label PRs"
-- File: `.github/workflows/labeler-manual.yml`
+Environment parity tips:
+- Provide service account credentials if your function code escalates privileges beyond emulator defaults (`GOOGLE_APPLICATION_CREDENTIALS`).
+- Ensure any additional env vars (e.g., `MIN_INSTANCES`, `MAX_INSTANCES`) are exported before starting the emulator for realistic behavior.
 
-How to run
-1. Go to GitHub → Actions tab.
-2. Select "Manually Label PRs".
-3. Click "Run workflow" and set inputs:
-    - maxCount: Max number of PRs to process (default 200). Set 0 to process all found.
-    - scope: Which PRs to consider: `closed` (default) or `all` (includes open and closed).
-4. Start the run.
+### When to Use Functions vs FastAPI
 
-What it does
-- Collects PR numbers based on the selected scope and caps to `maxCount`.
-- Runs `actions/labeler@v5` for each PR with `sync-labels: true`.
-   - Note: `sync-labels: true` will remove labels that no longer match the rules.
+| Use Case | Prefer FastAPI App | Prefer Cloud Function |
+| -------- | ------------------ | --------------------- |
+| Many cohesive REST endpoints | ✅ | ❌ |
+| Single lightweight webhook / trigger | ❌ | ✅ |
+| Needs custom middleware stack, complex routing | ✅ | ❌ |
+| Sporadic traffic, pay-per-invoke desirable | ⚠️ (cold starts if Cloud Run min=0) | ✅ |
+| Long-lived connections / streaming | ✅ | ❌ (not ideal) |
 
-Requirements
-- Ensure `.github/labeler.yml` contains your label rules (v5 format with `any`/`all` match blocks).
+You can mix both: keep core API in FastAPI (Cloud Run) and deploy isolated experimental or region-specific endpoints as Functions.
 
-Troubleshooting
-- If nothing matches, the matrix step is skipped (workflow succeeds with no changes).
-- Large repos: consider a smaller `maxCount` and rerun if needed.
+### Adding More Functions
+
+1. Create a new function in `functions/main.py` using `@https_fn.on_request()` or other trigger decorators.
+2. (Optional) Add per-function `max_instances` or `timeout_sec` in the decorator parameters.
+3. Update tests (if you add business logic—consider factoring non-trigger code into reusable modules for unit testing outside the Firebase runtime).
+4. Redeploy: `firebase deploy --only functions`.
+
+### Vertex AI / Generative AI (Optional)
+
+The scaffold includes commented guidance for Vertex AI via `google-genai`. To enable:
+1. Uncomment and initialize a `genai.Client` with `project` & `location`.
+2. Add required permissions (service account) for Vertex AI endpoints.
+3. Keep memory/timeout sizing in mind for model invocation latency.
+
+---
+
+## CI & Automation
+
+Workflow `.github/workflows/ci.yml`:
+1. Install (uv)
+2. Lint (ruff)
+3. Typing (ty)
+4. Coverage tests (pytest + htmlcov artifact)
+5. Coverage comment on PRs (threshold currently not enforced)
+
+Label automation:
+- Auto: `.github/workflows/labeler.yml`
+- Manual backfill: `.github/workflows/labeler-manual.yml` (dispatch with `maxCount`, `scope`)
+
+## Development Conventions
+
+- Routers thin; put logic in `services/`.
+- Async endpoints; document if using sync I/O.
+- Type hints everywhere (Ruff `ANN` rules).
+- Group imports: stdlib / third-party / local.
+- Access config only via `get_settings()`.
+- No direct env reads or secret logging.
+- Tests: prefer deterministic, isolated units.
+
+## Gotchas & Recommendations
+
+| Area | Detail | Recommendation |
+| ---- | ------ | -------------- |
+| Firestore sync calls | Blocking inside async | Wrap in thread executor if performance degrades |
+| Unused deps | `httpx`, `python-jose` | Remove unless near-term use planned |
+| Secret Manager flag | Unused setting | Implement or drop to reduce confusion |
+| CORS default | Empty denies all | Always set for browser clients |
+| Large bodies | Hard 413 at limit | Communicate to clients uploading large JSON |
+
+## For AI Assistants
+
+Adding an endpoint:
+1. Define request/response models (`app/models/`).
+2. Implement service logic (`app/services/`).
+3. Create router (`app/routers/`) using `APIRouter` with tags.
+4. Register router in `app/main.py`.
+5. Add tests: unit (service), integration (route), e2e (flow if needed).
+
+Adding config:
+1. Add field in `Settings` with env alias.
+2. Access via `get_settings()` in functions.
+3. Update README if externally relevant.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License – see [`LICENSE`](LICENSE).
+
+---
+
+_Generated & verified against repository state (Sept 2025). Update on structural or dependency changes._

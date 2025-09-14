@@ -1,0 +1,47 @@
+{
+  "firestore": {
+    "database": "(default)",
+    "location": "europe-west4",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "location": "europe-west4",
+      "codebase": "default",
+      "ignore": [
+        ".git",
+        "venv",
+        ".venv",
+        "__pycache__",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "runtime": "python313"
+    }
+  ],
+  "storage": {
+    "rules": "storage.rules",
+    "location": "europe-west4"
+  },
+  "emulators": {
+    "auth": {
+      "port": 7010
+    },
+    "functions": {
+      "port": 7020
+    },
+    "firestore": {
+      "port": 7030
+    },
+    "storage": {
+      "port": 7040
+    },
+    "ui": {
+      "enabled": true
+    },
+    "singleProjectMode": true
+  }
+}

@@ -1,4 +1,5 @@
 # Exclude local/dev artifacts from Docker build context
+venv/
 .venv/
 __pycache__/
 .pytest_cache/
@@ -35,3 +36,6 @@ firestore-debug.*.log*
 .gitignore
 .github/
 .vscode/
+
+# GCP service account
+service_account.json

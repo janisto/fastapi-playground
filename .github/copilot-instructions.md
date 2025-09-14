@@ -90,10 +90,41 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
 
 - `app/` — FastAPI app: routers, models, services, core config, auth
 - `tests/` — unit/integration/e2e tests
+- `functions/` — Firebase Cloud Functions (Python 3.13) codebase (`main.py`, its own `requirements.txt`)
 - `Justfile` — dev/test/build tasks
 - `pyproject.toml` — dependencies and tool configs (Ruff, ty, pytest, coverage)
 
 Keep routers focused on I/O and validation; put domain logic in `services/`; keep shared configuration/utilities in `core/`.
+
+### Monorepo Considerations (FastAPI app + Cloud Functions)
+
+When adding features, decide if logic belongs in the FastAPI service (`app/`) or a Cloud Function (`functions/`):
+
+| Scenario | Prefer FastAPI (`app/`) | Prefer Cloud Function (`functions/`) |
+| -------- | ----------------------- | ------------------------------------ |
+| Multiple cohesive REST endpoints | ✅ | ❌ |
+| Single lightweight webhook / experimental endpoint | ❌ | ✅ |
+| Requires custom middleware chain / shared service layer | ✅ | ❌ |
+| Spiky, low average traffic (cost optimize) | ⚠️ | ✅ |
+| Long-lived streaming / websockets | ✅ | ❌ |
+
+Cloud Functions specifics:
+- Runtime pinned via `firebase.json` (`python313`, region `europe-west4`).
+- Global scaling options in `functions/main.py` (memory 128MB; env-param `MIN_INSTANCES` default 0, `MAX_INSTANCES` default 2).
+- Dependencies isolated in `functions/requirements.txt`; DO NOT automatically mirror all `pyproject.toml` deps—keep lean to reduce cold starts.
+- Add new functions by decorating callables with `@https_fn.on_request()` (or other trigger types) inside `functions/main.py` (or split into modules imported by `main.py`).
+- Deployment: `firebase deploy --only functions` (ensure you installed `functions/requirements.txt`).
+- Emulator: `firebase emulators:start --only functions` (ports defined in `firebase.json`).
+- Vertex / Generative AI support is optional—uncomment and configure client if needed.
+
+Agent guidance:
+1. If a change affects shared domain logic used by both environments, refactor into a neutral module under a new `shared/` or reuse `app/services/` only if no Firebase-only dependencies leak in.
+2. Avoid importing FastAPI-specific middleware or app objects inside `functions/` code.
+3. When editing both layers, create separate commits/patch hunks logically grouped (e.g., "feat(functions): add X" and "feat(api): expose X endpoint").
+4. Keep environment variables documented in the top-level README when introducing new cross-environment config.
+5. For tests of logic used in functions, write pure unit tests under `tests/unit/` that import the shared module—not the Firebase runtime wrapper—to avoid emulator coupling.
+
+CI note: Currently CI focuses on the FastAPI app; if functions gain complex logic, add a lightweight import test (e.g., ensure `functions/main.py` loads) and possibly a dry-run deployment script.
 
 ---
 
