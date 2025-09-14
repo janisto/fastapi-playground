@@ -51,4 +51,3 @@ source = ["app", "tests"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-omit = ["app/**/asgi.py"]
