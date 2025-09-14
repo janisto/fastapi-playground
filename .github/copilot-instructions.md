@@ -173,7 +173,7 @@ Checklist for PRs
 - Typical env vars
   - `ENVIRONMENT`, `DEBUG`
   - `GOOGLE_APPLICATION_CREDENTIALS` (path to service account JSON)
-  - `FIREBASE_PROJECT_ID`, `GCP_PROJECT_ID`
+  - `FIREBASE_PROJECT_ID` (also used for trace correlation; `GCP_PROJECT_ID` deprecated)
 
 ---
 

@@ -20,8 +20,8 @@ dev = [
     "pytest-asyncio>=1.1.0",
     "pytest-cov>=6.2.1",
     "pytest-httpx>=0.35.0",
-    "ruff>=0.12.11",
-    "ty>=0.0.1a19",
+    "ruff>=0.13.0",
+    "ty>=0.0.1a20",
 ]
 
 [tool.ruff]
@@ -42,6 +42,9 @@ unresolved-import = "ignore"
 
 [tool.pytest.ini_options]
 # addopts = "--maxfail=1 --cov=app"
+norecursedirs = [
+    "lib",
+]
 
 [tool.coverage.run]
 branch = true

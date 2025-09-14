@@ -134,7 +134,8 @@ class RequestContextLogMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app: ASGIApp) -> None:
         super().__init__(app)
-        self._project_id = get_settings().gcp_project_id
+        # Reuse firebase_project_id for trace correlation
+        self._project_id = get_settings().firebase_project_id
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         headers = {k.lower(): v for k, v in request.headers.items()}

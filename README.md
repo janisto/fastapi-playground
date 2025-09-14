@@ -126,22 +126,21 @@ Loaded automatically from `.env` (see `config.Settings`).
 | `DEBUG` | No | `True` | Enable debug behaviors (verbosity, reload) |
 | `HOST` | No | `0.0.0.0` | Bind address |
 | `PORT` | No | `8080` | Listen port (Cloud Run uses this) |
-| `FIREBASE_PROJECT_ID` | Yes* | `test-project` | Firebase project id (Auth + Firestore) |
-| `GCP_PROJECT_ID` | Yes* | `test-project` | Used for trace correlation in logs |
+| `FIREBASE_PROJECT_ID` | Yes* | `test-project` | Firebase (and GCP) project id used for Auth, Firestore, and trace correlation |
 | `GOOGLE_APPLICATION_CREDENTIALS` | No | `None` | Path to service account JSON (else ADC) |
 | `SECRET_MANAGER_ENABLED` | No | `True` | Flag (currently unused placeholder) |
-| `FIRESTORE_COLLECTION_PROFILES` | No | `profiles` | Firestore collection name |
 | `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Request body limit (bytes) |
 | `CORS_ORIGINS` | No | (empty) | Comma-separated allowed origins (deny all if unset) |
 
 (*Provide real values outside tests.)
+
+Firestore profile collection name is fixed to `profiles` (see `app/models/profile.py`) and no longer configurable via env var.
 
 Example `.env`:
 ```env
 ENVIRONMENT=development
 DEBUG=true
 FIREBASE_PROJECT_ID=my-firebase
-GCP_PROJECT_ID=my-gcp
 MAX_REQUEST_SIZE_BYTES=1000000
 CORS_ORIGINS=https://example.com,https://app.example.com
 ```
@@ -310,7 +309,6 @@ Production env vars:
 ENVIRONMENT=production
 DEBUG=false
 FIREBASE_PROJECT_ID=<real>
-GCP_PROJECT_ID=<real>
 ```
 
 ## Firebase Cloud Functions (Python)
