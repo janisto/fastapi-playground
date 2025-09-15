@@ -5,6 +5,15 @@
 app:
   - changed-files:
       - any-glob-to-any-file: 'app/**'
+# Functions changes in functions folder
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+# Functions changes in functions folder
+functions:
+  - changed-files:
+      - any-glob-to-any-file: 'functions/**'
 
 # Documentation changes in README.md
 documentation:
