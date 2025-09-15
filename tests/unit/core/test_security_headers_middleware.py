@@ -7,17 +7,17 @@ from starlette.types import Receive, Scope, Send
 
 from app.core.config import get_settings
 from app.core.security import SecurityHeadersMiddleware
+from tests.helpers.starlette_utils import build_starlette_app
 
 
 def _app() -> Starlette:
-    app = Starlette()
-
-    @app.route("/ping")
     async def ping(request: Request) -> PlainTextResponse:  # type: ignore[override]
         return PlainTextResponse("pong")
 
-    app.add_middleware(SecurityHeadersMiddleware)
-    return app
+    return build_starlette_app(
+        routes=[("/ping", ping, ["GET"])],
+        middleware=[(SecurityHeadersMiddleware, {})],
+    )
 
 
 def test_security_headers_http() -> None:

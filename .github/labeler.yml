@@ -6,11 +6,23 @@ app:
   - changed-files:
       - any-glob-to-any-file: 'app/**'
 
+# Test changes in tests folder
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+# Functions changes in functions folder
+functions:
+  - changed-files:
+      - any-glob-to-any-file: 'functions/**'
+
 # Documentation changes in README.md
 documentation:
   - changed-files:
       - any-glob-to-any-file:
+          - 'functions/README.md'
           - 'README.md'
+          - 'GCP.md'
 
 # Branch-name based labels
 feature:

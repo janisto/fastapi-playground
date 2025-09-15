@@ -72,7 +72,7 @@ app.add_middleware(
 )
 
 
-@app.get("/", tags=["root"])
+@app.get("/", tags=["root"], include_in_schema=False)
 async def root() -> dict[str, str]:
     """Root endpoint."""
     return {"message": "Hello World", "docs": "/api-docs"}

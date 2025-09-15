@@ -20,6 +20,12 @@ Conventions
 - Keep Ruff and typing clean: run `just lint` and `just typing`. Avoid `print`; use logger if needed.
 - Use realistic but synthetic fixtures. Never log or include secrets/PII in test data.
 
+Comment discipline
+- Do not add progress or narrative comments (e.g., "setting up test", "now calling endpoint").
+- Keep comments only for complex fixture setup, intricate mocking, race-condition mitigation, or rationale behind unusual assertions.
+- Do not duplicate the test name or obvious Given/When/Then steps in comments.
+- Remove outdated comments immediately when altering test logic.
+
 Run commands (repo root)
 1) `just test` (pass extra pytest args as needed)
 2) `just cov` (coverage report to `htmlcov/`)

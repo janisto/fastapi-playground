@@ -1,6 +1,6 @@
 # FastAPI Playground
 
-A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firestore CRUD, typed Pydantic models, and a tidy development workflow with `uv` (dependency & virtualenv manager) and `just` (task runner). This README is optimized for AI code assistants: it lists actual module locations, environment variables, commands, architectural decisions, and gotchas verified against the current codebase (September 2025).
+A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firestore CRUD, typed Pydantic models, and a tidy development workflow with `uv` (dependency & virtualenv manager) and `just` (task runner). This README is optimized for AI code assistants: it lists actual module locations, environment variables, commands, architectural decisions, and gotchas.
 
 ## Features
 
@@ -8,7 +8,7 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 - Firebase Authentication (ID token verification via Admin SDK)
 - Firestore persistence for user profile documents
 - Firebase Cloud Functions (Python 3.13 runtime) example (`functions/main.py`) with regional config & scaling limits
-- Structured one-line JSON logging (Cloud Run friendly, trace correlation)
+- Structured one-line JSON logging (Cloud Run friendly, trace correlation via `X-Cloud-Trace-Context` header)
 - Pydantic v2 models + `pydantic-settings` for env-driven configuration
 - Custom middlewares: security headers, request body size limiting, request-context logging
 - Strict CORS allowlist (deny-by-default)
@@ -122,13 +122,16 @@ Loaded automatically from `.env` (see `config.Settings`).
 
 | Env Var | Required | Default | Purpose |
 | ------- | -------- | ------- | ------- |
-| `ENVIRONMENT` | No | `development` | Environment label (affects logging posture) |
+| `ENVIRONMENT` | No | `production` | Environment label (affects logging posture & HSTS) |
 | `DEBUG` | No | `True` | Enable debug behaviors (verbosity, reload) |
 | `HOST` | No | `0.0.0.0` | Bind address |
 | `PORT` | No | `8080` | Listen port (Cloud Run uses this) |
-| `FIREBASE_PROJECT_ID` | Yes* | `test-project` | Firebase (and GCP) project id used for Auth, Firestore, and trace correlation |
-| `GOOGLE_APPLICATION_CREDENTIALS` | No | `None` | Path to service account JSON (else ADC) |
-| `SECRET_MANAGER_ENABLED` | No | `True` | Flag (currently unused placeholder) |
+| `FIREBASE_PROJECT_ID` | Yes* | `test-project` | Firebase / GCP project id (Auth, Firestore, trace correlation) |
+| `FIREBASE_PROJECT_NUMBER` | No | `None` | Numeric project number (future integrations / logging metadata) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | No | `None` | Path to service account JSON (local dev only; omit in Cloud Run) |
+| `APP_ENVIRONMENT` | No | `None` | Optional secondary environment label (surfaced in logs if set) |
+| `APP_URL` | No | `None` | Public application URL (informational) |
+| `SECRET_MANAGER_ENABLED` | No | `True` | Placeholder flag (no logic yet) |
 | `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Request body limit (bytes) |
 | `CORS_ORIGINS` | No | (empty) | Comma-separated allowed origins (deny all if unset) |
 
@@ -136,13 +139,17 @@ Loaded automatically from `.env` (see `config.Settings`).
 
 Firestore profile collection name is fixed to `profiles` (see `app/models/profile.py`) and no longer configurable via env var.
 
-Example `.env`:
+Example `.env` (minimal + optional extras commented):
 ```env
 ENVIRONMENT=development
 DEBUG=true
 FIREBASE_PROJECT_ID=my-firebase
 MAX_REQUEST_SIZE_BYTES=1000000
 CORS_ORIGINS=https://example.com,https://app.example.com
+# Optional extras:
+# FIREBASE_PROJECT_NUMBER=123456789012
+# APP_ENVIRONMENT=dev
+# APP_URL=http://127.0.0.1:8080
 ```
 
 ## Quick Start
@@ -210,11 +217,11 @@ docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
 
 ## Request Size Limits
 
-`BodySizeLimitMiddleware` aborts with `413` if body exceeds `MAX_REQUEST_SIZE_BYTES` without buffering full body.
+`BodySizeLimitMiddleware` aborts with `413` if body exceeds `MAX_REQUEST_SIZE_BYTES` without buffering the entire body (streams & early abort: pre-checks `Content-Length`, then counts chunks incrementally).
 
 ## Logging & Trace Correlation
 
-JSON logs (`app/core/logging.py`): keys include `severity`, `message`, `time`, `logger`, source location, optional `trace` / `spanId` derived from `X-Cloud-Trace-Context` (Cloud Run / GCP).
+JSON logs (`app/core/logging.py`): keys include `severity`, `message`, `time`, `logger`, source location, optional `trace` / `spanId` derived from `X-Cloud-Trace-Context` (Cloud Run / GCP). Extra structured fields passed via `extra={...}` (excluding reserved attributes) are merged; `None` values serialized as the string `"null"` to ensure consistent key presence.
 
 Usage example:
 ```python
@@ -254,7 +261,7 @@ Notes: Firebase/Firestore interactions patched; no real network calls.
 
 ## Error Responses
 
-Standard business error shape:
+Standard business error shape (`ErrorResponse`):
 ```json
 { "detail": "<message>" }
 ```
@@ -297,6 +304,8 @@ gcloud run deploy fastapi-playground \
   --region us-central1 \
   --allow-unauthenticated
 ```
+For a detailed, end-to-end infrastructure and IAM setup (APIs, roles, environment variables, Cloud Build integration, Functions vs Cloud Run guidance) see: [`GCP.md`](GCP.md).
+
 Automatic base updates:
 ```bash
 gcloud run deploy fastapi-playground \
@@ -417,7 +426,11 @@ The scaffold includes commented guidance for Vertex AI via `google-genai`. To en
 3. Keep memory/timeout sizing in mind for model invocation latency.
 
 ---
+## Infrastructure Docs
 
+Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md). Keep README high-level; update `GCP.md` for infra changes (regions, IAM roles, API enablement, CI/CD specifics).
+
+---
 ## CI & Automation
 
 Workflow `.github/workflows/ci.yml`:
@@ -448,6 +461,7 @@ Label automation:
 | Firestore sync calls | Blocking inside async | Wrap in thread executor if performance degrades |
 | Unused deps | `httpx`, `python-jose` | Remove unless near-term use planned |
 | Secret Manager flag | Unused setting | Implement or drop to reduce confusion |
+| Additional env vars (APP_ENVIRONMENT, APP_URL, FIREBASE_PROJECT_NUMBER) | Optional metadata | Only set if needed for logging / external references |
 | CORS default | Empty denies all | Always set for browser clients |
 | Large bodies | Hard 413 at limit | Communicate to clients uploading large JSON |
 
@@ -468,7 +482,3 @@ Adding config:
 ## License
 
 MIT License – see [`LICENSE`](LICENSE).
-
----
-
-_Generated & verified against repository state (Sept 2025). Update on structural or dependency changes._
