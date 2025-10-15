@@ -1,6 +1,16 @@
 # FastAPI Playground
 
-A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firestore CRUD, typed Pydantic models, and a tidy development workflow with `uv` (dependency & virtualenv manager) and `just` (task runner). This README is optimized for AI code assistants: it lists actual module locations, environment variables, commands, architectural decisions, and gotchas.
+A production-ready FastAPI application demonstrating modern Python development practices with Firebase integration. Built with Python 3.13+, this project showcases:
+
+- **FastAPI** with async endpoints, automatic OpenAPI docs, and typed request/response models
+- **Firebase Authentication** (ID token verification) + **Firestore** (user profile CRUD)
+- **Firebase Cloud Functions** (Python 3.13 runtime, regional deployment, scaling controls)
+- **Modern tooling**: `uv` for dependency management, `just` for task automation
+- **Quality assurance**: Ruff (lint/format), ty (type checking), pytest (tests + coverage)
+- **Production features**: Structured JSON logging, trace correlation, security headers, CORS, request size limits
+- **CI/CD**: GitHub Actions with automated lint/type/test checks and coverage reporting
+
+This README is optimized for AI code assistants: it documents actual module locations, environment variables, commands, architectural decisions, gotchas, and development patterns.
 
 ## Features
 
@@ -44,48 +54,70 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 │   ├── unit/                      # Fine-grained model/auth/core tests
 │   ├── integration/               # API + middleware behavior tests
 │   ├── e2e/                       # Happy path scenario(s)
-│   ├── helpers/                   # Test utility modules
-│   └── mocks/                     # Firebase / HTTP mocks
+│   ├── helpers/                   # Test utility modules (auth, clients, profiles, starlette utils)
+│   └── mocks/                     # Firebase / HTTP / service mocks
 ├── functions/                     # Firebase Cloud Functions (Python) codebase
 │   ├── main.py                    # Example HTTPS callable (Hello world)
 │   ├── requirements.txt           # Functions-specific deps (pin separately)
 │   └── README.md                  # Deployment quickstart
 ├── .github/
+│   ├── copilot-instructions.md    # Primary AI assistant guidelines
+│   ├── instructions/              # Domain-specific instructions (openapi, tests)
+│   ├── prompts/                   # Repo-specific prompt templates
 │   ├── workflows/                 # CI + labeling automation
-│   ├── instructions/              # Copilot / contributor guidance
-│   └── prompts/                   # Repo-specific prompt templates
+│   └── labeler.yml                # Auto-label configuration
 ├── pyproject.toml                 # Dependencies & tool configuration
 ├── uv.lock                        # Locked, reproducible dependency versions
 ├── Justfile                       # Task automation
 ├── Dockerfile                     # Multi-stage build (slim base by default)
-└── README.md
+├── .dockerignore                  # Docker build exclusions
+├── .gitignore                     # Git exclusions
+├── .env.example                   # Example environment configuration
+├── firebase.json                  # Firebase project configuration
+├── firestore.rules                # Firestore security rules
+├── firestore.indexes.json         # Firestore index definitions
+├── storage.rules                  # Cloud Storage security rules
+├── GCP.md                         # Detailed GCP deployment & IAM guide
+└── README.md                      # This file
 ```
 
 ## API Endpoints
 
 ### Root & Health
-- `GET /` — Hello World + link to docs
-- `GET /health` — Liveness probe (returns `{ "status": "healthy" }`)
-- `GET /api-docs` — Swagger UI
-- `GET /api-redoc` — ReDoc
+- `GET /` — Hello World + link to docs (returns `{ "message": "Hello World", "docs": "/api-docs" }`)
+  - Not included in OpenAPI schema (`include_in_schema=False`)
+- `GET /health` — Liveness probe (returns `{ "status": "healthy" }` with `Literal["healthy"]` type)
+  - Lightweight probe for Cloud Run / K8s liveness checks
+  - Tagged: `["health"]`
+- `GET /api-docs` — Swagger UI (interactive API documentation)
+- `GET /api-redoc` — ReDoc (alternative API documentation UI)
 
 ### Profile (Protected: `Authorization: Bearer <Firebase ID token>`)
-- `POST /profile/` — Create profile
-- `GET /profile/` — Retrieve profile
-- `PUT /profile/` — Update profile (partial via nullable/omitted fields)
-- `DELETE /profile/` — Delete profile
+- `POST /profile/` — Create profile (201 on success, 409 if exists, 422 on validation error)
+- `GET /profile/` — Retrieve profile (200 on success, 404 if not found)
+- `PUT /profile/` — Update profile (200 on success; partial updates via nullable/omitted fields)
+- `DELETE /profile/` — Delete profile (200 on success, 404 if not found)
+
+All profile endpoints return `ProfileResponse` with shape:
+```json
+{
+  "success": true,
+  "message": "Operation message",
+  "profile": { /* Profile object or null */ }
+}
+```
 
 ### Profile Model (Response Shape)
 
 ```jsonc
 {
-   "firstname": "str",          // Required
-   "lastname": "str",           // Required
+   "firstname": "str",          // Required (1-100 chars)
+   "lastname": "str",           // Required (1-100 chars)
    "email": "EmailStr",         // Required & validated
-   "phone_number": "str",       // Required
-   "marketing": false,           // Boolean opt-in (default false)
-   "terms": true,                // Must be true when creating
-   "id": "<user uid>",          // Firebase user id (doc id)
+   "phone_number": "str",       // Required (E.164 format: +1234567890)
+   "marketing": false,          // Boolean opt-in (default false)
+   "terms": true,               // Must be true when creating
+   "id": "<user uid>",          // Firebase user id (doc id, 1-128 chars)
    "created_at": "ISO-8601",    // Set at creation
    "updated_at": "ISO-8601"     // Updated on modification
 }
@@ -94,10 +126,25 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 ## Prerequisites
 
 - Python 3.13+
-- `uv` (dependency & venv manager)
-- `just` (task runner)
+- `uv` (dependency & venv manager) — Install: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- `just` (task runner) — Install: `brew install just` (macOS) or see [just docs](https://github.com/casey/just)
 - Firebase project (Authentication + Firestore enabled)
 - Google Cloud project (optional for Cloud Run & trace/log context)
+
+## Dependency Management
+
+This project uses `uv` exclusively for dependency management (do not mix with pip/poetry):
+
+- Dependencies declared in `pyproject.toml` (runtime + dev groups)
+- Exact versions locked in `uv.lock` (~163KB) for reproducibility
+- Virtual environment auto-created in `.venv/` on `uv sync`
+- Use `just install` (alias for `uv sync`) to sync environment with lockfile
+- Use `just update` (alias for `uv sync --upgrade`) to upgrade all dependencies
+
+Adding a new dependency:
+1. Add to `pyproject.toml` under `dependencies` or `[dependency-groups] dev`
+2. Run `just install` to resolve and update `uv.lock`
+3. Commit both `pyproject.toml` and `uv.lock`
 
 ## Tech Stack & Dependencies
 
@@ -212,8 +259,24 @@ docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
 
 ## CORS & Security Headers
 
-- CORS deny-by-default. Set `CORS_ORIGINS` to explicit origins.
-- Middleware adds: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`; HSTS when HTTPS & not debug.
+Middleware stack (registration order in `app/main.py`):
+1. `RequestContextLogMiddleware` — Adds trace context from `X-Cloud-Trace-Context` header
+2. `BodySizeLimitMiddleware` — Enforces `MAX_REQUEST_SIZE_BYTES` limit (413 on exceed)
+3. `SecurityHeadersMiddleware` — Adds security headers
+4. `CORSMiddleware` — Handles CORS preflight/requests
+
+Security headers added:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: same-origin`
+- `Strict-Transport-Security` (HSTS) when HTTPS detected and not in debug mode (includes subdomains)
+
+CORS:
+- Deny-by-default (empty `allowed_origins` if `CORS_ORIGINS` unset or empty)
+- Set `CORS_ORIGINS` to comma-separated list of explicit origins
+- Credentials: `False`
+- Methods: `GET, POST, PUT, DELETE, OPTIONS`
+- Headers: `Authorization, Content-Type`
 
 ## Request Size Limits
 
@@ -249,6 +312,17 @@ Failure cases:
 | Unit | `tests/unit/**` | Models, config, small pure logic |
 | Integration | `tests/integration/**` | API routes, middleware |
 | E2E | `tests/e2e/**` | High-level flows |
+| Helpers | `tests/helpers/**` | Reusable test utilities (auth tokens, test clients, profile factories, Starlette utils) |
+| Mocks | `tests/mocks/**` | Firebase Admin, HTTP, service mocks |
+
+Test utilities:
+- `tests/helpers/auth.py` — Generate mock Firebase tokens
+- `tests/helpers/clients.py` — Build test clients with auth headers
+- `tests/helpers/profiles.py` — Profile factory fixtures
+- `tests/helpers/starlette_utils.py` — Starlette request/response helpers
+- `tests/mocks/firebase.py` — Mock Firebase Admin SDK
+- `tests/mocks/http.py` — Mock HTTP responses
+- `tests/mocks/services.py` — Mock service layer
 
 Examples:
 ```bash
@@ -257,15 +331,17 @@ just test tests/unit/models/test_profile_models.py
 just test tests/integration/test_api.py::test_health
 just cov
 ```
-Notes: Firebase/Firestore interactions patched; no real network calls.
+Notes: Firebase/Firestore interactions patched via `conftest.py`; no real network calls.
 
 ## Error Responses
 
-Standard business error shape (`ErrorResponse`):
+Standard business error shape (`ErrorResponse` from `app/models/error.py`):
 ```json
 { "detail": "<message>" }
 ```
-Validation errors keep FastAPI default list form.
+Examples: `{"detail": "Unauthorized"}`, `{"detail": "Profile not found"}`, `{"detail": "Profile already exists for this user"}`
+
+Validation errors keep FastAPI default list form with field-specific details.
 
 ## Example Requests
 
@@ -393,6 +469,15 @@ Or just functions:
 ```bash
 firebase emulators:start --only functions
 ```
+
+Emulator ports (from `firebase.json`):
+- Auth: 7010
+- Functions: 7020
+- Firestore: 7030
+- Storage: 7040
+- UI: auto-assigned (enabled)
+- `singleProjectMode: true` (simplified multi-service setup)
+
 Access the Emulator UI (auto-listed in terminal) to inspect requests, Firestore docs, and Auth users.
 
 Environment parity tips:
@@ -426,6 +511,23 @@ The scaffold includes commented guidance for Vertex AI via `google-genai`. To en
 3. Keep memory/timeout sizing in mind for model invocation latency.
 
 ---
+## Configuration Files Reference
+
+| File | Purpose |
+| ---- | ------- |
+| `.env` | Local environment variables (gitignored; copy from `.env.example`) |
+| `.env.example` | Example environment configuration template |
+| `firebase.json` | Firebase project config (Functions, Firestore, Storage, Emulator ports) |
+| `firestore.rules` | Firestore security rules |
+| `firestore.indexes.json` | Firestore composite index definitions |
+| `storage.rules` | Cloud Storage security rules |
+| `.firebaserc` | Firebase project aliases (gitignored if contains real project IDs) |
+| `.dockerignore` | Files excluded from Docker builds |
+| `.editorconfig` | Editor formatting consistency (indent, line endings, charset) |
+| `.python-version` | Python version hint for version managers |
+| `pyproject.toml` | Python dependencies, tool configs (Ruff, ty, pytest, coverage) |
+| `uv.lock` | Locked dependency versions for reproducibility |
+
 ## Infrastructure Docs
 
 Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md). Keep README high-level; update `GCP.md` for infra changes (regions, IAM roles, API enablement, CI/CD specifics).
@@ -433,51 +535,155 @@ Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md).
 ---
 ## CI & Automation
 
-Workflow `.github/workflows/ci.yml`:
-1. Install (uv)
-2. Lint (ruff)
-3. Typing (ty)
-4. Coverage tests (pytest + htmlcov artifact)
-5. Coverage comment on PRs (threshold currently not enforced)
+### Workflow `.github/workflows/ci.yml`
+Triggers: Push to `main`, PRs to `main`
 
-Label automation:
-- Auto: `.github/workflows/labeler.yml`
-- Manual backfill: `.github/workflows/labeler-manual.yml` (dispatch with `maxCount`, `scope`)
+Steps:
+1. Checkout code
+2. Set up Python 3.13
+3. Set up uv (Astral's package manager)
+4. Set up just (task runner)
+5. Install dependencies (`just install`)
+6. Run lint checks (`just lint`) — Ruff check + format
+7. Run typing checks (`just typing`) — ty static analysis
+8. Run test coverage (`just cov`) — pytest with coverage
+9. Upload coverage artifact (htmlcov/)
+10. Post coverage comment on PR (via `dima-engineer/pytest-reporter@v4`)
+
+Permissions:
+- `contents: read`
+- `pull-requests: write` (for coverage comments)
+
+Concurrency: Cancel in-progress runs for same ref
+
+Coverage thresholds:
+- Currently commented out (`cov-threshold-single: 85`, `cov-threshold-total: 90`)
+- Omit `tests/*` from coverage percentage calculation
+- Async tests supported
+
+### Label Automation
+- `.github/workflows/labeler.yml` — Auto-labels PRs based on changed paths
+- `.github/workflows/labeler-manual.yml` — Manual dispatch for backfilling labels (params: `maxCount`, `scope`)
+- `.github/labeler.yml` — Label rules configuration
 
 ## Development Conventions
 
+### Code Style
 - Routers thin; put logic in `services/`.
 - Async endpoints; document if using sync I/O.
-- Type hints everywhere (Ruff `ANN` rules).
-- Group imports: stdlib / third-party / local.
-- Access config only via `get_settings()`.
+- Type hints everywhere (Ruff `ANN` rules enforced).
+- Group imports: stdlib / third-party / local with blank line separators.
+- Access config only via `get_settings()` (never direct `os.getenv`).
 - No direct env reads or secret logging.
-- Tests: prefer deterministic, isolated units.
+- Pydantic models use `extra="forbid"` to catch typos/unexpected fields.
+- Use structured logging with `extra={...}` for context (never log PII/secrets).
+- Line length: 120 chars (Ruff config).
+- Use `from __future__ import annotations` for forward references.
+
+### File Naming
+- Python modules: `snake_case.py`
+- Test files: `test_<module_name>.py` (mirrors source structure where practical)
+- Models: Named after domain concept (e.g., `profile.py`, `health.py`, `error.py`)
+- Routers: Named after resource (e.g., `profile.py` for `/profile` endpoints)
+- Services: Named after domain (e.g., `profile.py` for profile business logic)
+
+### Test Organization
+- Unit tests: `tests/unit/<app_path>/test_<module>.py` (mirrors app structure)
+- Integration tests: `tests/integration/test_<feature>.py`
+- E2E tests: `tests/e2e/test_<scenario>.py`
+- Test helpers: `tests/helpers/<helper_name>.py` (reusable utilities)
+- Mocks: `tests/mocks/<service_name>.py` (fake implementations)
 
 ## Gotchas & Recommendations
 
 | Area | Detail | Recommendation |
 | ---- | ------ | -------------- |
-| Firestore sync calls | Blocking inside async | Wrap in thread executor if performance degrades |
-| Unused deps | `httpx`, `python-jose` | Remove unless near-term use planned |
-| Secret Manager flag | Unused setting | Implement or drop to reduce confusion |
-| Additional env vars (APP_ENVIRONMENT, APP_URL, FIREBASE_PROJECT_NUMBER) | Optional metadata | Only set if needed for logging / external references |
-| CORS default | Empty denies all | Always set for browser clients |
-| Large bodies | Hard 413 at limit | Communicate to clients uploading large JSON |
+| Firestore sync calls | Blocking inside async endpoints | Wrap in `anyio.to_thread.run_sync` if performance degrades |
+| Unused deps | `httpx`, `python-jose` not imported | Remove unless near-term use planned to reduce supply-chain surface |
+| Secret Manager flag | `SECRET_MANAGER_ENABLED` exists but unused | Implement secret loading logic or remove setting |
+| Optional env vars | `APP_ENVIRONMENT`, `APP_URL`, `FIREBASE_PROJECT_NUMBER` | Only set if needed for logging context / external references |
+| CORS default | Empty `CORS_ORIGINS` denies all | Always set explicit origins for browser clients; backend-to-backend doesn't need it |
+| Large bodies | Hard 413 at `MAX_REQUEST_SIZE_BYTES` limit | Communicate size limits to clients; no buffering occurs (streams + early abort) |
+| Profile collection name | Hardcoded as `"profiles"` in `app/models/profile.py` | Change constant + tests if rename needed; not configurable via env |
+| Auth dependency pattern | `_current_user_dependency` wrapper in router | Enables test patching; don't inline `verify_firebase_token` directly |
+| HSTS behavior | Only activates on HTTPS + non-debug | Local dev (HTTP) won't see HSTS header; expected behavior |
+| Test isolation | All Firebase/Firestore calls mocked | Never runs real network calls; use emulator for integration testing if needed |
+| Middleware order matters | Logging → Body Limit → Security → CORS | Don't reorder without understanding request flow impact |
+| Model validation | `extra="forbid"` on all request models | Typos/unknown fields rejected with 422; intentional strictness |
 
 ## For AI Assistants
 
-Adding an endpoint:
-1. Define request/response models (`app/models/`).
-2. Implement service logic (`app/services/`).
-3. Create router (`app/routers/`) using `APIRouter` with tags.
-4. Register router in `app/main.py`.
-5. Add tests: unit (service), integration (route), e2e (flow if needed).
+### Adding an endpoint:
+1. Define request/response models in `app/models/` (use `BaseModel`, add field validation, set `extra="forbid"`).
+2. Implement service logic in `app/services/` (use async if I/O-bound; inject Firestore via `get_firestore_client()`).
+3. Create router in `app/routers/` using `APIRouter` with tags, status codes, `responses` dict for error cases.
+4. Register router in `app/main.py` with `app.include_router(router, prefix="/path", tags=["tag"])`.
+5. Add tests: unit (service), integration (route + auth), e2e (flow if multi-step).
+6. Update `.github/instructions/openapi.instructions.md` if endpoint has special OpenAPI requirements.
 
-Adding config:
-1. Add field in `Settings` with env alias.
-2. Access via `get_settings()` in functions.
-3. Update README if externally relevant.
+### Adding config:
+1. Add field in `Settings` (`app/core/config.py`) with Field, type hint, and env alias.
+2. Access via `get_settings()` in functions (never `os.getenv`).
+3. Update README environment table if user-facing.
+4. Update `.env.example` with sample value.
+
+### Adding middleware:
+1. Create middleware in `app/core/` (extend Starlette `BaseHTTPMiddleware` or use plain ASGI).
+2. Register in `app/main.py` via `app.add_middleware()` in correct order (logging first, then body limit, then security, then CORS last).
+3. Add integration tests in `tests/integration/`.
+
+### Key files for context:
+- `app/main.py` — App factory, middleware registration, root endpoints
+- `app/core/config.py` — All environment-driven settings
+- `app/models/profile.py` — Profile domain models + `PROFILE_COLLECTION` constant
+- `tests/conftest.py` — Test fixtures, Firebase/Firestore mocking patterns
+- `tests/helpers/` — Reusable test utilities (auth token generation, client builders, profile factories)
+
+## Quick Reference Card
+
+### Most Common Commands
+```bash
+just serve              # Start dev server (http://127.0.0.1:8080)
+just test               # Run all tests
+just cov                # Run tests with coverage report
+just lint               # Lint and format code
+just typing             # Type check
+just check-all          # Run all QA checks
+just install            # Sync dependencies
+```
+
+### Key Files to Modify
+| Task | File(s) to Change |
+| ---- | ----------------- |
+| Add endpoint | `app/routers/<resource>.py`, `app/models/<resource>.py`, `app/services/<resource>.py`, register in `app/main.py` |
+| Add env var | `app/core/config.py` (Settings class), `.env.example`, README env table |
+| Add middleware | `app/core/<middleware>.py`, register in `app/main.py` |
+| Add dependency | `pyproject.toml`, run `just install`, commit `uv.lock` |
+| Configure Firebase | `firebase.json`, `firestore.rules`, `firestore.indexes.json` |
+| Add Cloud Function | `functions/main.py`, optionally update `functions/requirements.txt` |
+
+### Common Imports Pattern
+```python
+# Stdlib
+import logging
+from datetime import UTC, datetime
+from typing import Annotated
+
+# Third-party
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+# Local
+from app.core.config import get_settings
+from app.core.firebase import get_firestore_client
+from app.models.profile import Profile, ProfileCreate
+```
+
+### Environment Variables Quick List
+Required: `FIREBASE_PROJECT_ID`  
+Important: `CORS_ORIGINS` (if browser clients), `GOOGLE_APPLICATION_CREDENTIALS` (local dev)  
+Optional: `DEBUG`, `ENVIRONMENT`, `PORT`, `MAX_REQUEST_SIZE_BYTES`  
+Informational: `APP_ENVIRONMENT`, `APP_URL`, `FIREBASE_PROJECT_NUMBER`
 
 ## License
 
