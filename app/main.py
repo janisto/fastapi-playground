@@ -14,7 +14,7 @@ from app.core.firebase import initialize_firebase
 from app.core.logging import RequestContextLogMiddleware, setup_logging
 from app.core.security import SecurityHeadersMiddleware
 from app.models.health import HealthResponse
-from app.routers import profile
+from app.routers import dog, profile
 
 
 @asynccontextmanager
@@ -39,6 +39,7 @@ app = FastAPI(
 
 # Include routers
 app.include_router(profile.router, prefix="/profile", tags=["profile"])
+app.include_router(dog.router, prefix="/dogs", tags=["dogs"])
 
 # Add logging middleware to capture trace context
 app.add_middleware(RequestContextLogMiddleware)
