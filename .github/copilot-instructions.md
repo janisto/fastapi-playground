@@ -34,7 +34,7 @@ Violations should be removed before a PR is marked ready. Default to silence unl
 
 ## Tech & Tooling
 
-- Language/runtime: Python 3.13+
+- Language/runtime: Python 3.14+
 - Frameworks/libs: FastAPI, Pydantic v2, Uvicorn, Firebase Admin SDK, Google Cloud (Firestore/Logging/Secret Manager)
 - Package/devenv: uv (+ virtualenv in `.venv`), Justfile for tasks
 - Lint/format: Ruff (line-length 120; rules include ANN, FAST)
@@ -106,7 +106,7 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
 
 - `app/` — FastAPI app: routers, models, services, core config, auth
 - `tests/` — unit/integration/e2e tests
-- `functions/` — Firebase Cloud Functions (Python 3.13) codebase (`main.py`, its own `requirements.txt`)
+- `functions/` — Firebase Cloud Functions (Python 3.14) codebase (`main.py`, its own `requirements.txt`)
 - `Justfile` — dev/test/build tasks
 - `pyproject.toml` — dependencies and tool configs (Ruff, ty, pytest, coverage)
 

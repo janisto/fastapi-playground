@@ -4,10 +4,10 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 
 ## Features
 
-- FastAPI (Python 3.13+) with async endpoints and automatic OpenAPI docs (`/api-docs`, `/api-redoc`)
+- FastAPI (Python 3.14+) with async endpoints and automatic OpenAPI docs (`/api-docs`, `/api-redoc`)
 - Firebase Authentication (ID token verification via Admin SDK)
 - Firestore persistence for user profile documents
-- Firebase Cloud Functions (Python 3.13 runtime) example (`functions/main.py`) with regional config & scaling limits
+- Firebase Cloud Functions (Python 3.14 runtime) example (`functions/main.py`) with regional config & scaling limits
 - Structured one-line JSON logging (Cloud Run friendly, trace correlation via `X-Cloud-Trace-Context` header)
 - Pydantic v2 models + `pydantic-settings` for env-driven configuration
 - Custom middlewares: security headers, request body size limiting, request-context logging
@@ -93,7 +93,7 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 
 ## Prerequisites
 
-- Python 3.13+
+- Python 3.14+
 - `uv` (dependency & venv manager)
 - `just` (task runner)
 - Firebase project (Authentication + Firestore enabled)
@@ -186,7 +186,7 @@ just clean          # Remove caches/venv/coverage
 just fresh          # clean + install
 
 # Containers
-just docker-build   # Build image (python:3.13-slim*)
+just docker-build   # Build image (python:3.14-slim*)
 just docker-run     # Run with env-file + port
 just docker-logs    # Tail logs
 ```
@@ -290,7 +290,7 @@ docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
 ```
 Override base image:
 ```bash
-just docker-build pyimg=python:3.13-slim-bookworm
+just docker-build pyimg=python:3.14-slim-bookworm
 ```
 
 ## Deployment (Cloud Run)
@@ -310,7 +310,7 @@ Automatic base updates:
 ```bash
 gcloud run deploy fastapi-playground \
   --image gcr.io/PROJECT_ID/fastapi-playground:TAG \
-  --base-image python:3.13-slim \
+  --base-image python:3.14-slim \
   --automatic-updates
 ```
 Production env vars:
@@ -326,7 +326,7 @@ This repo also includes a minimal Firebase Cloud Functions (2nd gen) Python code
 
 Key points:
 
-- Runtime: Python 3.13 (`"runtime": "python313"` in `firebase.json`).
+- Runtime: Python 3.14 (`"runtime": "python314"` in `firebase.json`).
 - Region: `europe-west4` (set globally via `options.set_global_options`).
 - Memory: 128 MB (`memory=options.MemoryOption.MB_128`).
 - Scaling limits (env-configurable):

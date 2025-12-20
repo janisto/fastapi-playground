@@ -1,4 +1,4 @@
-## Production dependencies for Cloud Functions (Python 3.13)
+## Production dependencies for Cloud Functions (Python 3.14)
 ## Format: package[extras]==PIN  (pin where stability matters) or >= for minimum.
 ## Keep this file in sync with pyproject.toml. Prefer pinning to reduce cold start variance.
 

@@ -9,8 +9,8 @@
 #     --automatic-updates
 #   This links your app image to a managed base so Google can patch it without a new revision.
 #
-# Tip: for smaller images, consider python:3.13-alpine, python:3.13-slim, python:3.13-slim-bookworm or python:3.13-slim-bullseye
-ARG PYTHON_IMAGE=python:3.13-slim
+# Tip: for smaller images, consider python:3.14-alpine, python:3.14-slim, python:3.14-slim-bookworm or python:3.14-slim-bullseye
+ARG PYTHON_IMAGE=python:3.14-slim
 FROM ${PYTHON_IMAGE} AS builder
 
 # Update system packages to address vulnerabilities.
