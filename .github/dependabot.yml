@@ -11,6 +11,14 @@ updates:
       time: "09:00"
       timezone: "Europe/Helsinki"
 
+  - package-ecosystem: "pip"
+    directory: "/functions"
+    schedule:
+      interval: "monthly"
+      day: "sunday"
+      time: "09:00"
+      timezone: "Europe/Helsinki"
+
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:
