@@ -333,7 +333,7 @@ Key points:
   - `MIN_INSTANCES` (default 0)
   - `MAX_INSTANCES` (default 2)
 - Example function: `on_request_example` returns a simple "Hello world!" response.
-- Dependencies isolated in `functions/requirements.txt` (keep aligned with top-level deps where overlap exists, but pin separately to control cold start variance).
+- Dependencies managed via `functions/pyproject.toml` (uses uv by default on Python 3.14+; keep lean to reduce cold starts).
 
 ### Project Config (firebase.json excerpt)
 
@@ -363,17 +363,15 @@ Key points:
 From repository root (or `cd functions` first):
 
 ```bash
-python3 -m venv venv                # (Optional: isolate build env for dependency resolution)
-source venv/bin/activate
-pip install -r functions/requirements.txt
+cd functions
+uv sync                                # Install dependencies
 export FUNCTIONS_DISCOVERY_TIMEOUT=30  # Helps CLI module scan (avoid premature timeout)
 firebase deploy --only functions
-deactivate
 ```
 
-Common one-liner (already have an active virtualenv):
+Common one-liner:
 ```bash
-pip install -r functions/requirements.txt && firebase deploy --only functions
+cd functions && uv sync && firebase deploy --only functions
 ```
 
 Set scaling overrides per deployment (bash examples):
