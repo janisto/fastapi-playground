@@ -34,7 +34,7 @@ Violations should be removed before a PR is marked ready. Default to silence unl
 
 ## Tech & Tooling
 
-- Language/runtime: Python 3.13+
+- Language/runtime: Python 3.14+
 - Frameworks/libs: FastAPI, Pydantic v2, Uvicorn, Firebase Admin SDK, Google Cloud (Firestore/Logging/Secret Manager)
 - Package/devenv: uv (+ virtualenv in `.venv`), Justfile for tasks
 - Lint/format: Ruff (line-length 120; rules include ANN, FAST)
@@ -106,7 +106,7 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
 
 - `app/` — FastAPI app: routers, models, services, core config, auth
 - `tests/` — unit/integration/e2e tests
-- `functions/` — Firebase Cloud Functions (Python 3.13) codebase (`main.py`, its own `requirements.txt`)
+- `functions/` — Firebase Cloud Functions (Python 3.14) codebase (`main.py`, its own `pyproject.toml`)
 - `Justfile` — dev/test/build tasks
 - `pyproject.toml` — dependencies and tool configs (Ruff, ty, pytest, coverage)
 
@@ -125,11 +125,11 @@ When adding features, decide if logic belongs in the FastAPI service (`app/`) or
 | Long-lived streaming / websockets | ✅ | ❌ |
 
 Cloud Functions specifics:
-- Runtime pinned via `firebase.json` (`python313`, region `europe-west4`).
+- Runtime pinned via `firebase.json` (`python314`, region `europe-west4`).
 - Global scaling options in `functions/main.py` (memory 128MB; env-param `MIN_INSTANCES` default 0, `MAX_INSTANCES` default 2).
-- Dependencies isolated in `functions/requirements.txt`; DO NOT automatically mirror all `pyproject.toml` deps—keep lean to reduce cold starts.
+- Dependencies managed via `functions/pyproject.toml`; uses uv by default on Python 3.14+. Keep deps lean to reduce cold starts.
 - Add new functions by decorating callables with `@https_fn.on_request()` (or other trigger types) inside `functions/main.py` (or split into modules imported by `main.py`).
-- Deployment: `firebase deploy --only functions` (ensure you installed `functions/requirements.txt`).
+- Deployment: `firebase deploy --only functions`.
 - Emulator: `firebase emulators:start --only functions` (ports defined in `firebase.json`).
 - Vertex / Generative AI support is optional—uncomment and configure client if needed.
 

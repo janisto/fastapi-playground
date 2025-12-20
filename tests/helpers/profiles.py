@@ -38,8 +38,7 @@ def make_profile(
         created_at=now,
         updated_at=now,
     )
-    base.update(kwargs)
-    return Profile(id=id, **base)
+    return Profile(id=id, **{**base, **kwargs})
 
 
 def make_profile_update(**kwargs: object) -> ProfileUpdate:

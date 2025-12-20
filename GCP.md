@@ -159,13 +159,13 @@ Secrets: Use Secret Manager with Cloud Build by adding `--set-secrets VAR=projec
 ---
 ### 10. Firebase Cloud Functions (Python) (Optional Alternate / Complement)
 Contained in `functions/` with regional + scaling config:
-- Runtime: `python313`
+- Runtime: `python314`
 - Region: `europe-west4`
 - Scaling: `MIN_INSTANCES` / `MAX_INSTANCES` env params (default 0/2)
 
 Deploy:
 ```bash
-pip install -r functions/requirements.txt
+cd functions && uv sync
 firebase deploy --only functions
 ```
 
@@ -218,5 +218,5 @@ gcloud run deploy fastapi-playground --image gcr.io/PROJECT_ID/fastapi-playgroun
     --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,DEBUG=false
 
 # Functions deploy
-pip install -r functions/requirements.txt && firebase deploy --only functions
+cd functions && uv sync && firebase deploy --only functions
 ```

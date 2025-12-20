@@ -22,13 +22,13 @@ def test_health_check(client: TestClient) -> None:
 def test_unauthorized_access(client: TestClient) -> None:
     # Create
     payload = make_profile_payload_dict()
-    assert client.post("/profile/", json=payload).status_code == 403
+    assert client.post("/profile/", json=payload).status_code == 401
     # Get
-    assert client.get("/profile/").status_code == 403
+    assert client.get("/profile/").status_code == 401
     # Update
-    assert client.put("/profile/", json={}).status_code == 403
+    assert client.put("/profile/", json={}).status_code == 401
     # Delete
-    assert client.delete("/profile/").status_code == 403
+    assert client.delete("/profile/").status_code == 401
 
 
 def test_oversized_request_body_is_rejected(client: TestClient) -> None:

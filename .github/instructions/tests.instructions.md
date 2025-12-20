@@ -2,7 +2,7 @@
 applyTo: "tests/**"
 ---
 
-Use these rules for tests under `tests/**` (Python 3.13, FastAPI, pytest, pytest-asyncio). The project uses `httpx` for HTTP clients and `pytest-httpx` for mocking outbound HTTP in tests.
+Use these rules for tests under `tests/**` (Python 3.14, FastAPI, pytest, pytest-asyncio). The project uses `httpx` for HTTP clients and `pytest-httpx` for mocking outbound HTTP in tests.
 
 Structure
 - Unit tests → `tests/unit/**` (mirror `app/**` modules; pure logic with tight mocks)

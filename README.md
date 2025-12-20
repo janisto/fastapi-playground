@@ -4,10 +4,10 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 
 ## Features
 
-- FastAPI (Python 3.13+) with async endpoints and automatic OpenAPI docs (`/api-docs`, `/api-redoc`)
+- FastAPI (Python 3.14+) with async endpoints and automatic OpenAPI docs (`/api-docs`, `/api-redoc`)
 - Firebase Authentication (ID token verification via Admin SDK)
 - Firestore persistence for user profile documents
-- Firebase Cloud Functions (Python 3.13 runtime) example (`functions/main.py`) with regional config & scaling limits
+- Firebase Cloud Functions (Python 3.14 runtime) example (`functions/main.py`) with regional config & scaling limits
 - Structured one-line JSON logging (Cloud Run friendly, trace correlation via `X-Cloud-Trace-Context` header)
 - Pydantic v2 models + `pydantic-settings` for env-driven configuration
 - Custom middlewares: security headers, request body size limiting, request-context logging
@@ -48,7 +48,7 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 │   └── mocks/                     # Firebase / HTTP mocks
 ├── functions/                     # Firebase Cloud Functions (Python) codebase
 │   ├── main.py                    # Example HTTPS callable (Hello world)
-│   ├── requirements.txt           # Functions-specific deps (pin separately)
+│   ├── pyproject.toml             # Functions-specific deps (uses uv on Python 3.14+)
 │   └── README.md                  # Deployment quickstart
 ├── .github/
 │   ├── workflows/                 # CI + labeling automation
@@ -93,7 +93,7 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 
 ## Prerequisites
 
-- Python 3.13+
+- Python 3.14+
 - `uv` (dependency & venv manager)
 - `just` (task runner)
 - Firebase project (Authentication + Firestore enabled)
@@ -186,7 +186,7 @@ just clean          # Remove caches/venv/coverage
 just fresh          # clean + install
 
 # Containers
-just docker-build   # Build image (python:3.13-slim*)
+just docker-build   # Build image (python:3.14-slim*)
 just docker-run     # Run with env-file + port
 just docker-logs    # Tail logs
 ```
@@ -290,7 +290,7 @@ docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
 ```
 Override base image:
 ```bash
-just docker-build pyimg=python:3.13-slim-bookworm
+just docker-build pyimg=python:3.14-slim-bookworm
 ```
 
 ## Deployment (Cloud Run)
@@ -310,7 +310,7 @@ Automatic base updates:
 ```bash
 gcloud run deploy fastapi-playground \
   --image gcr.io/PROJECT_ID/fastapi-playground:TAG \
-  --base-image python:3.13-slim \
+  --base-image python:3.14-slim \
   --automatic-updates
 ```
 Production env vars:
@@ -326,14 +326,14 @@ This repo also includes a minimal Firebase Cloud Functions (2nd gen) Python code
 
 Key points:
 
-- Runtime: Python 3.13 (`"runtime": "python313"` in `firebase.json`).
+- Runtime: Python 3.14 (`"runtime": "python314"` in `firebase.json`).
 - Region: `europe-west4` (set globally via `options.set_global_options`).
 - Memory: 128 MB (`memory=options.MemoryOption.MB_128`).
 - Scaling limits (env-configurable):
   - `MIN_INSTANCES` (default 0)
   - `MAX_INSTANCES` (default 2)
 - Example function: `on_request_example` returns a simple "Hello world!" response.
-- Dependencies isolated in `functions/requirements.txt` (keep aligned with top-level deps where overlap exists, but pin separately to control cold start variance).
+- Dependencies managed via `functions/pyproject.toml` (uses uv by default on Python 3.14+; keep lean to reduce cold starts).
 
 ### Project Config (firebase.json excerpt)
 
@@ -344,7 +344,7 @@ Key points:
       "source": "functions",
       "location": "europe-west4",
       "codebase": "default",
-      "runtime": "python313"
+      "runtime": "python314"
     }
   ],
   "emulators": {
@@ -363,17 +363,15 @@ Key points:
 From repository root (or `cd functions` first):
 
 ```bash
-python3 -m venv venv                # (Optional: isolate build env for dependency resolution)
-source venv/bin/activate
-pip install -r functions/requirements.txt
+cd functions
+uv sync                                # Install dependencies
 export FUNCTIONS_DISCOVERY_TIMEOUT=30  # Helps CLI module scan (avoid premature timeout)
 firebase deploy --only functions
-deactivate
 ```
 
-Common one-liner (already have an active virtualenv):
+Common one-liner:
 ```bash
-pip install -r functions/requirements.txt && firebase deploy --only functions
+cd functions && uv sync && firebase deploy --only functions
 ```
 
 Set scaling overrides per deployment (bash examples):

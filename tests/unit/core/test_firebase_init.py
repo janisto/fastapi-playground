@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -6,7 +7,7 @@ from app.core import firebase
 
 
 @pytest.fixture(autouse=True)
-def reset_singletons() -> None:
+def reset_singletons() -> Generator[None]:
     firebase._firebase_app = None
     firebase._firestore_client = None
     yield
