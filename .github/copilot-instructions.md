@@ -106,7 +106,7 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
 
 - `app/` — FastAPI app: routers, models, services, core config, auth
 - `tests/` — unit/integration/e2e tests
-- `functions/` — Firebase Cloud Functions (Python 3.14) codebase (`main.py`, its own `requirements.txt`)
+- `functions/` — Firebase Cloud Functions (Python 3.14) codebase (`main.py`, its own `pyproject.toml`)
 - `Justfile` — dev/test/build tasks
 - `pyproject.toml` — dependencies and tool configs (Ruff, ty, pytest, coverage)
 

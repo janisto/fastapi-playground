@@ -48,7 +48,7 @@ A small FastAPI app showcasing Cloud Functions, Firebase Authentication, Firesto
 │   └── mocks/                     # Firebase / HTTP mocks
 ├── functions/                     # Firebase Cloud Functions (Python) codebase
 │   ├── main.py                    # Example HTTPS callable (Hello world)
-│   ├── requirements.txt           # Functions-specific deps (pin separately)
+│   ├── pyproject.toml             # Functions-specific deps (uses uv on Python 3.14+)
 │   └── README.md                  # Deployment quickstart
 ├── .github/
 │   ├── workflows/                 # CI + labeling automation
@@ -344,7 +344,7 @@ Key points:
       "source": "functions",
       "location": "europe-west4",
       "codebase": "default",
-      "runtime": "python313"
+      "runtime": "python314"
     }
   ],
   "emulators": {
