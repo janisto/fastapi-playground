@@ -13,7 +13,7 @@ class DummyUser:
 
 @pytest.fixture(autouse=True)
 def patch_user(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
-    async def fake_verify(token: str) -> "DummyUser":  # type: ignore[unused-ignore]
+    async def fake_verify(token: str) -> DummyUser:  # type: ignore[unused-ignore]
         return DummyUser("user-err")
 
     monkeypatch.setattr("app.routers.profile.verify_firebase_token", fake_verify)

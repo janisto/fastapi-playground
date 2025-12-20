@@ -70,8 +70,7 @@ def _sample_create(**overrides: object) -> ProfileCreate:
         marketing=True,
         terms=True,
     )
-    base.update(overrides)
-    return ProfileCreate(**base)
+    return ProfileCreate(**{**base, **overrides})
 
 
 @pytest.mark.asyncio
