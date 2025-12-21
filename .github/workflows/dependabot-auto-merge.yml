@@ -1,6 +1,7 @@
 # Automatically approve and merge Dependabot PRs for minor and patch updates
 name: Dependabot auto-merge
-on: pull_request
+
+on: pull_request_target
 
 permissions:
   contents: write
