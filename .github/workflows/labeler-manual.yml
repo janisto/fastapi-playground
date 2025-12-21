@@ -72,7 +72,7 @@ jobs:
         pr: ${{ fromJson(needs.collect_prs.outputs.pr_numbers) }}
 
     steps:
-      - uses: actions/labeler@v5
+      - uses: actions/labeler@v6
         with:
           pr-number: ${{ matrix.pr }}
           configuration-path: .github/labeler.yml
