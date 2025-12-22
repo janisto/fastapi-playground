@@ -58,7 +58,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("Cache-Control", self._cache_control)
 
         # Content-Security-Policy (defense-in-depth for JSON APIs)
-        if self._content_security_policy:
+        # Skip strict CSP for documentation endpoints that need external scripts
+        is_docs_path = request.url.path in ("/api-docs", "/api-redoc", "/openapi.json")
+        if self._content_security_policy and not is_docs_path:
             response.headers.setdefault("Content-Security-Policy", self._content_security_policy)
 
         # Permissions-Policy (disables FLoC and other tracking features)
