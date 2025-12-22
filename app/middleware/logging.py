@@ -246,11 +246,7 @@ def log_audit_event(
     """
     logger = logging.getLogger(__name__)
     logger.info(
-        "Audit: %s on %s/%s by %s",
-        action,
-        resource_type,
-        resource_id,
-        user_id,
+        "Audit event",
         extra={
             "audit": {
                 "action": action,

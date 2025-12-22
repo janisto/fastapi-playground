@@ -53,7 +53,7 @@ async def create_profile(
     except (HTTPException, ProfileAlreadyExistsError):
         raise
     except Exception:
-        logger.exception("Error creating profile for user %s", current_user.uid)
+        logger.exception("Error creating profile", extra={"user_id": current_user.uid})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create profile"
         ) from None
@@ -85,7 +85,7 @@ async def get_profile(
     except (HTTPException, ProfileNotFoundError):
         raise
     except Exception:
-        logger.exception("Error getting profile for user %s", current_user.uid)
+        logger.exception("Error getting profile", extra={"user_id": current_user.uid})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve profile"
         ) from None
@@ -121,7 +121,7 @@ async def update_profile(
     except (HTTPException, ProfileNotFoundError):
         raise
     except Exception:
-        logger.exception("Error updating profile for user %s", current_user.uid)
+        logger.exception("Error updating profile", extra={"user_id": current_user.uid})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update profile"
         ) from None
@@ -154,7 +154,7 @@ async def delete_profile(
     except (HTTPException, ProfileNotFoundError):
         raise
     except Exception:
-        logger.exception("Error deleting profile for user %s", current_user.uid)
+        logger.exception("Error deleting profile", extra={"user_id": current_user.uid})
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete profile"
         ) from None

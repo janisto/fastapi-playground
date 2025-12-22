@@ -68,7 +68,7 @@ async def verify_firebase_token(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        logger.debug("Successfully authenticated user: %s", uid)
+        logger.debug("Successfully authenticated user", extra={"user_id": uid})
 
         return FirebaseUser(
             uid=uid,

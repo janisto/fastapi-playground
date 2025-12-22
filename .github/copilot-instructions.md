@@ -336,7 +336,7 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
     except (HTTPException, ProfileNotFoundError):
         raise
     except Exception:
-        logger.exception("Error getting profile")
+        logger.exception("Error getting profile", extra={"user_id": current_user.uid})
         raise HTTPException(status_code=500, detail="Failed to retrieve profile") from None
     ```
 
@@ -350,6 +350,17 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
 - Error handling & logging
   - Use `app/middleware/logging.py` configuration. Include request context where useful.
   - Wrap critical paths in try/except with actionable messages; avoid silencing exceptions.
+  - **Structured logging with `extra={}`**: Always use `extra={}` dict for contextual data instead of `%s` formatting. This ensures proper JSON structured logging for Cloud Logging:
+    ```python
+    # Correct - structured logging with extra
+    logger.info("Profile created", extra={"user_id": uid, "profile_id": uid})
+    logger.warning("Invalid input", extra={"field": "email", "value": masked_email})
+    logger.exception("Error creating profile", extra={"user_id": uid})
+
+    # Wrong - %s formatting loses structure in JSON logs
+    logger.info("Profile created for user %s", uid)
+    logger.exception("Error creating profile for user %s", uid)
+    ```
   - **Logger levels**:
     - `logger.exception(...)` for unexpected failures inside `except` blocks.
     - `logger.warning(...)` for expected validation failures or rejected actions.
