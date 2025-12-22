@@ -1,176 +1,158 @@
-"""Profile service for Firestore operations."""
+"""
+Profile service with async Firestore operations.
+"""
 
-import logging
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from app.core.firebase import get_firestore_client
+from google.cloud import firestore
+
+from app.core.firebase import get_async_firestore_client
+from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
+from app.middleware import log_audit_event
 from app.models.profile import PROFILE_COLLECTION, Profile, ProfileCreate, ProfileUpdate
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from google.cloud.firestore import AsyncClient, AsyncDocumentReference, AsyncTransaction
 
 
 class ProfileService:
-    """Service for profile operations in Firestore."""
+    """
+    Service for profile CRUD operations using async Firestore.
+    """
 
     def __init__(self) -> None:
-        # Use centralized constant for collection name to avoid scattering magic strings / env coupling.
         self.collection_name = PROFILE_COLLECTION
 
-    def _get_collection(self) -> object:
-        """Get the profiles collection reference."""
-        db = get_firestore_client()
-        return db.collection(self.collection_name)
+    def _get_client(self) -> AsyncClient:
+        return get_async_firestore_client()
+
+    @staticmethod
+    @firestore.async_transactional
+    async def _create_in_transaction(  # pragma: no cover
+        transaction: AsyncTransaction,
+        doc_ref: AsyncDocumentReference,
+        data: dict,
+    ) -> None:
+        # Tested via E2E tests with Firebase emulators; unit tests mock this method
+        snapshot = await doc_ref.get(transaction=transaction)
+        if snapshot.exists:
+            raise ProfileAlreadyExistsError("Profile already exists")
+        transaction.set(doc_ref, data)
 
     async def create_profile(self, user_id: str, profile_data: ProfileCreate) -> Profile:
         """
-        Create a new profile for a user.
+        Create a new profile for the given user.
+        """
+        client = self._get_client()
+        doc_ref = client.collection(self.collection_name).document(user_id)
 
-        Args:
-            user_id: The Firebase user ID
-            profile_data: The profile data to create
+        now = datetime.now(UTC)
+        profile_dict = {
+            "id": user_id,
+            **profile_data.model_dump(),
+            "created_at": now,
+            "updated_at": now,
+        }
 
-        Returns:
-            Profile: The created profile
+        transaction = client.transaction()
+        await self._create_in_transaction(transaction, doc_ref, profile_dict)
+
+        log_audit_event("create", user_id, "profile", user_id, "success")
+
+        return Profile(**profile_dict)
+
+    async def get_profile(self, user_id: str) -> Profile:
+        """
+        Get profile by user ID.
 
         Raises:
-            ValueError: If profile already exists for user
+            ProfileNotFoundError: If profile does not exist.
         """
-        try:
-            collection = self._get_collection()
+        client = self._get_client()
+        doc_ref = client.collection(self.collection_name).document(user_id)
+        snapshot = await doc_ref.get()
 
-            # Check if profile already exists
-            existing = await self.get_profile(user_id)
-            if existing:
-                raise ValueError(f"Profile already exists for user {user_id}")
+        if not snapshot.exists:
+            raise ProfileNotFoundError("Profile not found")
 
-            # Create profile document
-            now = datetime.now(UTC)
-            profile_dict = {
-                "id": user_id,
-                "firstname": profile_data.firstname,
-                "lastname": profile_data.lastname,
-                "email": profile_data.email,
-                "phone_number": profile_data.phone_number,
-                "marketing": profile_data.marketing,
-                "terms": profile_data.terms,
-                "created_at": now,
-                "updated_at": now,
-            }
+        data = snapshot.to_dict()
+        if not data:
+            raise ProfileNotFoundError("Profile not found")
 
-            # Save to Firestore
-            collection.document(user_id).set(profile_dict)
+        return Profile(**data)
 
-            logger.info(f"Created profile for user {user_id}")
+    @staticmethod
+    @firestore.async_transactional
+    async def _update_in_transaction(  # pragma: no cover
+        transaction: AsyncTransaction,
+        doc_ref: AsyncDocumentReference,
+        updates: dict,
+    ) -> bool:
+        # Tested via E2E tests with Firebase emulators; unit tests mock this method
+        snapshot = await doc_ref.get(transaction=transaction)
+        if not snapshot.exists:
+            return False
+        transaction.update(doc_ref, updates)
+        return True
 
-            return Profile(**profile_dict)
-
-        except Exception as e:
-            logger.error(f"Error creating profile for user {user_id}: {e}")
-            raise
-
-    async def get_profile(self, user_id: str) -> Profile | None:
-        """
-        Get a profile by user ID.
-
-        Args:
-            user_id: The Firebase user ID
-
-        Returns:
-            Profile: The profile if found, None otherwise
-        """
-        try:
-            collection = self._get_collection()
-            doc = collection.document(user_id).get()
-
-            if not doc.exists:
-                return None
-
-            data = doc.to_dict()
-            if not data:
-                return None
-
-            return Profile(**data)
-
-        except Exception as e:
-            logger.error(f"Error getting profile for user {user_id}: {e}")
-            raise
-
-    async def update_profile(self, user_id: str, profile_data: ProfileUpdate) -> Profile | None:
+    async def update_profile(self, user_id: str, profile_data: ProfileUpdate) -> Profile:
         """
         Update an existing profile.
 
-        Args:
-            user_id: The Firebase user ID
-            profile_data: The profile data to update
-
-        Returns:
-            Profile: The updated profile if found, None otherwise
+        Raises:
+            ProfileNotFoundError: If profile does not exist.
         """
-        try:
-            collection = self._get_collection()
-            doc_ref = collection.document(user_id)
-            doc = doc_ref.get()
+        client = self._get_client()
+        doc_ref = client.collection(self.collection_name).document(user_id)
 
-            if not doc.exists:
-                return None
+        update_dict = {k: v for k, v in profile_data.model_dump(exclude_unset=True).items() if v is not None}
 
-            # Build update dictionary with only non-None values
-            update_dict = {}
-            for field, value in profile_data.model_dump(exclude_unset=True).items():
-                if value is not None:
-                    update_dict[field] = value
+        if not update_dict:
+            return await self.get_profile(user_id)
 
-            if not update_dict:
-                # No updates to apply
-                data = doc.to_dict()
-                return Profile(**data) if data else None
+        update_dict["updated_at"] = datetime.now(UTC)
 
-            # Add updated timestamp
-            update_dict["updated_at"] = datetime.now(UTC)
+        transaction = client.transaction()
+        exists = await self._update_in_transaction(transaction, doc_ref, update_dict)
 
-            # Update document
-            doc_ref.update(update_dict)
+        if not exists:
+            raise ProfileNotFoundError("Profile not found")
 
-            # Get updated document
-            updated_doc = doc_ref.get()
-            data = updated_doc.to_dict()
+        log_audit_event("update", user_id, "profile", user_id, "success")
 
-            logger.info(f"Updated profile for user {user_id}")
+        return await self.get_profile(user_id)
 
-            return Profile(**data) if data else None
+    @staticmethod
+    @firestore.async_transactional
+    async def _delete_in_transaction(  # pragma: no cover
+        transaction: AsyncTransaction,
+        doc_ref: AsyncDocumentReference,
+    ) -> dict | None:
+        # Tested via E2E tests with Firebase emulators; unit tests mock this method
+        snapshot = await doc_ref.get(transaction=transaction)
+        if not snapshot.exists:
+            return None
+        data = snapshot.to_dict()
+        transaction.delete(doc_ref)
+        return data
 
-        except Exception as e:
-            logger.error(f"Error updating profile for user {user_id}: {e}")
-            raise
-
-    async def delete_profile(self, user_id: str) -> bool:
+    async def delete_profile(self, user_id: str) -> Profile:
         """
         Delete a profile by user ID.
 
-        Args:
-            user_id: The Firebase user ID
-
-        Returns:
-            bool: True if profile was deleted, False if not found
+        Raises:
+            ProfileNotFoundError: If profile does not exist.
         """
-        try:
-            collection = self._get_collection()
-            doc_ref = collection.document(user_id)
-            doc = doc_ref.get()
+        client = self._get_client()
+        doc_ref = client.collection(self.collection_name).document(user_id)
 
-            if not doc.exists:
-                return False
+        transaction = client.transaction()
+        deleted_data = await self._delete_in_transaction(transaction, doc_ref)
 
-            doc_ref.delete()
+        if deleted_data is None:
+            raise ProfileNotFoundError("Profile not found")
 
-            logger.info(f"Deleted profile for user {user_id}")
+        log_audit_event("delete", user_id, "profile", user_id, "success")
 
-            return True
-
-        except Exception as e:
-            logger.error(f"Error deleting profile for user {user_id}: {e}")
-            raise
-
-
-# Global service instance
-profile_service = ProfileService()
+        return Profile(**deleted_data)

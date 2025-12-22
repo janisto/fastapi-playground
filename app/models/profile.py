@@ -1,4 +1,5 @@
-"""Profile data models.
+"""
+Profile data models.
 
 Constants
 ---------
@@ -10,79 +11,172 @@ Change here if a rename is ever required; update related tests accordingly.
 
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.types import NormalizedEmail, Phone
 
 # Firestore collection name for profiles
 PROFILE_COLLECTION = "profiles"
 
 
 class ProfileBase(BaseModel):
-    """Base profile model with common fields."""
+    """
+    Base profile model with common fields.
+    """
 
-    firstname: str = Field(..., min_length=1, max_length=100, description="The first name of the user")
-    lastname: str = Field(..., min_length=1, max_length=100, description="The last name of the user")
-    email: EmailStr = Field(..., description="The email address of the user")
-    phone_number: str = Field(
+    firstname: str = Field(
         ...,
-        min_length=2,
-        max_length=20,
-        pattern=r"^\+?[1-9]\d{1,14}$",
-        description="The phone number of the user in E.164 format (e.g., +1234567890)",
+        min_length=1,
+        max_length=100,
+        description="First name",
+        examples=["John"],
+    )
+    lastname: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Last name",
+        examples=["Doe"],
+    )
+    email: NormalizedEmail = Field(
+        ...,
+        description="Email address (auto-lowercased)",
+        examples=["user@example.com"],
+    )
+    phone_number: Phone = Field(
+        ...,
+        description="Phone number",
+        examples=["+358401234567"],
     )
     marketing: bool = Field(
-        default=False, description="Indicates if the user has opted in for marketing communications"
+        default=False,
+        description="Marketing opt-in",
+        examples=[False],
     )
-    terms: bool = Field(..., description="Indicates if the user has accepted the terms and conditions")
+    terms: bool = Field(
+        ...,
+        description="Terms acceptance",
+        examples=[True],
+    )
 
-    # Forbid unknown/extra fields in requests deriving from this base
-    model_config = {
-        "extra": "forbid",
-    }
+    model_config = ConfigDict(extra="forbid")
 
 
 class ProfileCreate(ProfileBase):
-    """Model for creating a new profile."""
-
-    pass
+    """
+    Model for creating a new profile.
+    """
 
 
 class ProfileUpdate(BaseModel):
-    """Model for updating an existing profile."""
+    """
+    Model for updating an existing profile.
+    """
 
-    firstname: str | None = Field(None, min_length=1, max_length=100, description="The first name of the user")
-    lastname: str | None = Field(None, min_length=1, max_length=100, description="The last name of the user")
-    email: EmailStr | None = Field(None, description="The email address of the user")
-    phone_number: str | None = Field(
+    firstname: str | None = Field(
         None,
-        min_length=2,
-        max_length=20,
-        pattern=r"^\+?[1-9]\d{1,14}$",
-        description="The phone number of the user in E.164 format (e.g., +1234567890)",
+        min_length=1,
+        max_length=100,
+        description="First name",
+        examples=["John"],
     )
-    marketing: bool | None = Field(None, description="Indicates if the user has opted in for marketing communications")
-    terms: bool | None = Field(None, description="Indicates if the user has accepted the terms and conditions")
+    lastname: str | None = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Last name",
+        examples=["Doe"],
+    )
+    email: NormalizedEmail | None = Field(
+        None,
+        description="Email address (auto-lowercased)",
+        examples=["user@example.com"],
+    )
+    phone_number: Phone | None = Field(
+        None,
+        description="Phone number",
+        examples=["+358401234567"],
+    )
+    marketing: bool | None = Field(
+        None,
+        description="Marketing opt-in",
+        examples=[False],
+    )
+    terms: bool | None = Field(
+        None,
+        description="Terms acceptance",
+        examples=[True],
+    )
 
-    # Forbid unknown/extra fields on updates
-    model_config = {
-        "extra": "forbid",
-    }
+    model_config = ConfigDict(extra="forbid")
 
 
-class Profile(ProfileBase):
-    """Complete profile model with metadata."""
+class Profile(BaseModel):
+    """
+    Complete profile model with metadata.
 
-    id: str = Field(..., min_length=1, max_length=128, description="The unique identifier for the profile")
-    created_at: datetime = Field(..., description="The date and time when the profile was created")
-    updated_at: datetime = Field(..., description="The date and time when the profile was last updated")
+    Note: Does not inherit from ProfileBase to avoid extra="forbid" which is
+    inappropriate for response models.
+    """
 
-    model_config = {
-        "from_attributes": True,
-    }
+    id: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        description="Unique identifier",
+        examples=["user-abc123"],
+    )
+    firstname: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="First name",
+        examples=["John"],
+    )
+    lastname: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Last name",
+        examples=["Doe"],
+    )
+    email: NormalizedEmail = Field(
+        ...,
+        description="Email address (auto-lowercased)",
+        examples=["user@example.com"],
+    )
+    phone_number: Phone = Field(
+        ...,
+        description="Phone number",
+        examples=["+358401234567"],
+    )
+    marketing: bool = Field(
+        default=False,
+        description="Marketing opt-in",
+        examples=[False],
+    )
+    terms: bool = Field(
+        ...,
+        description="Terms acceptance",
+        examples=[True],
+    )
+    created_at: datetime = Field(
+        ...,
+        description="Creation timestamp",
+        examples=["2025-01-15T10:30:00Z"],
+    )
+    updated_at: datetime = Field(
+        ...,
+        description="Last update timestamp",
+        examples=["2025-01-15T10:30:00Z"],
+    )
 
 
 class ProfileResponse(BaseModel):
-    """Response model for profile operations."""
+    """
+    Response model for profile operations.
+    """
 
-    success: bool = Field(..., description="Indicates if the operation was successful")
-    message: str = Field(..., description="A message describing the result")
-    profile: Profile | None = Field(None, description="The profile data if available")
+    success: bool = Field(..., description="Operation success status", examples=[True])
+    message: str = Field(..., description="Result message", examples=["Profile created successfully"])
+    profile: Profile | None = Field(None, description="Profile data if available")

@@ -8,23 +8,31 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import get_settings
-from app.core.firebase import initialize_firebase
-from app.core.logging import RequestContextLogMiddleware, setup_logging
-from app.core.security import SecurityHeadersMiddleware
-from app.models.health import HealthResponse
-from app.routers import profile
+from app.core.firebase import close_async_firestore_client, initialize_firebase
+from app.core.handlers import register_exception_handlers
+from app.middleware import (
+    BodySizeLimitMiddleware,
+    RequestContextLogMiddleware,
+    SecurityHeadersMiddleware,
+    setup_logging,
+)
+from app.routers import health, profile
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Application lifespan manager."""
-    # Initialize services
+    """
+    Application lifespan manager.
+    """
+    # Startup
     setup_logging()
     initialize_firebase()
 
     yield
+
+    # Shutdown
+    await close_async_firestore_client()
 
 
 # Create FastAPI app with API documentation
@@ -38,11 +46,31 @@ app = FastAPI(
 )
 
 # Include routers
-app.include_router(profile.router, prefix="/profile", tags=["profile"])
+app.include_router(profile.router)
+app.include_router(health.router)
 
-# Add logging middleware to capture trace context
-app.add_middleware(RequestContextLogMiddleware)
+# Register exception handlers
+register_exception_handlers(app)
+
+# Middleware order: last added = outermost (first to run on request, last on response)
+# Desired request flow: Logging → Security → BodyLimit → CORS → route
+# Desired response flow: route → CORS → BodyLimit → Security → Logging
+
+# CORS (innermost) - handles preflight and adds CORS headers early in response
+settings = get_settings()
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,  # type: ignore[arg-type]
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Cloud-Trace-Context"],
+    )
+
+# Body size limit - reject oversized requests before further processing
 app.add_middleware(BodySizeLimitMiddleware)
+
+# Security headers - add security headers to all responses
 app.add_middleware(
     SecurityHeadersMiddleware,
     hsts=True,
@@ -52,45 +80,13 @@ app.add_middleware(
     referrer_policy="same-origin",
 )
 
-# CORS with strict allowlist
-settings = get_settings()
-allowed_origins = []  # override via env if needed
-try:
-    # Expect comma-separated origins in CORS_ORIGINS env
-    raw = getattr(settings, "cors_origins", None)  # may not exist yet
-    if isinstance(raw, str) and raw.strip():
-        allowed_origins = [o.strip() for o in raw.split(",") if o.strip()]
-except Exception:
-    allowed_origins = []
-
-app.add_middleware(
-    CORSMiddleware,  # type: ignore[arg-type]
-    allow_origins=allowed_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+# Logging (outermost) - capture full request lifecycle including all middleware
+app.add_middleware(RequestContextLogMiddleware)
 
 
 @app.get("/", tags=["root"], include_in_schema=False)
 async def root() -> dict[str, str]:
-    """Root endpoint."""
-    return {"message": "Hello World", "docs": "/api-docs"}
-
-
-@app.get(
-    "/health",
-    tags=["health"],
-    summary="Service health",
-    description="Lightweight health probe for liveness checks.",
-    operation_id="health_get",
-    responses={
-        200: {
-            "description": "Service is healthy",
-            "content": {"application/json": {"example": {"status": "healthy"}}},
-        }
-    },
-)
-async def health_check() -> HealthResponse:
-    """Health check endpoint."""
-    return HealthResponse(status="healthy")
+    """
+    Root endpoint.
+    """
+    return {"message": "Hello", "docs": "/api-docs"}

@@ -9,23 +9,36 @@ ARGS_SERVE := env("_UV_RUN_ARGS_SERVE", "")
     just --list
 
 
-# Run tests
+# Run all CI-compatible tests (unit + integration)
 [group('qa')]
 test *args:
-    uv run {{ ARGS_TEST }} -m pytest {{ args }}
+    uv run {{ ARGS_TEST }} -m pytest tests/unit/ tests/integration/ -v --cov=app {{ args }}
 
-_cov *args:
-    uv run -m coverage {{ args }}
+# Run unit tests only
+[group('qa')]
+test-unit *args:
+    uv run {{ ARGS_TEST }} -m pytest tests/unit/ -v {{ args }}
+
+# Run integration tests only
+[group('qa')]
+test-integration *args:
+    uv run {{ ARGS_TEST }} -m pytest tests/integration/ -v {{ args }}
+
+# Run E2E tests (requires Firebase emulators)
+[group('qa')]
+test-e2e *args:
+    uv run {{ ARGS_TEST }} -m pytest tests/e2e/ -v -s {{ args }}
+
+# Run all tests including E2E
+[group('qa')]
+test-all *args:
+    uv run {{ ARGS_TEST }} -m pytest tests/ -v --cov=app {{ args }}
 
 # Run tests and measure coverage
 [group('qa')]
 @cov:
-    just _cov erase
-    just _cov run -m pytest tests
-    just _cov combine
-    just _cov report
-    just _cov html
-    just _cov json -o coverage.json
+    uv run -m coverage erase
+    uv run -m pytest tests/unit tests/integration --cov=app --cov-branch --cov-report=term-missing --cov-report=html --cov-report=json:coverage.json
 
 # Run linters
 [group('qa')]
@@ -77,8 +90,12 @@ docker-build image="fastapi-playground:local" pyimg="":
         fi
 
 [group('container')]
-docker-run image="fastapi-playground:local" env_file=".env" name="fastapi-playground":
-    docker run --rm --name {{ name }} -p {{ PORT }}:8080 --env-file {{ env_file }} {{ image }}
+docker-run image="fastapi-playground:local" env_file=".env" name="fastapi-playground" creds="service_account.json":
+    docker run --rm --name {{ name }} -p {{ PORT }}:8080 \
+        --env-file {{ env_file }} \
+        -v "$(pwd)/{{ creds }}:/app/credentials.json:ro" \
+        -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
+        {{ image }}
 
 [group('container')]
 docker-logs name="fastapi-playground":
@@ -104,3 +121,9 @@ clean:
 # Recreate project virtualenv from nothing
 [group('lifecycle')]
 fresh: clean install
+
+
+# Start Firebase emulators for E2E tests
+[group('run')]
+emulators:
+    firebase emulators:start --only auth,firestore

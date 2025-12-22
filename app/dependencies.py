@@ -1,14 +1,32 @@
-"""Application dependencies."""
+"""
+Application dependencies.
+"""
+
+from typing import Annotated
+
+from fastapi import Depends
 
 from app.auth.firebase import FirebaseUser, verify_firebase_token
-from app.services.profile import ProfileService, profile_service
+from app.services.profile import ProfileService
 
-# Dependency functions for FastAPI
-get_current_user = verify_firebase_token
+# Auth dependency type alias
+CurrentUser = Annotated[FirebaseUser, Depends(verify_firebase_token)]
+
+
+def get_profile_service() -> ProfileService:
+    """
+    Dependency provider for ProfileService.
+    """
+    return ProfileService()
+
+
+# Service dependency type alias
+ProfileServiceDep = Annotated[ProfileService, Depends(get_profile_service)]
 
 __all__ = [
+    "CurrentUser",
     "FirebaseUser",
-    "get_current_user",
     "ProfileService",
-    "profile_service",
+    "ProfileServiceDep",
+    "get_profile_service",
 ]

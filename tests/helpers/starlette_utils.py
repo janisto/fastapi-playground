@@ -1,3 +1,7 @@
+"""
+Starlette app utilities for isolated middleware tests.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -13,7 +17,8 @@ def build_starlette_app(
     routes: Sequence[tuple[str, RouteHandler, Sequence[str]]],
     middleware: Iterable[MiddlewareSpec] | None = None,
 ) -> Starlette:
-    """Build a minimal Starlette app for tests.
+    """
+    Build a minimal Starlette app for tests.
 
     Parameters:
         routes: Tuples of (path, handler, methods).

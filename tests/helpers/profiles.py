@@ -1,4 +1,6 @@
-"""Profile-related helpers for tests."""
+"""
+Profile-related helpers for tests.
+"""
 
 from datetime import UTC, datetime
 
@@ -13,6 +15,9 @@ def make_profile_create(
     marketing: bool = True,
     terms: bool = True,
 ) -> ProfileCreate:
+    """
+    Factory for ProfileCreate with sensible defaults.
+    """
     return ProfileCreate(
         firstname=firstname,
         lastname=lastname,
@@ -24,24 +29,30 @@ def make_profile_create(
 
 
 def make_profile(
-    id: str = "test-user-123",
+    user_id: str = "test-user-123",
     **kwargs: object,
 ) -> Profile:
+    """
+    Create a Profile instance for testing.
+    """
     now = datetime.now(UTC)
-    base = dict(
-        firstname="John",
-        lastname="Doe",
-        email="john@example.com",
-        phone_number="+1234567890",
-        marketing=True,
-        terms=True,
-        created_at=now,
-        updated_at=now,
-    )
-    return Profile(id=id, **{**base, **kwargs})
+    base = {
+        "firstname": "John",
+        "lastname": "Doe",
+        "email": "john@example.com",
+        "phone_number": "+1234567890",
+        "marketing": True,
+        "terms": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    return Profile(id=user_id, **{**base, **kwargs})
 
 
 def make_profile_update(**kwargs: object) -> ProfileUpdate:
+    """
+    Factory for ProfileUpdate with only the provided fields.
+    """
     return ProfileUpdate(**kwargs)
 
 
@@ -56,7 +67,8 @@ def make_profile_payload_dict(
     overrides: dict[str, object] | None = None,
     omit: list[str] | None = None,
 ) -> dict[str, object]:
-    """Build a plain dict payload for POST/PUT requests.
+    """
+    Build a plain dict payload for POST/PUT requests.
 
     Use `overrides` to change values and `omit` to drop specific keys to test validation errors.
     """

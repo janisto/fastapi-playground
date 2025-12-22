@@ -17,17 +17,16 @@ concurrency:
 jobs:
   check-all:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up Python 3.14
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.14'
-
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
 
       - name: Set up just
         uses: extractions/setup-just@v3
@@ -54,8 +53,10 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: dima-engineer/pytest-reporter@v4
         with:
+          pytest-root-dir: app
+          pytest-tests-dir: tests
           cov-omit-list: tests/*
-          #cov-threshold-single: 85
-          #cov-threshold-total: 90
+          cov-threshold-single: 75
+          cov-threshold-total: 75
           async-tests: true
           uv-version: latest
