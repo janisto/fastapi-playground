@@ -422,3 +422,81 @@ class TestPermissionsPolicyHeader:
         with TestClient(app) as client:
             response = client.get("/ping")
             assert "permissions-policy" not in response.headers
+
+
+class TestCSPDocumentationExemption:
+    """
+    Tests for CSP exemption on API documentation paths.
+
+    Documentation endpoints (/api-docs, /api-redoc, /openapi.json) need to load
+    external JavaScript from CDNs (Swagger UI, ReDoc). The strict CSP policy
+    must be skipped for these paths to allow the documentation to render.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        ["/api-docs", "/api-redoc", "/openapi.json"],
+        ids=["swagger-ui", "redoc", "openapi-json"],
+    )
+    def test_csp_skipped_for_documentation_paths(self, path: str) -> None:
+        """
+        Verify Content-Security-Policy header is not set for documentation paths.
+        """
+
+        async def docs_handler(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("docs content")
+
+        app = build_starlette_app(
+            routes=[(path, docs_handler, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get(path)
+            assert response.status_code == 200
+            assert "content-security-policy" not in response.headers
+
+    def test_csp_applied_for_non_documentation_paths(self) -> None:
+        """
+        Verify Content-Security-Policy header is still set for regular API paths.
+        """
+
+        async def api_handler(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("api response")
+
+        app = build_starlette_app(
+            routes=[("/api/users", api_handler, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/api/users")
+            assert response.status_code == 200
+            assert response.headers.get("content-security-policy") == "default-src 'none'"
+
+    def test_other_security_headers_still_applied_for_documentation_paths(self) -> None:
+        """
+        Verify other security headers are still applied even when CSP is skipped.
+
+        Documentation paths should only skip CSP, not other security headers.
+        """
+
+        async def docs_handler(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("docs content")
+
+        app = build_starlette_app(
+            routes=[("/api-docs", docs_handler, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/api-docs")
+            assert response.status_code == 200
+            # CSP should be skipped
+            assert "content-security-policy" not in response.headers
+            # But other security headers should still be present
+            assert response.headers.get("x-content-type-options") == "nosniff"
+            assert response.headers.get("x-frame-options") == "DENY"
+            assert response.headers.get("referrer-policy") == "same-origin"
+            assert response.headers.get("cache-control") == "no-store"
+            assert response.headers.get("permissions-policy") == "interest-cohort=()"
