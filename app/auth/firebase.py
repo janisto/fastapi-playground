@@ -1,11 +1,15 @@
-"""Firebase Authentication utilities."""
+"""
+Firebase Authentication utilities.
+"""
 
+import asyncio
 import logging
+from dataclasses import dataclass
 
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth
-from firebase_admin.auth import ExpiredIdTokenError, InvalidIdTokenError, RevokedIdTokenError
+from firebase_admin.auth import ExpiredIdTokenError, InvalidIdTokenError, RevokedIdTokenError, UserDisabledError
 
 from app.core.firebase import get_firebase_app
 
@@ -15,17 +19,19 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 
+@dataclass(frozen=True, slots=True)
 class FirebaseUser:
-    """Represents an authenticated Firebase user."""
+    """
+    Authenticated Firebase user extracted from token.
+    """
 
-    def __init__(self, uid: str, email: str | None = None, email_verified: bool = False) -> None:
-        self.uid = uid
-        self.email = email
-        self.email_verified = email_verified
+    uid: str
+    email: str | None = None
+    email_verified: bool = False
 
 
 async def verify_firebase_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials = Security(security),
 ) -> FirebaseUser:
     """
     Verify Firebase ID token and return user information.
@@ -45,8 +51,9 @@ async def verify_firebase_token(
         # Get Firebase app instance
         app = get_firebase_app()
 
-        # Verify the ID token
-        decoded_token = auth.verify_id_token(token, app=app)
+        # Verify the ID token with revocation check
+        # Run in thread pool to avoid blocking the event loop (sync Firebase SDK call)
+        decoded_token = await asyncio.to_thread(auth.verify_id_token, token, app=app, check_revoked=True)
 
         # Extract user information
         uid = decoded_token.get("uid")
@@ -54,13 +61,14 @@ async def verify_firebase_token(
         email_verified = decoded_token.get("email_verified", False)
 
         if not uid:
+            logger.warning("Invalid token: missing user ID")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token: missing user ID",
+                detail="Unauthorized",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        logger.info(f"Successfully authenticated user: {uid}")
+        logger.debug("Successfully authenticated user: %s", uid)
 
         return FirebaseUser(
             uid=uid,
@@ -77,25 +85,32 @@ async def verify_firebase_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
     except RevokedIdTokenError:
         logger.warning("Revoked Firebase ID token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
+    except UserDisabledError:
+        logger.warning("Disabled Firebase user account")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from None
     except InvalidIdTokenError:
         logger.warning("Invalid Firebase ID token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
-        )
-    except Exception as e:
-        logger.error(f"Error verifying Firebase token: {e}")
+        ) from None
+    except Exception:
+        logger.exception("Error verifying Firebase token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None

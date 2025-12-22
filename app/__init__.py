@@ -1,2 +1,3 @@
-def hello() -> str:
-    return "Hello from my-app!"
+"""
+FastAPI Playground application package.
+"""

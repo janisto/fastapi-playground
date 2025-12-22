@@ -1,7 +1,10 @@
-"""Reusable mocks and stubs for tests."""
+"""
+Reusable mocks and stubs for tests.
+"""
 
 __all__ = [
     "firebase",
-    "services",
+    "firestore",
     "http",
+    "services",
 ]

@@ -1,174 +1,263 @@
-"""Unit tests for Firebase authentication."""
-
-from unittest.mock import MagicMock, patch
+"""
+Unit tests for Firebase authentication.
+"""
 
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from firebase_admin.auth import (
+    ExpiredIdTokenError,
+    InvalidIdTokenError,
+    RevokedIdTokenError,
+    UserDisabledError,
+)
+from pytest import MonkeyPatch
 
 from app.auth.firebase import FirebaseUser, verify_firebase_token
+from tests.mocks.firebase import (
+    patch_firebase_verify_error,
+    patch_firebase_verify_ok,
+    patch_get_firebase_app,
+)
+
+
+def _make_credentials(token: str = "test-token") -> HTTPAuthorizationCredentials:
+    """
+    Create mock HTTPAuthorizationCredentials for testing.
+    """
+    return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
 class TestFirebaseUser:
-    """Test FirebaseUser class."""
+    """
+    Tests for FirebaseUser dataclass.
+    """
 
-    def test_firebase_user_creation(self) -> None:
-        """Test creating a FirebaseUser instance."""
-        user = FirebaseUser(uid="test-user-123", email="test@example.com", email_verified=True)
-
-        assert user.uid == "test-user-123"
-        assert user.email == "test@example.com"
+    def test_create_with_all_fields(self) -> None:
+        """
+        Verify FirebaseUser creation with all fields.
+        """
+        user = FirebaseUser(uid="user-123", email="user@example.com", email_verified=True)
+        assert user.uid == "user-123"
+        assert user.email == "user@example.com"
         assert user.email_verified is True
 
-    def test_firebase_user_defaults(self) -> None:
-        """Test FirebaseUser with default values."""
-        user = FirebaseUser(uid="test-user-123")
-
-        assert user.uid == "test-user-123"
+    def test_create_with_defaults(self) -> None:
+        """
+        Verify FirebaseUser creation with default values.
+        """
+        user = FirebaseUser(uid="user-123")
+        assert user.uid == "user-123"
         assert user.email is None
         assert user.email_verified is False
 
+    def test_is_frozen(self) -> None:
+        """
+        Verify FirebaseUser is immutable.
+        """
+        user = FirebaseUser(uid="user-123")
+        with pytest.raises(AttributeError):
+            user.uid = "modified"  # type: ignore[misc]
+
 
 class TestVerifyFirebaseToken:
-    """Test Firebase token verification."""
+    """
+    Tests for verify_firebase_token dependency.
+    """
 
-    @patch("app.auth.firebase.auth.verify_id_token")
-    @patch("app.auth.firebase.get_firebase_app")
-    @pytest.mark.asyncio
-    async def test_verify_token_success(self, mock_get_app: MagicMock, mock_verify_token: MagicMock) -> None:
-        """Test successful token verification."""
-        # Setup mocks
-        mock_app = MagicMock()
-        mock_get_app.return_value = mock_app
+    async def test_valid_token_returns_user(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify valid token returns FirebaseUser.
+        """
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_ok(monkeypatch, uid="user-123", email="user@example.com")
 
-        mock_verify_token.return_value = {"uid": "test-user-123", "email": "test@example.com", "email_verified": True}
-
-        # Create test credentials
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="test-token")
-
-        # Call function
+        credentials = _make_credentials("valid-token")
         user = await verify_firebase_token(credentials)
 
-        # Assertions
         assert isinstance(user, FirebaseUser)
-        assert user.uid == "test-user-123"
-        assert user.email == "test@example.com"
+        assert user.uid == "user-123"
+        assert user.email == "user@example.com"
         assert user.email_verified is True
 
-        # Verify mocks were called correctly
-        mock_verify_token.assert_called_once_with("test-token", app=mock_app)
+    async def test_expired_token_raises_401(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify expired token raises HTTPException with 401.
+        """
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_error(monkeypatch, ExpiredIdTokenError("Token expired", None))
 
-    @patch("app.auth.firebase.auth.verify_id_token")
-    @patch("app.auth.firebase.get_firebase_app")
-    @pytest.mark.asyncio
-    async def test_verify_token_missing_uid(self, mock_get_app: MagicMock, mock_verify_token: MagicMock) -> None:
-        """Test token verification with missing UID."""
-        # Setup mocks
-        mock_app = MagicMock()
-        mock_get_app.return_value = mock_app
+        credentials = _make_credentials("expired-token")
 
-        mock_verify_token.return_value = {
-            # Missing uid
-            "email": "test@example.com",
-            "email_verified": True,
-        }
-
-        # Create test credentials
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="test-token")
-
-        # Call function and expect exception
         with pytest.raises(HTTPException) as exc_info:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
-        assert "missing user ID" in exc_info.value.detail
+        assert exc_info.value.detail == "Unauthorized"
+        assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
 
-    @patch("app.auth.firebase.auth.verify_id_token")
-    @patch("app.auth.firebase.get_firebase_app")
-    @pytest.mark.asyncio
-    async def test_verify_token_invalid_token(self, mock_get_app: MagicMock, mock_verify_token: MagicMock) -> None:
-        """Test token verification with invalid token."""
-        from firebase_admin.auth import InvalidIdTokenError
+    async def test_revoked_token_raises_401(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify revoked token raises HTTPException with 401.
+        """
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_error(monkeypatch, RevokedIdTokenError("Token revoked"))
 
-        # Setup mocks
-        mock_app = MagicMock()
-        mock_get_app.return_value = mock_app
+        credentials = _make_credentials("revoked-token")
 
-        mock_verify_token.side_effect = InvalidIdTokenError("Invalid token", None)
-
-        # Create test credentials
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid-token")
-
-        # Call function and expect exception
         with pytest.raises(HTTPException) as exc_info:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Unauthorized"
 
-    @patch("app.auth.firebase.auth.verify_id_token")
-    @patch("app.auth.firebase.get_firebase_app")
-    @pytest.mark.asyncio
-    async def test_verify_token_expired_token(self, mock_get_app: MagicMock, mock_verify_token: MagicMock) -> None:
-        """Test token verification with expired token."""
-        from firebase_admin.auth import ExpiredIdTokenError
+    async def test_invalid_token_raises_401(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify invalid token raises HTTPException with 401.
+        """
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_error(monkeypatch, InvalidIdTokenError("Invalid token"))
 
-        # Setup mocks
-        mock_app = MagicMock()
-        mock_get_app.return_value = mock_app
+        credentials = _make_credentials("invalid-token")
 
-        mock_verify_token.side_effect = ExpiredIdTokenError("Token expired", None)
-
-        # Create test credentials
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="expired-token")
-
-        # Call function and expect exception
         with pytest.raises(HTTPException) as exc_info:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Unauthorized"
 
-    @patch("app.auth.firebase.auth.verify_id_token")
-    @patch("app.auth.firebase.get_firebase_app")
-    @pytest.mark.asyncio
-    async def test_verify_token_revoked_token(self, mock_get_app: MagicMock, mock_verify_token: MagicMock) -> None:
-        """Test token verification with revoked token."""
-        from firebase_admin.auth import RevokedIdTokenError
+    async def test_disabled_user_raises_401(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify disabled user raises HTTPException with 401.
+        """
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_error(monkeypatch, UserDisabledError("User disabled"))
 
-        # Setup mocks
-        mock_app = MagicMock()
-        mock_get_app.return_value = mock_app
+        credentials = _make_credentials("disabled-user-token")
 
-        mock_verify_token.side_effect = RevokedIdTokenError("Token revoked")
-
-        # Create test credentials
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="revoked-token")
-
-        # Call function and expect exception
         with pytest.raises(HTTPException) as exc_info:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Unauthorized"
 
-    @patch("app.auth.firebase.auth.verify_id_token")
-    @patch("app.auth.firebase.get_firebase_app")
-    @pytest.mark.asyncio
-    async def test_verify_token_generic_error(self, mock_get_app: MagicMock, mock_verify_token: MagicMock) -> None:
-        """Test token verification with generic error."""
-        # Setup mocks
-        mock_app = MagicMock()
-        mock_get_app.return_value = mock_app
+    async def test_generic_error_raises_401(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify generic errors raise HTTPException with 401.
+        """
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_error(monkeypatch, RuntimeError("Unexpected error"))
 
-        mock_verify_token.side_effect = Exception("Generic error")
+        credentials = _make_credentials("error-token")
 
-        # Create test credentials
-        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="error-token")
-
-        # Call function and expect exception
         with pytest.raises(HTTPException) as exc_info:
             await verify_firebase_token(credentials)
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Unauthorized"
+
+    async def test_missing_uid_raises_401(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify token without uid raises HTTPException with 401.
+        """
+        patch_get_firebase_app(monkeypatch)
+
+        import app.auth.firebase as auth_mod
+
+        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict:
+            return {"email": "user@example.com"}
+
+        monkeypatch.setattr(auth_mod.auth, "verify_id_token", _fake_verify)
+
+        credentials = _make_credentials("no-uid-token")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_firebase_token(credentials)
+
+        assert exc_info.value.status_code == 401
+
+    async def test_email_not_verified(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify user with unverified email is returned correctly.
+        """
+        patch_get_firebase_app(monkeypatch)
+
+        import app.auth.firebase as auth_mod
+
+        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict:
+            return {"uid": "user-123", "email": "user@example.com", "email_verified": False}
+
+        monkeypatch.setattr(auth_mod.auth, "verify_id_token", _fake_verify)
+
+        credentials = _make_credentials("valid-token")
+        user = await verify_firebase_token(credentials)
+
+        assert user.uid == "user-123"
+        assert user.email_verified is False
+
+
+class TestVerifyFirebaseTokenLogging:
+    """
+    Tests for authentication logging behavior.
+    """
+
+    async def test_successful_auth_logs_at_debug_level(
+        self, monkeypatch: MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        Verify successful authentication logs at DEBUG level, not INFO.
+        """
+        import logging
+
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_ok(monkeypatch, uid="user-123")
+
+        credentials = _make_credentials("valid-token")
+
+        with caplog.at_level(logging.DEBUG):
+            await verify_firebase_token(credentials)
+
+        auth_logs = [r for r in caplog.records if "Successfully authenticated" in r.message]
+        assert len(auth_logs) == 1
+        assert auth_logs[0].levelno == logging.DEBUG
+
+    async def test_missing_uid_logs_at_warning_level(
+        self, monkeypatch: MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        Verify missing UID logs at WARNING level.
+        """
+        import logging
+
+        patch_get_firebase_app(monkeypatch)
+
+        import app.auth.firebase as auth_mod
+
+        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict:
+            return {"email": "user@example.com"}
+
+        monkeypatch.setattr(auth_mod.auth, "verify_id_token", _fake_verify)
+
+        credentials = _make_credentials("no-uid-token")
+
+        with caplog.at_level(logging.DEBUG), pytest.raises(HTTPException):
+            await verify_firebase_token(credentials)
+
+        warning_logs = [r for r in caplog.records if "missing user ID" in r.message]
+        assert len(warning_logs) == 1
+        assert warning_logs[0].levelno == logging.WARNING
+
+
+class TestHTTPBearerSecurity:
+    """
+    Tests for HTTP Bearer security scheme.
+    """
+
+    def test_security_scheme_exists(self) -> None:
+        """
+        Verify security scheme is defined.
+        """
+        from app.auth.firebase import security
+
+        assert security is not None
+        assert security.scheme_name == "HTTPBearer"

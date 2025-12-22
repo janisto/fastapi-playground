@@ -10,8 +10,8 @@ dependencies = [
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
     "uvicorn[standard]>=0.38.0",
-    "python-jose[cryptography]>=3.5.0",
     "httpx>=0.28.1",
+    "python-magic>=0.4.27",
 ]
 
 [dependency-groups]
@@ -20,17 +20,122 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
     "pytest-httpx>=0.36.0",
+    "pytest-mock>=3.15.1",
     "ruff>=0.14.10",
     "ty>=0.0.4",
 ]
 
 [tool.ruff]
-# Allow lines to be as long as 120.
 line-length = 120
 
 [tool.ruff.lint]
-# Add type annotation and FastAPI rules, isort import sorting rules, plus pyupgrade to modernize typing
-extend-select = ["ANN", "FAST", "I", "UP"]
+select = [
+    # === FOUNDATION ===
+    "E",      # pycodestyle errors
+    "F",      # Pyflakes
+    "W",      # pycodestyle warnings
+
+    # === TYPE ANNOTATIONS & MODERNIZATION ===
+    "ANN",    # flake8-annotations
+    "FAST",   # FastAPI-specific
+    "I",      # isort
+    "UP",     # pyupgrade
+
+    # === TIER 1: ESSENTIAL ===
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "RUF",    # Ruff-specific
+    "PIE",    # flake8-pie
+    "T20",    # flake8-print
+
+    # === TIER 2: QUALITY & SAFETY ===
+    "S",      # flake8-bandit (security)
+    "TRY",    # tryceratops (exceptions)
+    "PT",     # flake8-pytest-style
+    "ASYNC",  # flake8-async
+    "LOG",    # flake8-logging
+    "G",      # flake8-logging-format
+    "DTZ",    # flake8-datetimez
+
+    # === TIER 3: CLEAN CODE ===
+    "D213",   # Multi-line docstring summary on second line
+    "RET",    # flake8-return
+    "RSE",    # flake8-raise
+    "PERF",   # Perflint
+    "TC",     # flake8-type-checking
+    "A",      # flake8-builtins
+    "BLE",    # flake8-blind-except
+    "PGH",    # pygrep-hooks
+    "FURB",   # refurb
+
+    # === TIER 4: OPTIONAL ===
+    "C90",    # mccabe complexity
+    "N",      # pep8-naming
+    "FLY",    # flynt
+    "ISC",    # flake8-implicit-str-concat
+    "PLC",    # Pylint convention
+    "PLE",    # Pylint error
+    "PLW",    # Pylint warning
+]
+
+ignore = [
+    "E501",     # Line too long (handled by formatter)
+    "ISC001",   # Conflicts with formatter
+    "TRY003",   # Long exception messages OK for HTTPException
+    "TRY300",   # try-consider-else (stylistic preference)
+    "TRY301",   # raise-within-try (acceptable pattern)
+    "PLR0913",  # Too many arguments (FastAPI DI pattern)
+    "PLR0912",  # Too many branches
+    "PLC0415",  # Import outside top-level (common in tests/lazy loading)
+    "PLW0603",  # Global statement (acceptable for singleton patterns)
+    "TC001",    # Typing-only first-party imports (adds complexity for minor gain)
+    "TC002",    # Typing-only third-party imports (adds complexity for minor gain)
+    "TC003",    # Typing-only stdlib imports (adds complexity for minor gain)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",     # Allow assert in tests
+    "S107",     # Allow hardcoded test tokens
+    "PLR2004",  # Magic values OK in tests
+    "PT013",    # Allow `from pytest import ...` style
+    "N817",     # Allow short aliases like PS for ProfileService
+    "RET504",   # Unnecessary assignment OK in tests for clarity
+    "S104",     # Testing 0.0.0.0 binding is intentional
+]
+"app/core/config.py" = [
+    "S104",     # Binding to 0.0.0.0 is intentional for containers
+]
+"app/middleware/body_limit.py" = [
+    "BLE001",   # Broad exception catch intentional for header parsing resilience
+    "S110",     # try-except-pass is intentional for robustness
+]
+"app/middleware/logging.py" = [
+    "BLE001",   # Broad exception catch intentional for trace header parsing
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = ["pydantic.validator", "pydantic.field_validator"]
 
 [tool.ty.environment]
 # Multiple directories (priority order)
@@ -41,16 +146,17 @@ unresolved-attribute = "ignore"
 unresolved-import = "ignore"
 
 [tool.pytest.ini_options]
-# addopts = "--maxfail=1 --cov=app"
-norecursedirs = [
-    "lib",
-]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+asyncio_default_test_loop_scope = "function"
+addopts = "--maxfail=1 --cov=app"
 
 [tool.coverage.run]
 branch = true
 parallel = true
-source = ["app", "tests"]
+source = ["app"]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+fail_under = 75
