@@ -761,8 +761,10 @@ class TestLogAuditEvent:
 
         assert len(caplog.records) > 0
         record = caplog.records[-1]
-        assert "Audit" in record.message
-        assert "create" in record.message
+        assert record.message == "Audit event"
+        assert hasattr(record, "audit")
+        audit: dict[str, object] = record.audit  # type: ignore[attr-defined]
+        assert audit["action"] == "create"
 
     def test_logs_audit_with_details(self, caplog: pytest.LogCaptureFixture) -> None:
         """
