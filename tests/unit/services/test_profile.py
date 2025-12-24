@@ -119,12 +119,14 @@ def mock_transactional_methods(mocker: MockerFixture, fake_db: FakeAsyncClient) 
         transaction: object,
         doc_ref: object,
         updates: dict[str, Any],
-    ) -> bool:
+    ) -> dict[str, Any] | None:
         doc_id = getattr(doc_ref, "id", None)
         if not doc_id or doc_id not in fake_db._store:
-            return False
+            return None
+        existing_data = fake_db._store[doc_id].copy()
         fake_db._store[doc_id].update(updates)
-        return True
+        # Return merged data as the real implementation does
+        return {**existing_data, **updates}
 
     async def fake_delete_in_transaction(
         transaction: object,

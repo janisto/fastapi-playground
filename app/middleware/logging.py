@@ -54,6 +54,34 @@ class CloudRunJSONFormatter(logging.Formatter):
     A minimal, fast JSON formatter for Cloud Run stdout structured logs.
     """
 
+    # Standard LogRecord fields to exclude from extra data (class-level constant for performance)
+    _EXCLUDED_FIELDS: frozenset[str] = frozenset(
+        {
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "message",
+            "taskName",
+        }
+    )
+
     def __init__(self, *, include_source: bool = True) -> None:
         super().__init__()
         self.include_source = include_source
@@ -93,33 +121,7 @@ class CloudRunJSONFormatter(logging.Formatter):
 
         # Structured extra fields on the record (skip private/standard fields)
         for key, value in record.__dict__.items():
-            if key.startswith("_"):
-                continue
-            if key in {
-                "name",
-                "msg",
-                "args",
-                "levelname",
-                "levelno",
-                "pathname",
-                "filename",
-                "module",
-                "exc_info",
-                "exc_text",
-                "stack_info",
-                "lineno",
-                "funcName",
-                "created",
-                "msecs",
-                "relativeCreated",
-                "thread",
-                "threadName",
-                "processName",
-                "process",
-            }:
-                continue
-            # Avoid overwriting official keys
-            if key in payload:
+            if key.startswith("_") or key in self._EXCLUDED_FIELDS or key in payload:
                 continue
             # Coerce None labels to strings to avoid label nesting quirks
             payload[key] = "null" if value is None else value
