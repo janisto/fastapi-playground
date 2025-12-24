@@ -88,13 +88,15 @@ class ProfileService:
         transaction: AsyncTransaction,
         doc_ref: AsyncDocumentReference,
         updates: dict,
-    ) -> bool:
+    ) -> dict | None:
         # Tested via E2E tests with Firebase emulators; unit tests mock this method
         snapshot = await doc_ref.get(transaction=transaction)
         if not snapshot.exists:
-            return False
+            return None
+        existing_data = snapshot.to_dict() or {}
         transaction.update(doc_ref, updates)
-        return True
+        # Return merged data to avoid extra read after transaction
+        return {**existing_data, **updates}
 
     async def update_profile(self, user_id: str, profile_data: ProfileUpdate) -> Profile:
         """
@@ -114,14 +116,14 @@ class ProfileService:
         update_dict["updated_at"] = datetime.now(UTC)
 
         transaction = client.transaction()
-        exists = await self._update_in_transaction(transaction, doc_ref, update_dict)
+        merged_data = await self._update_in_transaction(transaction, doc_ref, update_dict)
 
-        if not exists:
+        if merged_data is None:
             raise ProfileNotFoundError("Profile not found")
 
         log_audit_event("update", user_id, "profile", user_id, "success")
 
-        return await self.get_profile(user_id)
+        return Profile(**merged_data)
 
     @staticmethod
     @firestore.async_transactional
