@@ -663,7 +663,9 @@ Checklist for PRs
 - Typical env vars
   - `ENVIRONMENT`, `DEBUG`
   - `GOOGLE_APPLICATION_CREDENTIALS` (path to service account JSON)
-  - `FIREBASE_PROJECT_ID` (also used for trace correlation; `GCP_PROJECT_ID` deprecated)  - `FIREBASE_PROJECT_NUMBER` (optional, for project number reference)
+  - `FIREBASE_PROJECT_ID` (also used for trace correlation; `GCP_PROJECT_ID` deprecated)
+  - `FIREBASE_PROJECT_NUMBER` (optional, for project number reference)
+  - `FIRESTORE_DATABASE` (optional, Firestore database ID; defaults to `(default)`)
   - `MAX_REQUEST_SIZE_BYTES` (default 1,000,000; maximum request body size)
   - `CORS_ORIGINS` (JSON array or comma-separated list of allowed origins)
   - `SECRET_MANAGER_ENABLED` (default true; enable/disable Secret Manager)

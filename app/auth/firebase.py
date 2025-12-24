@@ -9,7 +9,13 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth
-from firebase_admin.auth import ExpiredIdTokenError, InvalidIdTokenError, RevokedIdTokenError, UserDisabledError
+from firebase_admin.auth import (
+    CertificateFetchError,
+    ExpiredIdTokenError,
+    InvalidIdTokenError,
+    RevokedIdTokenError,
+    UserDisabledError,
+)
 
 from app.core.firebase import get_firebase_app
 
@@ -79,6 +85,14 @@ async def verify_firebase_token(
     except HTTPException:
         # Re-raise HTTPException without modification
         raise
+    except CertificateFetchError:
+        # Network or configuration issue fetching public keys for token verification
+        logger.exception("Failed to fetch Firebase public keys for token verification")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service temporarily unavailable",
+            headers={"Retry-After": "30"},
+        ) from None
     except ExpiredIdTokenError:
         logger.warning("Expired Firebase ID token")
         raise HTTPException(

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     firebase_project_id: str = Field(default="test-project", description="Firebase project ID")
     google_application_credentials: str | None = Field(default=None, description="Path to service account credentials")
     firebase_project_number: str | None = Field(default=None, description="Firebase project number")
+    firestore_database: str | None = Field(default=None, description="Firestore database ID (default: (default))")
 
     # App metadata (optional / informational)
     app_environment: str | None = Field(default=None, description="Application environment")

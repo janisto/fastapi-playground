@@ -1098,7 +1098,7 @@ def test_root_ok() -> None:
 		r = client.get("/")
 		assert r.status_code == 200
 		body = r.json()
-		assert body["message"] == "Hello World"
+		assert body["message"] == "Hello"
 		assert body["docs"] == "/api-docs"
 ```
 

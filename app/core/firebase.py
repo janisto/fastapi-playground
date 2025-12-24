@@ -77,11 +77,16 @@ def get_firebase_app() -> firebase_admin.App:
 def get_async_firestore_client() -> AsyncClient:
     """
     Get or create the async Firestore client (lazy singleton).
+
+    Supports optional database configuration for projects using multiple Firestore databases.
     """
     global _async_firestore_client
     if _async_firestore_client is None:
         settings = get_settings()
-        _async_firestore_client = AsyncClient(project=settings.firebase_project_id)
+        _async_firestore_client = AsyncClient(
+            project=settings.firebase_project_id,
+            database=settings.firestore_database,
+        )
     return _async_firestore_client
 
 

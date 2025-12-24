@@ -14,7 +14,7 @@ Perform a comprehensive security review of this FastAPI REST API following OWASP
 Before analysis, read these files:
 1. `app/main.py` - Application setup, middleware, and CORS configuration
 2. `app/auth/firebase.py` - Firebase authentication implementation
-3. `app/core/security.py` - Security headers middleware
+3. `app/middleware/security.py` - Security headers middleware
 4. `app/core/config.py` - Configuration and secrets handling
 5. All files in `app/routers/` - Endpoint definitions
 6. All files in `app/services/` - Business logic
