@@ -123,9 +123,12 @@ Before making any updates, read these files in order:
   - `DEBUG` - debug mode toggle
   - `HOST`, `PORT` - server binding
   - `FIREBASE_PROJECT_ID` - Firebase/GCP project
+  - `FIREBASE_PROJECT_NUMBER` - optional, project number reference
+  - `FIRESTORE_DATABASE` - optional, Firestore database ID (defaults to `(default)`)
   - `GOOGLE_APPLICATION_CREDENTIALS` - service account path
   - `CORS_ORIGINS` - allowed origins
   - `MAX_REQUEST_SIZE_BYTES` - request body limit
+  - `SECRET_MANAGER_ENABLED` - enable/disable Secret Manager
 - Search for `Settings` class usage across all source files
 - Verify `.env.example` or `.env` patterns if present
 
