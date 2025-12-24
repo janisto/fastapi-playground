@@ -22,6 +22,7 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "FIREBASE_PROJECT_ID",
         "GOOGLE_APPLICATION_CREDENTIALS",
         "FIREBASE_PROJECT_NUMBER",
+        "FIRESTORE_DATABASE",
         "APP_ENVIRONMENT",
         "APP_URL",
         "SECRET_MANAGER_ENABLED",
@@ -268,6 +269,14 @@ class TestSettingsOptionalFields:
         settings = Settings(_env_file=None)
 
         assert settings.firebase_project_number is None
+
+    def test_firestore_database_default_none(self) -> None:
+        """
+        Verify Firestore database defaults to None (uses default database).
+        """
+        settings = Settings(_env_file=None)
+
+        assert settings.firestore_database is None
 
     def test_app_environment_default_none(self) -> None:
         """

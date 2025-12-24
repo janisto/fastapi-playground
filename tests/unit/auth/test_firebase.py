@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from firebase_admin.auth import (
+    CertificateFetchError,
     ExpiredIdTokenError,
     InvalidIdTokenError,
     RevokedIdTokenError,
@@ -155,6 +156,28 @@ class TestVerifyFirebaseToken:
 
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Unauthorized"
+
+    async def test_certificate_fetch_error_raises_503(self, monkeypatch: MonkeyPatch) -> None:
+        """
+        Verify CertificateFetchError raises HTTPException with 503.
+
+        This occurs when Firebase SDK cannot fetch public keys for token verification
+        due to network issues or configuration problems.
+        """
+        patch_get_firebase_app(monkeypatch)
+        patch_firebase_verify_error(
+            monkeypatch,
+            CertificateFetchError("Failed to fetch certificates", cause=None),
+        )
+
+        credentials = _make_credentials("valid-token")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_firebase_token(credentials)
+
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == "Authentication service temporarily unavailable"
+        assert exc_info.value.headers == {"Retry-After": "30"}
 
     async def test_missing_uid_raises_401(self, monkeypatch: MonkeyPatch) -> None:
         """
