@@ -262,7 +262,11 @@ Transaction methods are tested via E2E tests with Firebase emulators. Unit tests
 # Add pragma comment for coverage
 @staticmethod
 @firestore.async_transactional
-async def _create_in_transaction(...) -> None:  # pragma: no cover
+async def _create_in_transaction(
+    transaction: AsyncTransaction,
+    doc_ref: AsyncDocumentReference,
+    data: dict,
+) -> None:  # pragma: no cover
     # Tested via E2E tests with Firebase emulators; unit tests mock this method
     ...
 ```
