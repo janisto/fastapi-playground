@@ -61,8 +61,8 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 │   └── pyproject.toml             # Functions-specific dependencies
 ├── .github/
 │   ├── workflows/                 # CI (lint, typing, tests, coverage)
-│   ├── instructions/              # Copilot / contributor guidelines
-│   └── prompts/                   # Prompt templates for AI assistants
+│   ├── agents/                    # Copilot agent configurations
+│   └── skills/                    # Copilot skill definitions
 ├── pyproject.toml                 # Dependencies & tool config (Ruff, ty, pytest)
 ├── uv.lock                        # Locked dependency versions
 ├── Justfile                       # Task automation
@@ -157,6 +157,7 @@ Loaded from `.env` via `pydantic-settings` (see [app/core/config.py](app/core/co
 | `PORT` | No | `8080` | Listen port (Cloud Run uses this) |
 | `FIREBASE_PROJECT_ID` | Yes* | `test-project` | Firebase/GCP project ID |
 | `FIREBASE_PROJECT_NUMBER` | No | `None` | Numeric project number (logging metadata) |
+| `FIRESTORE_DATABASE` | No | `None` | Firestore database ID (defaults to `(default)`) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | No | `None` | Path to service account JSON (local dev only) |
 | `APP_ENVIRONMENT` | No | `None` | Optional environment label for logs |
 | `APP_URL` | No | `None` | Public application URL (informational) |
@@ -322,7 +323,7 @@ just cov                # Coverage report (html/json)
 
 **Examples:**
 ```bash
-just test-unit tests/unit/models/test_profile_models.py
+just test-unit tests/unit/models/test_profile_model.py
 just test-integration tests/integration/routers/test_profile.py::TestCreateProfile
 ```
 
@@ -588,6 +589,7 @@ Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md).
 - Profile router uses `PATCH` for partial updates (not `PUT`)
 - All routes have `operation_id` for stable SDK generation (pattern: `<resource>_<action>`)
 - Response models use `ProfileResponse` wrapper with `success`, `message`, `profile` fields
+
 ## License
 
 MIT License — see [LICENSE](LICENSE).
