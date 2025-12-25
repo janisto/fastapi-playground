@@ -1,5 +1,5 @@
 ---
-applyTo: "tests/**"
+description: Testing guidelines for this FastAPI/Python repository. Covers pytest conventions, fixtures, mocks, and test structure (Python 3.14, pytest, pytest-asyncio, httpx, pytest-httpx).
 ---
 
 Use these rules for tests under `tests/**` (Python 3.14, FastAPI, pytest, pytest-asyncio). The project uses `httpx` for HTTP clients and `pytest-httpx` for mocking outbound HTTP in tests.
@@ -1568,4 +1568,4 @@ When API changes
 - Keep OpenAPI consistent (FastAPI generates it automatically). If you introduce a shared error schema, reuse it across endpoints and assert it in tests.
 
 Notes
-- These conventions align with FastAPI’s testing guidance (TestClient, dependency overrides, async tests, and lifespan handling) and this repo’s tooling (just, uv, Ruff, ty).
+- These conventions align with FastAPI's testing guidance (TestClient, dependency overrides, async tests, and lifespan handling) and this repo's tooling (just, uv, Ruff, ty).
