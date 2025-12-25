@@ -1,9 +1,7 @@
 ---
-name: 'README.md Review and Update'
-description: 'Update README.md Documentation for FastAPI Playground'
-argument-hint: 'You are tasked with reviewing and updating the README.md file for this FastAPI-based REST API project. This file provides guidance to VS Code Copilot when working with code in this repository.'
-agent: 'agent'
-tools: ['context7/*', 'read', 'edit']
+mode: agent
+name: readme-review
+description: Update README.md documentation for FastAPI Playground
 ---
 # Task: Update README.md Documentation
 

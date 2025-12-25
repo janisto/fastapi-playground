@@ -1,9 +1,7 @@
 ---
-name: 'REST API Security Review'
-description: 'Comprehensive FastAPI security audit based on OWASP best practices.'
-argument-hint: 'FastAPI codebase to review for security vulnerabilities.'
-agent: 'agent'
-tools: ['context7/*', 'read', 'edit']
+mode: agent
+name: security-review
+description: Comprehensive FastAPI security audit based on OWASP best practices
 ---
 # Task: REST API Security Review
 
