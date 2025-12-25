@@ -6,6 +6,8 @@ description: Guide for creating FastAPI endpoints following this project's conve
 
 Use this skill when creating new API endpoints for this FastAPI application. Follow these patterns to ensure consistency with the existing codebase.
 
+For comprehensive coding guidelines, see `AGENTS.md` in the repository root.
+
 ## Router Setup
 
 Create routers in `app/routers/` with proper configuration:

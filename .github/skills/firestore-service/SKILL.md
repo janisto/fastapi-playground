@@ -6,6 +6,8 @@ description: Guide for creating Firestore services with async operations, transa
 
 Use this skill when creating services that interact with Firestore using async operations.
 
+For comprehensive coding guidelines, see `AGENTS.md` in the repository root.
+
 ## Service Structure
 
 Create services in `app/services/` with the following structure:

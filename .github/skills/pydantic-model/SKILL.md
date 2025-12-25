@@ -6,6 +6,8 @@ description: Guide for creating Pydantic v2 models with proper validation, field
 
 Use this skill when creating Pydantic models for request/response schemas in this FastAPI application.
 
+For comprehensive coding guidelines, see `AGENTS.md` in the repository root.
+
 ## Model File Structure
 
 Create models in `app/models/` with a docstring explaining the module and any constants:

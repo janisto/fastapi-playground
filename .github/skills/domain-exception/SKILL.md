@@ -6,6 +6,8 @@ description: Guide for creating domain exceptions with HTTP semantics that are a
 
 Use this skill when creating domain exceptions that carry HTTP semantics for automatic response conversion.
 
+For comprehensive coding guidelines, see `AGENTS.md` in the repository root.
+
 ## Base Exception Classes
 
 The project has these base classes in `app/exceptions/base.py`:

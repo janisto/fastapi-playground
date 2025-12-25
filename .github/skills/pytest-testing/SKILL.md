@@ -6,6 +6,8 @@ description: Guide for writing pytest tests following this project's patterns in
 
 Use this skill when writing tests for this FastAPI application. Follow these patterns for consistency.
 
+For comprehensive testing guidelines, see `tests/AGENTS.md`.
+
 ## Test Organization
 
 | Category | Path | Focus |
@@ -13,6 +15,10 @@ Use this skill when writing tests for this FastAPI application. Follow these pat
 | Unit | `tests/unit/` | Models, config, services, middleware |
 | Integration | `tests/integration/` | API routes with mocked services |
 | E2E | `tests/e2e/` | Real Firebase emulator tests |
+
+Additional directories:
+- `tests/helpers/` - Factory functions, auth helpers, assertion utilities
+- `tests/mocks/` - Fake Firestore client, Firebase mocks, service stubs
 
 Mirror the `app/` structure in test directories.
 
@@ -244,4 +250,58 @@ just test-unit          # Unit tests only
 just test-integration   # Integration tests only
 just test-e2e           # E2E tests (requires: just emulators)
 just cov                # Coverage report
+```
+
+## Unit vs Integration vs E2E: The Simple Rule
+
+> **If your test uses the `client` fixture (real app TestClient), it's an integration test.**
+> **If your test uses Firebase emulators, it's an E2E test.**
+> **Everything else is a unit test.**
+
+| Criterion | Unit Test | Integration Test | E2E Test |
+|-----------|-----------|------------------|----------|
+| Uses `client` fixture? | No | Yes | Yes |
+| Mocks ProfileService? | N/A | Yes | No |
+| Uses real Firestore? | No | No | Yes (emulator) |
+| Included in CI? | Yes | Yes | No |
+
+## HTTP Mocking with pytest-httpx
+
+Use the `httpx_mock` fixture to mock outbound HTTP requests:
+
+```python
+from pytest_httpx import HTTPXMock
+
+def test_outbound_call(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url="https://example.com/api/status",
+        json={"ok": True},
+        status_code=200,
+    )
+
+    resp = httpx.get("https://example.com/api/status")
+    assert resp.json() == {"ok": True}
+```
+
+## Fake Firestore for Unit Tests
+
+Use `tests/mocks/firestore.py` for service unit tests:
+
+```python
+from pytest_mock import MockerFixture
+from tests.mocks.firestore import FakeAsyncClient
+
+@pytest.fixture
+def fake_db(mocker: MockerFixture) -> FakeAsyncClient:
+    db = FakeAsyncClient()
+    mocker.patch("app.services.profile.get_async_firestore_client", return_value=db)
+    return db
+
+class TestProfileServiceGetProfile:
+    async def test_returns_profile_when_exists(self, fake_db: FakeAsyncClient) -> None:
+        fake_db._store["user-123"] = _make_profile_data(user_id="user-123")
+        service = ProfileService()
+        profile = await service.get_profile("user-123")
+        assert profile.id == "user-123"
 ```
