@@ -1,3 +1,7 @@
+---
+description: AI agent guidelines for this FastAPI/Python repository. Covers coding conventions, project structure, workflow principles, and tech stack (Python 3.14+, FastAPI, Pydantic v2, Firebase).
+---
+
 # Copilot Instructions
 
 These guidelines define how AI agents and contributors should work in this FastAPI/Python repository. Use GitHub Issues/PRs for tracking, GitHub Actions for CI (if configured), and local tooling via uv and just.
@@ -658,8 +662,8 @@ Checklist for PRs
 ## Secrets & Environment Variables
 
 - Never commit secrets. Use a local `.env` (gitignored) and Secret Manager in production.
-- Access config through settings classes (pydantic-settings); don’t read env directly in business logic.
-- Don’t log secrets or PII; ensure logs redact sensitive fields.
+- Access config through settings classes (pydantic-settings); don't read env directly in business logic.
+- Don't log secrets or PII; ensure logs redact sensitive fields.
 - Typical env vars
   - `ENVIRONMENT`, `DEBUG`
   - `GOOGLE_APPLICATION_CREDENTIALS` (path to service account JSON)
