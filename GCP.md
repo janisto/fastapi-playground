@@ -132,24 +132,56 @@ If you want automated builds from GitHub:
 1. Connect repository (Cloud Build Console → Repositories → Connect).
 2. Create a build trigger:
      - Source: GitHub, branch pattern (e.g. `main`)
-     - Build config: Use the included `cloudbuild.yaml`
+     - Build config: Use inline configuration (see below)
      - Service account: one with Cloud Run Deploy + Artifact Registry Write + (optional) Secret Manager Access
-3. Configure substitutions if needed (see `cloudbuild.yaml` for available options).
 
 **Important: BuildKit Requirement**
 
 The Dockerfile uses BuildKit features (`RUN --mount=type=cache,...`) for efficient caching. The default `gcr.io/cloud-builders/docker` image does **NOT** support BuildKit natively.
 
-The included `cloudbuild.yaml` uses the official Docker image with BuildKit enabled. If you create your own build config, ensure you:
+When configuring your inline build config, ensure you:
 - Use the official `docker` image (not `gcr.io/cloud-builders/docker`)
 - Set `DOCKER_BUILDKIT=1` environment variable
+
+Example inline configuration:
+```yaml
+steps:
+  # Build with BuildKit enabled (required for --mount syntax in Dockerfile)
+  - name: 'docker:27'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        docker build -t gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA .
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
+  # Push to Container Registry
+  - name: 'docker:27'
+    args: ['push', 'gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA']
+
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'fastapi-playground'
+      - '--image=gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA'
+      - '--region=europe-west4'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=FIREBASE_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,DEBUG=false'
+
+images:
+  - 'gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA'
+```
 
 **Why the official `docker` image?**
 - The `gcr.io/cloud-builders/docker` image uses an older Docker version that doesn't support BuildKit's `--mount` option
 - The official `docker` image (from Docker Hub) includes Docker 23.x+ with full BuildKit support
 - Setting `DOCKER_BUILDKIT=1` enables BuildKit for advanced Dockerfile features
 
-4. (Optional) Add a build-time health check script that curls `/health` after deploying to verify rollout.
+3. (Optional) Add a build-time health check script that curls `/health` after deploying to verify rollout.
 
 Secrets: Use Secret Manager with Cloud Build by adding `--set-secrets VAR=projects/<num>/secrets/<name>:latest` if you introduce secrets later.
 
@@ -194,7 +226,7 @@ No direct Cloud Logging API usage (stdout ingestion). Ensure log-based metrics /
 ### 13. Troubleshooting
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Cloud Build: `the --mount option requires BuildKit` | Using `gcr.io/cloud-builders/docker` which doesn't support BuildKit | Use the included `cloudbuild.yaml` which uses the official `docker` image with `DOCKER_BUILDKIT=1` |
+| Cloud Build: `the --mount option requires BuildKit` | Using `gcr.io/cloud-builders/docker` which doesn't support BuildKit | Use the official `docker` image with `DOCKER_BUILDKIT=1` in your inline config (see Section 9) |
 | 500 + log `Firestore client is not available` | Missing permissions or Firestore not initialized | Check IAM role `datastore.user` and region | 
 | Auth 401/403 | Missing/invalid `Authorization` header | Provide valid Firebase ID token |
 | Cold start latency | Min instances = 0 | Raise `MIN_INSTANCES` (Cloud Run: `--min-instances`) or Functions env param |
@@ -214,9 +246,6 @@ docker push gcr.io/PROJECT_ID/fastapi-playground:latest
 # Deploy Cloud Run
 gcloud run deploy fastapi-playground --image gcr.io/PROJECT_ID/fastapi-playground:latest --region europe-west4 --allow-unauthenticated \
     --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,DEBUG=false
-
-# Cloud Build (uses cloudbuild.yaml with BuildKit)
-gcloud builds submit --config=cloudbuild.yaml
 
 # Functions deploy
 cd functions && uv sync && firebase deploy --only functions
