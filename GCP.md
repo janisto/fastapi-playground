@@ -104,11 +104,13 @@ Firestore + Auth calls in tests are mocked; real GCP resources not required.
 
 ---
 ### 8. Container Build & Cloud Run Deployment
-Build image (locally or via Cloud Build):
+Build image locally (BuildKit is required for the `--mount` syntax used in the Dockerfile):
 ```bash
-docker build -t gcr.io/PROJECT_ID/fastapi-playground:latest .
+DOCKER_BUILDKIT=1 docker build -t gcr.io/PROJECT_ID/fastapi-playground:latest .
 docker push gcr.io/PROJECT_ID/fastapi-playground:latest
 ```
+
+> **Note:** Docker 23.0+ uses BuildKit by default. If using an older Docker version, prefix the build command with `DOCKER_BUILDKIT=1`.
 Deploy:
 ```bash
 gcloud run deploy fastapi-playground \
@@ -130,28 +132,23 @@ If you want automated builds from GitHub:
 1. Connect repository (Cloud Build Console → Repositories → Connect).
 2. Create a build trigger:
      - Source: GitHub, branch pattern (e.g. `main`)
-     - Build config: Docker build (or custom `cloudbuild.yaml` if you add one)
+     - Build config: Use the included `cloudbuild.yaml`
      - Service account: one with Cloud Run Deploy + Artifact Registry Write + (optional) Secret Manager Access
-3. Set substitutions / env for deploy step (if using a custom build config). Example `cloudbuild.yaml` pattern:
-```yaml
-steps:
-    - name: gcr.io/cloud-builders/docker
-        args: ['build','-t','gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA','.' ]
-    - name: gcr.io/cloud-builders/docker
-        args: ['push','gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA']
-    - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-        entrypoint: gcloud
-        args:
-            - run
-            - deploy
-            - fastapi-playground
-            - --image=gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA
-            - --region=europe-west4
-            - --allow-unauthenticated
-            - --set-env-vars=FIREBASE_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,DEBUG=false
-images:
-    - gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA
-```
+3. Configure substitutions if needed (see `cloudbuild.yaml` for available options).
+
+**Important: BuildKit Requirement**
+
+The Dockerfile uses BuildKit features (`RUN --mount=type=cache,...`) for efficient caching. The default `gcr.io/cloud-builders/docker` image does **NOT** support BuildKit natively.
+
+The included `cloudbuild.yaml` uses the official Docker image with BuildKit enabled. If you create your own build config, ensure you:
+- Use the official `docker` image (not `gcr.io/cloud-builders/docker`)
+- Set `DOCKER_BUILDKIT=1` environment variable
+
+**Why the official `docker` image?**
+- The `gcr.io/cloud-builders/docker` image uses an older Docker version that doesn't support BuildKit's `--mount` option
+- The official `docker` image (from Docker Hub) includes Docker 23.x+ with full BuildKit support
+- Setting `DOCKER_BUILDKIT=1` enables BuildKit for advanced Dockerfile features
+
 4. (Optional) Add a build-time health check script that curls `/health` after deploying to verify rollout.
 
 Secrets: Use Secret Manager with Cloud Build by adding `--set-secrets VAR=projects/<num>/secrets/<name>:latest` if you introduce secrets later.
@@ -197,6 +194,7 @@ No direct Cloud Logging API usage (stdout ingestion). Ensure log-based metrics /
 ### 13. Troubleshooting
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| Cloud Build: `the --mount option requires BuildKit` | Using `gcr.io/cloud-builders/docker` which doesn't support BuildKit | Use the included `cloudbuild.yaml` which uses the official `docker` image with `DOCKER_BUILDKIT=1` |
 | 500 + log `Firestore client is not available` | Missing permissions or Firestore not initialized | Check IAM role `datastore.user` and region | 
 | Auth 401/403 | Missing/invalid `Authorization` header | Provide valid Firebase ID token |
 | Cold start latency | Min instances = 0 | Raise `MIN_INSTANCES` (Cloud Run: `--min-instances`) or Functions env param |
@@ -209,13 +207,16 @@ No direct Cloud Logging API usage (stdout ingestion). Ensure log-based metrics /
 just serve
 just test
 
-# Container build & push
-docker build -t gcr.io/PROJECT_ID/fastapi-playground:latest .
+# Container build & push (BuildKit required)
+DOCKER_BUILDKIT=1 docker build -t gcr.io/PROJECT_ID/fastapi-playground:latest .
 docker push gcr.io/PROJECT_ID/fastapi-playground:latest
 
 # Deploy Cloud Run
 gcloud run deploy fastapi-playground --image gcr.io/PROJECT_ID/fastapi-playground:latest --region europe-west4 --allow-unauthenticated \
     --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,DEBUG=false
+
+# Cloud Build (uses cloudbuild.yaml with BuildKit)
+gcloud builds submit --config=cloudbuild.yaml
 
 # Functions deploy
 cd functions && uv sync && firebase deploy --only functions
