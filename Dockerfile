@@ -12,7 +12,12 @@
 #     --base-image BASE_IMAGE \
 #     --automatic-updates
 #   This links your app image to a managed base so Google can patch it without a new revision.
+
+# Builder image: includes uv for dependency management
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:python3.14-trixie-slim
+# Runtime image: minimal Python image without uv (not needed at runtime)
+ARG PYTHON_IMAGE=python:3.14-slim-trixie
+
 FROM ${UV_IMAGE} AS builder
 
 # Install runtime dependencies
@@ -55,8 +60,8 @@ COPY app ./app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-editable
 
-# Final runtime stage (same base by default; can be swapped via --build-arg)
-FROM ${UV_IMAGE} AS runtime
+# Runtime stage: uses minimal Python image (no uv needed at runtime)
+FROM ${PYTHON_IMAGE} AS runtime
 
 # Install runtime dependencies
 # libmagic1: required by python-magic for file type detection
@@ -69,8 +74,8 @@ RUN groupadd --system --gid 1001 app \
     && useradd --system --gid 1001 --uid 1001 --create-home app
 
 # OCI provenance label for base image (useful for tooling/visibility)
-ARG UV_IMAGE
-LABEL org.opencontainers.image.base.name="${UV_IMAGE}"
+ARG PYTHON_IMAGE
+LABEL org.opencontainers.image.base.name="${PYTHON_IMAGE}"
 
 # Ensure we use the project virtualenv at runtime
 ENV VIRTUAL_ENV=/app/.venv \
