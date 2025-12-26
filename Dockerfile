@@ -55,9 +55,8 @@ COPY app ./app
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-editable
 
-# Final runtime stage uses python:3.14-slim-trixie for minimal size
-# (no uv needed at runtime)
-FROM python:3.14-slim-trixie AS runtime
+# Final runtime stage (same base by default; can be swapped via --build-arg)
+FROM ${UV_IMAGE} AS runtime
 
 # Install runtime dependencies
 # libmagic1: required by python-magic for file type detection
@@ -69,8 +68,9 @@ RUN apt-get update \
 RUN groupadd --system --gid 1001 app \
     && useradd --system --gid 1001 --uid 1001 --create-home app
 
-# OCI provenance label for runtime base image (useful for tooling/visibility)
-LABEL org.opencontainers.image.base.name="python:3.14-slim-trixie"
+# OCI provenance label for base image (useful for tooling/visibility)
+ARG UV_IMAGE
+LABEL org.opencontainers.image.base.name="${UV_IMAGE}"
 
 # Ensure we use the project virtualenv at runtime
 ENV VIRTUAL_ENV=/app/.venv \
