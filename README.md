@@ -4,6 +4,8 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 
 <img src="assets/python.svg" alt="Python logo" width="400">
 
+<sub>Python logo from [python.org](https://www.python.org/community/logos/). Trademark of the Python Software Foundation.</sub>
+
 ## Features
 
 - **FastAPI** (Python 3.14+) with async endpoints and OpenAPI docs (`/api-docs`, `/api-redoc`)
