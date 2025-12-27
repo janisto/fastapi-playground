@@ -2,6 +2,10 @@
 
 A FastAPI application demonstrating Firebase Authentication, Firestore CRUD operations, typed Pydantic v2 models, and a modern Python development workflow using `uv` (dependency & virtualenv manager) and `just` (task runner). This README is optimized for AI code assistants.
 
+<img src="assets/python.svg" alt="Python logo" width="400">
+
+<sub>Python logo from [python.org](https://www.python.org/community/logos/). Trademark of the Python Software Foundation.</sub>
+
 ## Features
 
 - **FastAPI** (Python 3.14+) with async endpoints and OpenAPI docs (`/api-docs`, `/api-redoc`)
