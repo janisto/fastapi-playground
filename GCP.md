@@ -12,11 +12,11 @@ See:
 2. Create / Link a Firebase project to the same GCP project (Firebase console). The Firebase project ID must match the `FIREBASE_PROJECT_ID` environment variable used by the app.
 
 ---
-### 2. Enable Firebase Products (Console → Build)
+### 2. Enable Firebase Products (Console, Build section)
 Enable (region: `europe-west4` to match repo defaults):
-- Firestore (Native mode) – location: `europe-west4`
-- Cloud Storage for Firebase – location: `europe-west4`
-- Authentication → Sign-in methods:
+- Firestore (Native mode) - location: `europe-west4`
+- Cloud Storage for Firebase - location: `europe-west4`
+- Authentication, Sign-in methods:
     - Phone (add test numbers if needed)
     - Google (configure OAuth consent & SHA if using Android, etc.)
 
@@ -93,7 +93,7 @@ SECRET_MANAGER_ENABLED=true
 ### 7. Local Development
 1. Clone repo & install deps: `just install`
 2. Create `.env` with at least `FIREBASE_PROJECT_ID` (and credentials path if needed).
-3. Run: `just serve` → `http://127.0.0.1:8080/api-docs`
+3. Run: `just serve` (opens `http://127.0.0.1:8080/api-docs`)
 4. (Optional) Start Firebase emulators for Firestore/Auth/Functions:
      ```bash
      firebase emulators:start
@@ -129,7 +129,7 @@ Health check: Cloud Run uses `/` for default checks by default; you can configur
 ---
 ### 9. Cloud Build (2nd Gen) – Optional CI/CD
 If you want automated builds from GitHub:
-1. Connect repository (Cloud Build Console → Repositories → Connect).
+1. Connect repository (Cloud Build Console, Repositories, Connect).
 2. Create a build trigger:
      - Source: GitHub, branch pattern (e.g. `main`)
      - Build config: Use inline configuration (see below)
@@ -207,9 +207,11 @@ Use Functions when you need a small single endpoint (webhook, prototype) and kee
 
 ---
 ### 11. Logging & Trace Correlation
-The FastAPI app emits structured JSON logs (see `app/core/logging.py`). When Cloud Run forwards requests with `X-Cloud-Trace-Context`, logs embed:
-- `trace`: `projects/<FIREBASE_PROJECT_ID>/traces/<TRACE_ID>`
-- `spanId`: Provided span
+The FastAPI app emits structured JSON logs (see `app/middleware/logging.py`). When requests include the W3C `traceparent` header, logs embed:
+- `trace`: `projects/<FIREBASE_PROJECT_ID>/traces/<trace-id>`
+- `spanId`: The `parent-id` from traceparent
+
+The `traceparent` header format: `{version}-{trace-id}-{parent-id}-{trace-flags}` (e.g., `00-a0892f3577b34da6a3ce929d0e0e4736-f03067aa0ba902b7-01`).
 
 No direct Cloud Logging API usage (stdout ingestion). Ensure log-based metrics / alerts are configured in GCP as needed.
 

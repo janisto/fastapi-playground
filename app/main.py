@@ -7,17 +7,18 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_problem.handler import add_exception_handler
 
 from app.core.config import get_settings
+from app.core.exception_handler import eh
 from app.core.firebase import close_async_firestore_client, initialize_firebase
-from app.core.handlers import register_exception_handlers
 from app.middleware import (
     BodySizeLimitMiddleware,
     RequestContextLogMiddleware,
     SecurityHeadersMiddleware,
     setup_logging,
 )
-from app.routers import health, profile
+from app.routers import health, hello, items, profile
 
 
 @asynccontextmanager
@@ -48,9 +49,11 @@ app = FastAPI(
 # Include routers
 app.include_router(profile.router)
 app.include_router(health.router)
+app.include_router(hello.router)
+app.include_router(items.router)
 
-# Register exception handlers
-register_exception_handlers(app)
+# Register RFC 9457 Problem Details exception handler
+add_exception_handler(app, eh)
 
 # Middleware order: last added = outermost (first to run on request, last on response)
 # Desired request flow: Logging → Security → BodyLimit → CORS → route
@@ -58,13 +61,16 @@ register_exception_handlers(app)
 
 # CORS (innermost) - handles preflight and adds CORS headers early in response
 settings = get_settings()
-if settings.cors_origins:
+if settings.cors_origins:  # pragma: no cover
+    # Per CORS spec, credentials cannot be used with wildcard origin
+    allow_credentials = "*" not in settings.cors_origins
     app.add_middleware(
         CORSMiddleware,  # type: ignore[arg-type]
         allow_origins=settings.cors_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Cloud-Trace-Context"],
+        allow_credentials=allow_credentials,
+        allow_methods=settings.cors_methods,
+        allow_headers=settings.cors_headers,
+        expose_headers=settings.cors_expose_headers,
     )
 
 # Body size limit - reject oversized requests before further processing
@@ -76,8 +82,6 @@ app.add_middleware(
     hsts=True,
     hsts_include_subdomains=True,
     hsts_preload=False,
-    x_frame_options="DENY",
-    referrer_policy="same-origin",
 )
 
 # Logging (outermost) - capture full request lifecycle including all middleware

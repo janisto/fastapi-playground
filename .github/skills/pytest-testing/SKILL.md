@@ -22,9 +22,22 @@ Additional directories:
 
 Mirror the `app/` structure in test directories.
 
+## Unit vs Integration vs E2E: The Simple Rule
+
+> **If your test uses the `client` fixture (real app TestClient), it's an integration test.**
+> **If your test uses Firebase emulators, it's an E2E test.**
+> **Everything else is a unit test.**
+
+| Criterion | Unit Test | Integration Test | E2E Test |
+|-----------|-----------|------------------|----------|
+| Uses `client` fixture? | No | Yes | Yes |
+| Mocks ProfileService? | N/A | Yes | No |
+| Uses real Firestore? | No | No | Yes (emulator) |
+| Included in CI? | Yes | Yes | No |
+
 ## Integration Test Pattern
 
-Integration tests use the FastAPI TestClient with mocked services:
+Integration tests use the FastAPI TestClient with mocked services via `tests/integration/conftest.py`:
 
 ```python
 """
@@ -61,8 +74,7 @@ class TestCreateResource:
         response = client.post(f"{BASE_URL}/", json=make_resource_payload_dict())
 
         assert response.status_code == 201
-        body = response.json()
-        assert body["success"] is True
+        assert "Location" in response.headers
         mock_resource_service.create_resource.assert_awaited_once()
 
     def test_returns_409_when_duplicate(
@@ -79,7 +91,8 @@ class TestCreateResource:
         response = client.post(f"{BASE_URL}/", json=make_resource_payload_dict())
 
         assert response.status_code == 409
-        assert response.json()["detail"] == "Resource already exists"
+        body = response.json()
+        assert body["title"] == "Resource already exists"
 
     def test_returns_401_without_auth(
         self,
@@ -94,22 +107,52 @@ class TestCreateResource:
         assert response.status_code == 401
 ```
 
-## Fixtures
+## Integration Fixtures
 
-Use fixtures from `tests/conftest.py`:
-- `client` - TestClient with Firebase/logging patched
+The `tests/integration/conftest.py` provides:
+- `client` - TestClient with mocked services injected via `dependency_overrides`
 - `fake_user` - Simple fake FirebaseUser
-- `with_fake_user` - Override auth dependency
-
-Add service mock fixtures in integration `conftest.py`:
+- `with_fake_user` - Override auth dependency to return fake user
+- `mock_resource_service` - AsyncMock of service for assertion
 
 ```python
+# tests/integration/conftest.py
 @pytest.fixture
 def mock_resource_service() -> AsyncMock:
     """
     Mocked ResourceService for integration tests.
     """
     return AsyncMock(spec=ResourceService)
+
+
+@pytest.fixture
+def client(mock_resource_service: AsyncMock) -> Generator[TestClient]:
+    """
+    TestClient with mocked services (no Firebase/Firestore).
+    """
+    from app.main import app
+
+    with (
+        patch("app.main.initialize_firebase"),
+        patch("app.main.setup_logging"),
+        patch("app.main.close_async_firestore_client"),
+    ):
+        app.dependency_overrides[get_resource_service] = lambda: mock_resource_service
+        with TestClient(app, raise_server_exceptions=False) as c:
+            yield c
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def with_fake_user(fake_user: FirebaseUser) -> Generator[None]:
+    """
+    Override auth to return fake user.
+    """
+    from app.main import app
+
+    app.dependency_overrides[verify_firebase_token] = lambda: fake_user
+    yield
+    app.dependency_overrides.pop(verify_firebase_token, None)
 ```
 
 ## Helper Functions
@@ -183,8 +226,6 @@ def test_returns_422_for_missing_fields(
     response = client.post(f"{BASE_URL}/", json=payload)
 
     assert response.status_code == 422
-    body = response.json()
-    assert any(missing_field in str(err.get("loc", [])) for err in body["detail"])
 ```
 
 ## Async Tests
@@ -242,29 +283,6 @@ response = client.get("/resource/")
 response = client.get("/resource")
 ```
 
-## Running Tests
-
-```bash
-just test               # Unit + integration (CI-compatible)
-just test-unit          # Unit tests only
-just test-integration   # Integration tests only
-just test-e2e           # E2E tests (requires: just emulators)
-just cov                # Coverage report
-```
-
-## Unit vs Integration vs E2E: The Simple Rule
-
-> **If your test uses the `client` fixture (real app TestClient), it's an integration test.**
-> **If your test uses Firebase emulators, it's an E2E test.**
-> **Everything else is a unit test.**
-
-| Criterion | Unit Test | Integration Test | E2E Test |
-|-----------|-----------|------------------|----------|
-| Uses `client` fixture? | No | Yes | Yes |
-| Mocks ProfileService? | N/A | Yes | No |
-| Uses real Firestore? | No | No | Yes (emulator) |
-| Included in CI? | Yes | Yes | No |
-
 ## HTTP Mocking with pytest-httpx
 
 Use the `httpx_mock` fixture to mock outbound HTTP requests:
@@ -295,13 +313,24 @@ from tests.mocks.firestore import FakeAsyncClient
 @pytest.fixture
 def fake_db(mocker: MockerFixture) -> FakeAsyncClient:
     db = FakeAsyncClient()
-    mocker.patch("app.services.profile.get_async_firestore_client", return_value=db)
+    mocker.patch("app.services.resource.get_async_firestore_client", return_value=db)
     return db
 
-class TestProfileServiceGetProfile:
-    async def test_returns_profile_when_exists(self, fake_db: FakeAsyncClient) -> None:
-        fake_db._store["user-123"] = _make_profile_data(user_id="user-123")
-        service = ProfileService()
-        profile = await service.get_profile("user-123")
-        assert profile.id == "user-123"
+
+class TestResourceServiceGetResource:
+    async def test_returns_resource_when_exists(self, fake_db: FakeAsyncClient) -> None:
+        fake_db._store["user-123"] = _make_resource_data(user_id="user-123")
+        service = ResourceService()
+        resource = await service.get_resource("user-123")
+        assert resource.id == "user-123"
+```
+
+## Running Tests
+
+```bash
+just test               # Unit + integration (CI-compatible)
+just test-unit          # Unit tests only
+just test-integration   # Integration tests only
+just test-e2e           # E2E tests (requires: just emulators)
+just cov                # Coverage report
 ```

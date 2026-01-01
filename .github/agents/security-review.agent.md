@@ -1,5 +1,4 @@
 ---
-mode: agent
 name: security-review
 description: Comprehensive FastAPI security audit based on OWASP best practices
 ---
@@ -13,10 +12,14 @@ Before analysis, read these files:
 1. `app/main.py` - Application setup, middleware, and CORS configuration
 2. `app/auth/firebase.py` - Firebase authentication implementation
 3. `app/middleware/security.py` - Security headers middleware
-4. `app/core/config.py` - Configuration and secrets handling
-5. All files in `app/routers/` - Endpoint definitions
-6. All files in `app/services/` - Business logic
-7. `app/dependencies.py` - Shared dependencies
+4. `app/middleware/body_limit.py` - Request body size limiting
+5. `app/middleware/logging.py` - Structured logging with trace correlation
+6. `app/core/config.py` - Configuration and secrets handling
+7. `app/core/exception_handler.py` - Error handling and RFC 9457 Problem Details
+8. `app/routers/health.py`, `app/routers/hello.py`, `app/routers/items.py`, `app/routers/profile.py` - Endpoint definitions
+9. `app/services/profile.py` - Business logic
+10. `app/dependencies.py` - Shared dependencies and DI aliases
+11. `app/exceptions/profile.py` - Domain exception definitions
 
 ## Security Review Checklist
 

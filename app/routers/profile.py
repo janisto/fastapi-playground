@@ -4,21 +4,24 @@ Profile router for user profile management.
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from app.core.cbor import CBORRoute
 from app.dependencies import CurrentUser, ProfileServiceDep
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
-from app.models.error import ErrorResponse
-from app.models.profile import ProfileCreate, ProfileResponse, ProfileUpdate
+from app.models.error import ProblemResponse, ValidationProblemResponse
+from app.models.profile import Profile, ProfileCreate, ProfileUpdate
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/profile",
     tags=["Profile"],
+    route_class=CBORRoute,
     responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized"},
-        500: {"model": ErrorResponse, "description": "Server error"},
+        401: {"model": ProblemResponse, "description": "Unauthorized"},
+        422: {"model": ValidationProblemResponse, "description": "Validation error"},
+        500: {"model": ProblemResponse, "description": "Server error"},
     },
 )
 
@@ -26,21 +29,22 @@ router = APIRouter(
 @router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
-    response_model=ProfileResponse,
     summary="Create user profile",
     description="Create a new profile for the authenticated user.",
     operation_id="profile_create",
     responses={
-        201: {"model": ProfileResponse, "description": "Profile created successfully"},
-        403: {"model": ErrorResponse, "description": "Forbidden"},
-        409: {"model": ErrorResponse, "description": "Profile already exists"},
+        201: {"model": Profile, "description": "Profile created successfully"},
+        403: {"model": ProblemResponse, "description": "Forbidden"},
+        409: {"model": ProblemResponse, "description": "Profile already exists"},
     },
 )
 async def create_profile(
+    request: Request,
     profile_data: ProfileCreate,
     current_user: CurrentUser,
     service: ProfileServiceDep,
-) -> ProfileResponse:
+    response: Response,
+) -> Profile:
     """
     Create a new profile for the authenticated user.
 
@@ -49,7 +53,20 @@ async def create_profile(
     """
     try:
         profile = await service.create_profile(current_user.uid, profile_data)
-        return ProfileResponse(success=True, message="Profile created successfully", profile=profile)
+        response.headers["Location"] = "/profile/"
+        response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
+        return Profile(
+            schema_url=str(request.base_url) + "schemas/ProfileData.json",
+            id=profile.id,
+            firstname=profile.firstname,
+            lastname=profile.lastname,
+            email=profile.email,
+            phone_number=profile.phone_number,
+            marketing=profile.marketing,
+            terms=profile.terms,
+            created_at=profile.created_at,
+            updated_at=profile.updated_at,
+        )
     except (HTTPException, ProfileAlreadyExistsError):
         raise
     except Exception:
@@ -61,19 +78,20 @@ async def create_profile(
 
 @router.get(
     "/",
-    response_model=ProfileResponse,
     summary="Get user profile",
     description="Get the profile of the authenticated user.",
     operation_id="profile_get",
     responses={
-        200: {"model": ProfileResponse, "description": "Profile retrieved successfully"},
-        404: {"model": ErrorResponse, "description": "Profile not found"},
+        200: {"model": Profile, "description": "Profile retrieved successfully"},
+        404: {"model": ProblemResponse, "description": "Profile not found"},
     },
 )
 async def get_profile(
+    request: Request,
+    response: Response,
     current_user: CurrentUser,
     service: ProfileServiceDep,
-) -> ProfileResponse:
+) -> Profile:
     """
     Retrieve the profile of the authenticated user.
 
@@ -81,7 +99,19 @@ async def get_profile(
     """
     try:
         profile = await service.get_profile(current_user.uid)
-        return ProfileResponse(success=True, message="Profile retrieved successfully", profile=profile)
+        response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
+        return Profile(
+            schema_url=str(request.base_url) + "schemas/ProfileData.json",
+            id=profile.id,
+            firstname=profile.firstname,
+            lastname=profile.lastname,
+            email=profile.email,
+            phone_number=profile.phone_number,
+            marketing=profile.marketing,
+            terms=profile.terms,
+            created_at=profile.created_at,
+            updated_at=profile.updated_at,
+        )
     except (HTTPException, ProfileNotFoundError):
         raise
     except Exception:
@@ -93,21 +123,23 @@ async def get_profile(
 
 @router.patch(
     "/",
-    response_model=ProfileResponse,
+    response_model=Profile,
     response_model_exclude_unset=True,
     summary="Update user profile",
     description="Partially update the profile of the authenticated user.",
     operation_id="profile_update",
     responses={
-        200: {"model": ProfileResponse, "description": "Profile updated successfully"},
-        404: {"model": ErrorResponse, "description": "Profile not found"},
+        200: {"model": Profile, "description": "Profile updated successfully"},
+        404: {"model": ProblemResponse, "description": "Profile not found"},
     },
 )
 async def update_profile(
+    request: Request,
+    response: Response,
     profile_data: ProfileUpdate,
     current_user: CurrentUser,
     service: ProfileServiceDep,
-) -> ProfileResponse:
+) -> Profile:
     """
     Partially update the profile of the authenticated user.
 
@@ -117,7 +149,19 @@ async def update_profile(
     """
     try:
         profile = await service.update_profile(current_user.uid, profile_data)
-        return ProfileResponse(success=True, message="Profile updated successfully", profile=profile)
+        response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
+        return Profile(
+            schema_url=str(request.base_url) + "schemas/ProfileData.json",
+            id=profile.id,
+            firstname=profile.firstname,
+            lastname=profile.lastname,
+            email=profile.email,
+            phone_number=profile.phone_number,
+            marketing=profile.marketing,
+            terms=profile.terms,
+            created_at=profile.created_at,
+            updated_at=profile.updated_at,
+        )
     except (HTTPException, ProfileNotFoundError):
         raise
     except Exception:
@@ -129,19 +173,19 @@ async def update_profile(
 
 @router.delete(
     "/",
-    response_model=ProfileResponse,
+    status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete user profile",
     description="Delete the profile of the authenticated user.",
     operation_id="profile_delete",
     responses={
-        200: {"model": ProfileResponse, "description": "Profile deleted successfully"},
-        404: {"model": ErrorResponse, "description": "Profile not found"},
+        204: {"description": "Profile deleted successfully"},
+        404: {"model": ProblemResponse, "description": "Profile not found"},
     },
 )
 async def delete_profile(
     current_user: CurrentUser,
     service: ProfileServiceDep,
-) -> ProfileResponse:
+) -> None:
     """
     Delete the profile of the authenticated user.
 
@@ -150,7 +194,6 @@ async def delete_profile(
     """
     try:
         await service.delete_profile(current_user.uid)
-        return ProfileResponse(success=True, message="Profile deleted successfully", profile=None)
     except (HTTPException, ProfileNotFoundError):
         raise
     except Exception:

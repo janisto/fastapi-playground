@@ -4,7 +4,7 @@ Unit tests for configuration settings.
 
 import pytest
 
-from app.core.config import Settings, get_settings
+from app.core.config import Settings, get_settings, parse_cors_origins
 
 
 @pytest.fixture(autouse=True)
@@ -31,6 +31,100 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
     for var in env_vars:
         monkeypatch.delenv(var, raising=False)
+
+
+class TestParseCorsOrigins:
+    """
+    Tests for parse_cors_origins function.
+    """
+
+    def test_parses_json_array(self) -> None:
+        """
+        Verify JSON array is parsed correctly.
+        """
+        result = parse_cors_origins('["http://localhost:3000", "https://example.com"]')
+
+        assert result == ["http://localhost:3000", "https://example.com"]
+
+    def test_parses_comma_separated(self) -> None:
+        """
+        Verify comma-separated string is parsed correctly.
+        """
+        result = parse_cors_origins("http://localhost:3000,https://example.com")
+
+        assert result == ["http://localhost:3000", "https://example.com"]
+
+    def test_strips_whitespace_from_comma_separated(self) -> None:
+        """
+        Verify whitespace is stripped from comma-separated values.
+        """
+        result = parse_cors_origins("http://localhost:3000 , https://example.com , http://app.test")
+
+        assert result == ["http://localhost:3000", "https://example.com", "http://app.test"]
+
+    def test_returns_empty_list_for_empty_string(self) -> None:
+        """
+        Verify empty string returns empty list.
+        """
+        result = parse_cors_origins("")
+
+        assert result == []
+
+    def test_returns_empty_list_for_whitespace_only(self) -> None:
+        """
+        Verify whitespace-only string returns empty list.
+        """
+        result = parse_cors_origins("   ")
+
+        assert result == []
+
+    def test_passes_through_list(self) -> None:
+        """
+        Verify list input is passed through unchanged.
+        """
+        origins = ["http://localhost:3000", "https://example.com"]
+
+        result = parse_cors_origins(origins)
+
+        assert result == origins
+
+    def test_single_value_without_comma(self) -> None:
+        """
+        Verify single value without comma is parsed correctly.
+        """
+        result = parse_cors_origins("http://localhost:3000")
+
+        assert result == ["http://localhost:3000"]
+
+    def test_ignores_empty_entries_in_comma_separated(self) -> None:
+        """
+        Verify empty entries are filtered out.
+        """
+        result = parse_cors_origins("http://localhost:3000,,https://example.com,")
+
+        assert result == ["http://localhost:3000", "https://example.com"]
+
+    def test_invalid_json_falls_back_to_comma_separated(self) -> None:
+        """
+        Verify invalid JSON starting with [ falls back to comma parsing.
+        """
+        result = parse_cors_origins("[invalid json")
+
+        assert result == ["[invalid json"]
+
+    def test_valid_json_non_list_falls_back_to_comma_separated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Verify valid JSON that is not a list falls back to comma parsing.
+
+        This edge case covers when JSON parses successfully but isn't a list.
+        """
+        # Mock json.loads to return a dict instead of list to test the branch
+        monkeypatch.setattr("app.core.config.json.loads", lambda x: {"key": "value"})
+
+        result = parse_cors_origins("[fake json that returns dict]")
+
+        # Falls through to comma-separated parsing since parsed isn't a list
+        assert result == ["[fake json that returns dict]"]
 
 
 class TestSettings:
@@ -172,6 +266,46 @@ class TestSettingsFromEnv:
         settings = Settings(_env_file=None)
 
         assert settings.cors_origins == ["http://localhost:3000", "https://example.com"]
+
+    def test_cors_origins_from_env_comma_separated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Verify CORS origins is loaded from comma-separated env var.
+        """
+        monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000,https://example.com")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.cors_origins == ["http://localhost:3000", "https://example.com"]
+
+    def test_cors_origins_comma_separated_with_spaces(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Verify CORS origins handles comma-separated values with spaces.
+        """
+        monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000, https://example.com , http://app.test")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.cors_origins == ["http://localhost:3000", "https://example.com", "http://app.test"]
+
+    def test_cors_origins_single_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Verify CORS origins handles single value without comma.
+        """
+        monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.cors_origins == ["http://localhost:3000"]
+
+    def test_cors_origins_empty_string(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """
+        Verify CORS origins handles empty string.
+        """
+        monkeypatch.setenv("CORS_ORIGINS", "")
+
+        settings = Settings(_env_file=None)
+
+        assert settings.cors_origins == []
 
     def test_google_credentials_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """

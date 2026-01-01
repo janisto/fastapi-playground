@@ -297,12 +297,12 @@ class TestCorsMiddleware:
             assert "authorization" in allowed_headers
             assert "content-type" in allowed_headers
 
-    def test_cors_allows_trace_header_for_logging(
+    def test_cors_allows_traceparent_header_for_logging(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
-        Verify CORS allows X-Cloud-Trace-Context header for logging middleware.
+        Verify CORS allows traceparent header for logging middleware.
         """
         monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3000"]')
 
@@ -324,9 +324,9 @@ class TestCorsMiddleware:
                     headers={
                         "Origin": "http://localhost:3000",
                         "Access-Control-Request-Method": "GET",
-                        "Access-Control-Request-Headers": "X-Cloud-Trace-Context",
+                        "Access-Control-Request-Headers": "traceparent",
                     },
                 )
 
             allowed_headers = response.headers.get("access-control-allow-headers", "").lower()
-            assert "x-cloud-trace-context" in allowed_headers
+            assert "traceparent" in allowed_headers

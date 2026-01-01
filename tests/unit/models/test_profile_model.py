@@ -15,7 +15,6 @@ from app.models.profile import (
     PROFILE_COLLECTION,
     Profile,
     ProfileCreate,
-    ProfileResponse,
     ProfileUpdate,
 )
 
@@ -188,6 +187,38 @@ class TestProfileCreate:
                 terms=True,
             )
 
+    def test_terms_false_raises_validation_error(self) -> None:
+        """
+        Verify terms=False raises ValidationError on profile creation.
+        """
+        with pytest.raises(ValidationError) as exc_info:
+            ProfileCreate(
+                firstname="John",
+                lastname="Doe",
+                email="john@example.com",
+                phone_number="+358401234567",
+                terms=False,
+            )
+
+        errors = exc_info.value.errors()
+        assert len(errors) == 1
+        assert errors[0]["loc"] == ("terms",)
+        assert "terms must be accepted" in errors[0]["msg"]
+        assert errors[0]["type"] == "value_error"
+
+    def test_terms_true_accepted(self) -> None:
+        """
+        Verify terms=True is accepted on profile creation.
+        """
+        profile = ProfileCreate(
+            firstname="John",
+            lastname="Doe",
+            email="john@example.com",
+            phone_number="+358401234567",
+            terms=True,
+        )
+        assert profile.terms is True
+
 
 class TestProfileUpdate:
     """
@@ -339,87 +370,6 @@ class TestProfile:
                 created_at=now,
                 updated_at=now,
             )
-
-
-class TestProfileResponse:
-    """
-    Tests for ProfileResponse model.
-    """
-
-    def test_success_with_profile(self) -> None:
-        """
-        Verify response with profile data.
-        """
-        now = datetime.now(UTC)
-        profile = Profile(
-            id="user-123",
-            firstname="John",
-            lastname="Doe",
-            email="john@example.com",
-            phone_number="+358401234567",
-            marketing=True,
-            terms=True,
-            created_at=now,
-            updated_at=now,
-        )
-        response = ProfileResponse(
-            success=True,
-            message="Profile created",
-            profile=profile,
-        )
-        assert response.success is True
-        assert response.profile is not None
-        assert response.profile.id == "user-123"
-
-    def test_success_without_profile(self) -> None:
-        """
-        Verify response without profile data.
-        """
-        response = ProfileResponse(
-            success=True,
-            message="Profile deleted",
-            profile=None,
-        )
-        assert response.success is True
-        assert response.profile is None
-
-    def test_failure_response(self) -> None:
-        """
-        Verify failure response with success=False.
-        """
-        response = ProfileResponse(
-            success=False,
-            message="Profile not found",
-            profile=None,
-        )
-        assert response.success is False
-        assert response.message == "Profile not found"
-
-    def test_json_serialization(self) -> None:
-        """
-        Verify response serializes to JSON correctly.
-        """
-        now = datetime.now(UTC)
-        profile = Profile(
-            id="user-123",
-            firstname="John",
-            lastname="Doe",
-            email="john@example.com",
-            phone_number="+358401234567",
-            marketing=True,
-            terms=True,
-            created_at=now,
-            updated_at=now,
-        )
-        response = ProfileResponse(
-            success=True,
-            message="Profile retrieved",
-            profile=profile,
-        )
-        json_str = response.model_dump_json()
-        assert '"success":true' in json_str
-        assert '"message":"Profile retrieved"' in json_str
-        assert '"id":"user-123"' in json_str
 
 
 class TestProfileCollection:

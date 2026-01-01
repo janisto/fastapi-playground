@@ -96,7 +96,7 @@ class ResourceUpdate(BaseModel):
 
 ## Entity Models (Response)
 
-Response models should NOT inherit from request base models with `extra="forbid"`:
+Response models should NOT inherit from request base models with `extra="forbid"`. Use `serialize_by_alias=True` for models with field aliases like `$schema`:
 
 ```python
 class Resource(BaseModel):
@@ -107,6 +107,14 @@ class Resource(BaseModel):
     inappropriate for response models.
     """
 
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    schema_url: str | None = Field(
+        default=None,
+        alias="$schema",
+        description="JSON Schema URL for this response",
+        examples=["https://api.example.com/schemas/ResourceData.json"],
+    )
     id: str = Field(
         ...,
         min_length=1,
@@ -138,20 +146,23 @@ class Resource(BaseModel):
     )
 ```
 
-## Response Wrapper Models
+## Response Convention
 
-Wrap entity models in response models:
+**Return resources directly** - do not use wrapper response models. This follows REST best practices:
 
 ```python
-class ResourceResponse(BaseModel):
-    """
-    Response model for resource operations.
-    """
+# Correct - return resource directly
+@router.get("/")
+async def get_resource(...) -> Resource:
+    return await service.get_resource(user_id)
 
-    success: bool = Field(..., description="Operation success status", examples=[True])
-    message: str = Field(..., description="Result message", examples=["Resource created successfully"])
-    resource: Resource | None = Field(None, description="Resource data if available")
+# Wrong - do not use wrapper responses
+@router.get("/")
+async def get_resource(...) -> ResourceResponse:
+    return ResourceResponse(success=True, resource=resource)
 ```
+
+POST endpoints return 201 with `Location` header. DELETE endpoints return 204 No Content.
 
 ## Field Requirements
 
@@ -168,6 +179,7 @@ Example formats by type:
 | `bool` | `examples=[True]` |
 | `datetime` | `examples=["2025-01-15T10:30:00Z"]` |
 | `list[str]` | `examples=[["item1", "item2"]]` |
+| `list[Model]` | **Omit examples** (nested schema auto-documents via `$ref`) |
 | `EmailStr` | `examples=["user@example.com"]` |
 | `T \| None` | Provide example for `T`; omit `None` |
 
@@ -186,8 +198,7 @@ Use predefined types from `app/models/types.py`:
 | Base class (internal) | `{Resource}Base` | `ProfileBase` |
 | Create request | `{Resource}Create` | `ProfileCreate` |
 | Update request | `{Resource}Update` | `ProfileUpdate` |
-| Full entity | `{Resource}` | `Profile` |
-| Response wrapper | `{Resource}Response` | `ProfileResponse` |
+| Full entity (response) | `{Resource}` | `Profile` |
 
 ## Serialization
 
@@ -195,3 +206,11 @@ Use Pydantic v2 methods:
 - `.model_dump()` instead of deprecated `.dict()`
 - `.model_dump(exclude_unset=True)` for partial updates
 - `.model_validate()` instead of deprecated `.parse_obj()`
+
+## Model Config Options
+
+Common `ConfigDict` settings:
+- `extra="forbid"` - Reject unknown fields (request models only)
+- `populate_by_name=True` - Allow field name or alias in input
+- `serialize_by_alias=True` - Use aliases in output (for `$schema` etc.)
+- `from_attributes=True` - Construct from ORM-like objects
