@@ -18,14 +18,34 @@ class TestHealthEndpoint:
 
         assert response.status_code == 200
 
-    def test_returns_healthy_status(self, client: TestClient) -> None:
+    def test_returns_healthy_message(self, client: TestClient) -> None:
         """
-        Verify health endpoint returns healthy status.
+        Verify health endpoint returns healthy message.
         """
         response = client.get("/health/")
 
         body = response.json()
-        assert body["status"] == "healthy"
+        assert body["message"] == "healthy"
+
+    def test_returns_schema_url(self, client: TestClient) -> None:
+        """
+        Verify health endpoint returns $schema URL.
+        """
+        response = client.get("/health/")
+
+        body = response.json()
+        assert "$schema" in body
+        assert "schemas/HealthData.json" in body["$schema"]
+
+    def test_returns_describedby_link_header(self, client: TestClient) -> None:
+        """
+        Verify health endpoint returns Link header with describedBy.
+        """
+        response = client.get("/health/")
+
+        link = response.headers.get("link", "")
+        assert 'rel="describedBy"' in link
+        assert "/schemas/HealthData.json" in link
 
     def test_returns_json_content_type(self, client: TestClient) -> None:
         """

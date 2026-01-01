@@ -12,7 +12,7 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 - **Firebase Authentication** (ID token verification via Admin SDK with revocation checks)
 - **Firestore persistence** for user profile documents with async transactional operations
 - **Firebase Cloud Functions** (Python 3.14 runtime) example with regional config & scaling limits
-- **Structured JSON logging** (Cloud Run compatible, trace correlation via `X-Cloud-Trace-Context`)
+- **Structured JSON logging** (Cloud Run compatible, trace correlation via W3C `traceparent`)
 - **Pydantic v2** models + `pydantic-settings` for type-safe configuration
 - **Custom middlewares**: security headers, request body size limiting, request-context logging
 - **Domain exceptions** with HTTP semantics for clean error handling
@@ -21,6 +21,95 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 - **Linting + formatting** via Ruff (`check` + `format` + comprehensive rules)
 - **Static typing** via `ty`
 - **Container build** with multi-stage Dockerfile for Cloud Run deployment
+
+## API Design Principles
+
+This project follows modern REST API guidelines:
+
+### Resource-Oriented Design
+
+- Resources are the key abstraction; URLs identify resources, not actions
+- Use nouns for endpoints (e.g., `/profile/`, `/items/`) not verbs
+- Return resources directly without wrapper envelopes
+
+### HTTP Methods and Status Codes
+
+| Method | Use Case | Success | Common Errors |
+|--------|----------|---------|---------------|
+| `GET` | Retrieve resource | 200 OK | 404 Not Found |
+| `POST` | Create resource | 201 Created + Location header | 400 Bad Request, 409 Conflict |
+| `PATCH` | Partial update | 200 OK | 400, 404 |
+| `DELETE` | Remove resource | 204 No Content | 404 |
+
+### Error Responses (RFC 9457 Problem Details)
+
+All errors return RFC 9457 Problem Details format:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Profile not found"
+}
+```
+
+Validation errors (422) include detailed error locations:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Validation Error",
+  "status": 422,
+  "detail": "Request validation failed",
+  "errors": [
+    {"location": "body.email", "message": "value is not a valid email address", "value": "invalid"}
+  ]
+}
+```
+
+### Request Tracking (X-Request-ID)
+
+Every request includes an `X-Request-ID` header for distributed tracing:
+- If the client provides `X-Request-ID`, the server echoes it back
+- If not provided, the server generates a UUID v4
+- The header appears in all responses, including errors
+
+### Content Negotiation (JSON/CBOR)
+
+The API supports both JSON and CBOR (RFC 8949) serialization:
+
+| Accept Header | Response Content-Type |
+|---------------|----------------------|
+| `application/json` (default) | `application/json` |
+| `application/cbor` | `application/cbor` |
+
+For requests, use `Content-Type: application/cbor` to send CBOR-encoded bodies.
+
+### Timestamps
+
+All timestamps use ISO 8601 format with UTC timezone (RFC 3339):
+```
+2025-01-15T10:30:00Z
+```
+
+### Pagination
+
+List endpoints use cursor-based pagination with RFC 8288 Link headers:
+
+```http
+GET /items/?limit=10
+
+HTTP/1.1 200 OK
+Link: </items/?limit=10&cursor=aWR4OjEw>; rel="next"
+```
+
+| Parameter | Type | Default | Range | Description |
+|-----------|------|---------|-------|-------------|
+| `cursor` | string | - | - | Opaque pagination cursor |
+| `limit` | int | 10 | 1-100 | Items per page |
+
+Cursors are opaque base64-encoded strings; clients should not parse them.
 
 ## Project Structure
 
@@ -33,10 +122,12 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 │   ├── core/
 │   │   ├── config.py              # Settings class (pydantic-settings)
 │   │   ├── firebase.py            # Firebase Admin SDK & async Firestore client
-│   │   └── handlers/              # Exception handlers (domain, http, validation)
+│   │   ├── exception_handler.py   # RFC 9457 Problem Details exception handling
+│   │   ├── cbor.py                # CBOR content negotiation support
+│   │   └── validation.py          # Request validation utilities
 │   ├── exceptions/
-│   │   ├── __init__.py            # Exports all domain exceptions
-│   │   ├── base.py                # DomainError, NotFoundError, ConflictError
+│   │   ├── __init__.py            # Exports all exceptions
+│   │   ├── base.py                # Re-exports fastapi-problem base classes
 │   │   └── profile.py             # ProfileNotFoundError, ProfileAlreadyExistsError
 │   ├── middleware/
 │   │   ├── __init__.py            # Exports middleware and logging utilities
@@ -89,28 +180,26 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 
 | Method | Path | Description | Success | Errors |
 |--------|------|-------------|---------|--------|
-| `POST` | `/profile/` | Create profile | 201 | 401, 403, 409, 500 |
+| `POST` | `/profile/` | Create profile | 201 + Location | 401, 403, 409, 422, 500 |
 | `GET` | `/profile/` | Get profile | 200 | 401, 404, 500 |
-| `PATCH` | `/profile/` | Partial update profile | 200 | 401, 404, 500 |
-| `DELETE` | `/profile/` | Delete profile | 200 | 401, 404, 500 |
+| `PATCH` | `/profile/` | Partial update profile | 200 | 401, 404, 422, 500 |
+| `DELETE` | `/profile/` | Delete profile | 204 | 401, 404, 500 |
 
 ### Profile Model (Response Shape)
 
+Profile endpoints return the resource directly (no wrapper envelope):
+
 ```jsonc
 {
-  "success": true,
-  "message": "Profile created successfully",
-  "profile": {
-    "id": "<user uid>",           // Firebase UID (document ID)
-    "firstname": "John",          // Required, 1-100 chars
-    "lastname": "Doe",            // Required, 1-100 chars
-    "email": "user@example.com",  // Required, auto-lowercased
-    "phone_number": "+358401234567", // E.164 format
-    "marketing": false,           // Boolean opt-in
-    "terms": true,                // Must be true when creating
-    "created_at": "2025-01-15T10:30:00Z",
-    "updated_at": "2025-01-15T10:30:00Z"
-  }
+  "id": "<user uid>",           // Firebase UID (document ID)
+  "firstname": "John",          // Required, 1-100 chars
+  "lastname": "Doe",            // Required, 1-100 chars
+  "email": "user@example.com",  // Required, auto-lowercased
+  "phone_number": "+358401234567", // E.164 format
+  "marketing": false,           // Boolean opt-in
+  "terms": true,                // Must be true when creating
+  "created_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-01-15T10:30:00Z"
 }
 ```
 
@@ -266,7 +355,9 @@ Adds: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Poli
 
 ## Logging & Trace Correlation
 
-JSON logs with keys: `severity`, `message`, `time`, `logger`, source location, optional `trace`/`spanId` from `X-Cloud-Trace-Context` header (Cloud Run/GCP).
+JSON logs with keys: `severity`, `message`, `time`, `logger`, source location, optional `trace`/`spanId` from W3C `traceparent` header.
+
+The `traceparent` header uses format: `{version}-{trace-id}-{parent-id}-{trace-flags}` (e.g., `00-a0892f3577b34da6a3ce929d0e0e4736-f03067aa0ba902b7-01`).
 
 ```python
 logger.info("profile created", extra={"user_id": uid, "profile_id": uid})
@@ -286,22 +377,33 @@ log_audit_event("create", user_id, "profile", user_id, "success")
 4. Returns `FirebaseUser(uid, email, email_verified)`
 
 **Failure cases:**
-- Missing header → 403 (HTTPBearer security scheme)
-- Invalid/expired/revoked token → 401 `{"detail": "Unauthorized"}`
+- Missing header: 403 (HTTPBearer security scheme)
+- Invalid/expired/revoked token: 401 `{"detail": "Unauthorized"}`
 
-## Domain Exceptions
+## Exceptions
 
-Custom exceptions with HTTP semantics in `app/exceptions/`:
+Exceptions use `fastapi-problem` base classes for RFC 9457 Problem Details responses.
 
-| Exception | Status | Use Case |
-|-----------|--------|----------|
-| `DomainError` | 500 | Base class |
-| `NotFoundError` | 404 | Resource not found |
-| `ConflictError` | 409 | Resource conflict |
-| `ProfileNotFoundError` | 404 | Profile not found |
-| `ProfileAlreadyExistsError` | 409 | Profile already exists |
+**Base classes** (from `app/exceptions/base.py`):
 
-Exception handlers in `app/core/handlers/` automatically convert domain exceptions to HTTP responses.
+| Base Class | Status | Use Case |
+|------------|--------|----------|
+| `NotFoundProblem` | 404 | Resource not found |
+| `ConflictProblem` | 409 | Duplicate resource, state conflict |
+| `BadRequestProblem` | 400 | Invalid request (cursor, parameter) |
+| `ForbiddenProblem` | 403 | Access denied |
+| `UnauthorisedProblem` | 401 | Authentication required |
+| `UnprocessableProblem` | 422 | Validation failure |
+| `ServerProblem` | 500 | Internal server error |
+
+**Profile-specific exceptions** (from `app/exceptions/profile.py`):
+
+| Exception | Inherits | Use Case |
+|-----------|----------|----------|
+| `ProfileNotFoundError` | `NotFoundProblem` | Profile not found |
+| `ProfileAlreadyExistsError` | `ConflictProblem` | Profile already exists |
+
+Exception handler in `app/core/exception_handler.py` automatically converts exceptions to HTTP responses.
 
 ## Firestore Service
 
@@ -337,12 +439,32 @@ just test-integration tests/integration/routers/test_profile.py::TestCreateProfi
 
 ## Error Responses
 
-Standard error shape (`ErrorResponse`):
+All errors use RFC 9457 Problem Details format via `fastapi-problem`:
+
 ```json
-{"detail": "<message>"}
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Profile not found"
+}
 ```
 
-Validation errors keep FastAPI's default list format (422 responses).
+Validation errors (422) include detailed error locations:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Validation Error",
+  "status": 422,
+  "detail": "Request validation failed",
+  "errors": [
+    {"location": "body.email", "message": "value is not a valid email address", "value": "invalid"}
+  ]
+}
+```
+
+Sensitive fields (password, token, etc.) have their values redacted from error responses.
 
 ## Example Requests
 
@@ -503,11 +625,11 @@ Environment parity tips:
 
 | Use Case | Prefer FastAPI App | Prefer Cloud Function |
 | -------- | ------------------ | --------------------- |
-| Many cohesive REST endpoints | ✅ | ❌ |
-| Single lightweight webhook / trigger | ❌ | ✅ |
-| Needs custom middleware stack, complex routing | ✅ | ❌ |
-| Sporadic traffic, pay-per-invoke desirable | ⚠️ (cold starts if Cloud Run min=0) | ✅ |
-| Long-lived connections / streaming | ✅ | ❌ (not ideal) |
+| Many cohesive REST endpoints | Yes | No |
+| Single lightweight webhook / trigger | No | Yes |
+| Needs custom middleware stack, complex routing | Yes | No |
+| Sporadic traffic, pay-per-invoke desirable | Maybe (cold starts if Cloud Run min=0) | Yes |
+| Long-lived connections / streaming | Yes | No (not ideal) |
 
 You can mix both: keep core API in FastAPI (Cloud Run) and deploy isolated experimental or region-specific endpoints as Functions.
 
@@ -565,6 +687,7 @@ Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md).
 | Firebase Auth | Blocking SDK call | Token verification runs via `asyncio.to_thread()` |
 | Firestore | Async client required | Use `get_async_firestore_client()` for async ops |
 | Pydantic v2 | API changes from v1 | Use `model_dump()` not `.dict()`, `model_validate()` not `.parse_obj()` |
+| Pydantic aliases | `model_dump()` ignores aliases by default | Use `serialize_by_alias=True` in `ConfigDict` for models with `alias=` fields |
 | Trailing slashes | FastAPI redirects without | Always use paths with trailing slash (e.g., `/profile/`) |
 
 ## For AI Assistants
@@ -582,17 +705,20 @@ Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md).
 2. Access via `get_settings()` in application code
 3. Update this README if user-facing
 
-**Adding domain exceptions:**
-1. Create exception class in `app/exceptions/` inheriting from `DomainError`/`NotFoundError`/`ConflictError`
-2. Set `status_code` and `detail` class attributes
+**Adding exceptions:**
+1. Create exception class in `app/exceptions/` inheriting from `fastapi-problem` base classes (e.g., `NotFoundProblem`, `ConflictProblem`)
+2. Set `title` class attribute for the error title
 3. Export from [app/exceptions/__init__.py](app/exceptions/__init__.py)
-4. Exception handlers auto-convert to HTTP responses
+4. Exception handler auto-converts to RFC 9457 Problem Details responses
 
 **Key patterns:**
 - Use `CurrentUser` and `ProfileServiceDep` type aliases for dependency injection
 - Profile router uses `PATCH` for partial updates (not `PUT`)
 - All routes have `operation_id` for stable SDK generation (pattern: `<resource>_<action>`)
-- Response models use `ProfileResponse` wrapper with `success`, `message`, `profile` fields
+- Response models return resources directly (no wrapper envelopes)
+- POST endpoints return 201 with `Location` header
+- DELETE endpoints return 204 No Content
+- All errors use RFC 9457 Problem Details via `fastapi-problem`
 
 ## License
 

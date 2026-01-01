@@ -44,7 +44,7 @@ def client(mock_profile_service: AsyncMock) -> Generator[TestClient]:
         patch("app.main.close_async_firestore_client"),
     ):
         app.dependency_overrides[get_profile_service] = lambda: mock_profile_service
-        with TestClient(app) as c:
+        with TestClient(app, raise_server_exceptions=False) as c:
             yield c
         app.dependency_overrides.clear()
 

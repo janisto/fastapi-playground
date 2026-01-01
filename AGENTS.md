@@ -44,15 +44,15 @@ Violations should be removed before a PR is marked ready. Default to silence unl
 
 ## Workflow Principles
 
-- Correctness first → Prioritize correctness, then readability/maintainability, then performance.
-- Reflect before acting → After tool results, briefly summarize insights, list next options, and pick the best one.
-- Parallelize independent steps → Run unrelated reads/checks in parallel to maximize efficiency.
-- No leftovers → Remove temporary files/scripts/debug outputs before finishing. Keep `git status` clean aside from intended changes.
-- No legacy aliases → Never add backwards-compatibility shims or deprecated aliases. Refactor all usages to the new convention instead.
-- Ask when unsure → If requirements are ambiguous, seek clarification rather than guessing.
-- Well-supported dependencies → Prefer widely used, well-documented libraries with active maintenance. Ask permission before adding new dependencies.
-- Security first → Never exfiltrate secrets; avoid network calls unless explicitly required. Do not log PII or secrets.
-- After editing code → Run `just lint` and `just typing` to ensure lint/type compliance.
+- Correctness first: Prioritize correctness, then readability/maintainability, then performance.
+- Reflect before acting: After tool results, briefly summarize insights, list next options, and pick the best one.
+- Parallelize independent steps: Run unrelated reads/checks in parallel to maximize efficiency.
+- No leftovers: Remove temporary files/scripts/debug outputs before finishing. Keep `git status` clean aside from intended changes.
+- No legacy aliases: Never add backwards-compatibility shims or deprecated aliases. Refactor all usages to the new convention instead.
+- Ask when unsure: If requirements are ambiguous, seek clarification rather than guessing.
+- Well-supported dependencies: Prefer widely used, well-documented libraries with active maintenance. Ask permission before adding new dependencies.
+- Security first: Never exfiltrate secrets; avoid network calls unless explicitly required. Do not log PII or secrets.
+- After editing code: Run `just lint` and `just typing` to ensure lint/type compliance.
 
 ---
 
@@ -70,6 +70,216 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
 ---
 
 ## Coding Guidelines
+
+### REST API Guidelines
+
+This project follows modern REST API best practices:
+
+#### Response Conventions
+
+- Return resources directly without wrapper envelopes
+- POST endpoints return 201 Created with `Location` header
+- DELETE endpoints return 204 No Content
+- All timestamps use ISO 8601 format with UTC timezone (RFC 3339)
+
+```python
+# Correct - return resource directly
+@router.get("/")
+async def get_profile(current_user: CurrentUser) -> Profile:
+    return await service.get_profile(current_user.uid)
+
+# Correct - POST with 201 and Location header
+@router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_profile(..., response: Response) -> Profile:
+    profile = await service.create_profile(...)
+    response.headers["Location"] = "/profile/"
+    return profile
+
+# Correct - DELETE with 204 No Content
+@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_profile(...) -> None:
+    await service.delete_profile(...)
+    return None
+```
+
+#### Error Handling with fastapi-problem
+
+Errors use RFC 9457 Problem Details format via `fastapi-problem`:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Profile not found"
+}
+```
+
+Define domain exceptions using fastapi-problem base classes:
+
+```python
+# app/exceptions/profile.py
+from fastapi_problem.error import ConflictProblem, NotFoundProblem
+
+class ProfileNotFoundError(NotFoundProblem):
+    """Raised when a profile cannot be found."""
+    title = "Profile not found"
+
+class ProfileAlreadyExistsError(ConflictProblem):
+    """Raised when attempting to create a duplicate profile."""
+    title = "Profile already exists"
+```
+
+Register the exception handler in `main.py`:
+
+```python
+from fastapi_problem.handler import add_exception_handler
+from app.core.exception_handler import eh
+
+add_exception_handler(app, eh)
+```
+
+Validation errors (422) use a structured format with `errors` array:
+
+```json
+{
+  "type": "about:blank",
+  "title": "Validation Error",
+  "status": 422,
+  "detail": "Request validation failed",
+  "errors": [
+    {"location": "body.email", "message": "value is not a valid email address", "value": "invalid"}
+  ]
+}
+```
+
+#### Request Tracking (X-Request-ID)
+
+All requests include an `X-Request-ID` header:
+- Echoes client-provided ID or generates UUID v4
+- Appears in all responses including errors
+- Implemented via `RequestContextLogMiddleware` and exception handler hooks
+
+#### Content Negotiation (JSON/CBOR)
+
+The API supports JSON (default) and CBOR (RFC 8949):
+
+```python
+from app.core.cbor import CBORRoute
+
+router = APIRouter(
+    prefix="/items",
+    route_class=CBORRoute,  # Enables automatic CBOR negotiation
+)
+```
+
+- `Accept: application/cbor` returns CBOR-encoded response
+- `Content-Type: application/cbor` accepts CBOR-encoded request body
+- Errors respect Accept header (`application/problem+cbor` when appropriate)
+
+#### Pagination Implementation
+
+Use cursor-based pagination with RFC 8288 Link headers. The `paginate()` helper validates cursor types and raises `InvalidCursorError` on type mismatch, returning 400 Bad Request (per HTTP semantics, an invalid cursor is a malformed request parameter, not a schema validation error):
+
+```python
+from app.pagination import paginate
+
+@router.get("/")
+async def list_items(
+    request: Request,
+    response: Response,
+    cursor: CursorParam = None,
+    limit: LimitParam = 10,
+) -> ItemList:
+    items = get_all_items()  # Your data source
+    
+    result = paginate(
+        items=items,
+        cursor=cursor,
+        limit=limit,
+        cursor_type="item",  # Cursor type must match or 400 Bad Request is returned
+        get_id=lambda x: x.id,
+        base_url=str(request.url.path),
+        query_params={"limit": str(limit)},
+    )
+    
+    if result.link_header:
+        response.headers["Link"] = result.link_header
+    
+    return ItemList(items=result.items, total=result.total)
+```
+
+For manual cursor handling (simpler cases):
+
+```python
+from app.pagination import Cursor, CursorParam, LimitParam, build_link_header, decode_cursor
+
+@router.get("/")
+async def list_items(
+    request: Request,
+    response: Response,
+    cursor: CursorParam = None,
+    limit: LimitParam = 10,
+) -> ItemList:
+    # Decode cursor
+    start_idx = 0
+    if cursor:
+        decoded = decode_cursor(cursor)
+        if decoded.type == "idx":
+            start_idx = int(decoded.value)
+
+    # Build next/prev cursors
+    next_cursor = Cursor(type="idx", value=str(end_idx)).encode()
+
+    # Add Link header
+    link = build_link_header(
+        base_url=str(request.url.path),
+        query_params={"limit": str(limit)},
+        next_cursor=next_cursor,
+        prev_cursor=prev_cursor,
+    )
+    if link:
+        response.headers["Link"] = link
+```
+
+#### JSON Schema References ($schema field)
+
+Responses include a `$schema` field pointing to a JSON Schema document for self-description:
+
+```python
+class ItemList(BaseModel):
+    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+    schema_url: str | None = Field(
+        default=None,
+        alias="$schema",
+        description="JSON Schema URL for this response",
+        examples=["/schemas/ItemsData.json"],  # Use relative path in examples
+    )
+    items: list[Item] = Field(...)
+    total: int = Field(...)
+```
+
+**Important**: Per JSON Schema spec, the `$schema` value MUST be an absolute URI with a scheme. Use `request.base_url` to build the full URL at runtime:
+
+```python
+@router.get("/")
+async def list_items(request: Request, response: Response) -> ItemList:
+    # Add describedBy Link header
+    response.headers["Link"] = '</schemas/ItemsData.json>; rel="describedBy"'
+    
+    return ItemList(
+        schema_url=str(request.base_url) + "schemas/ItemsData.json",  # Absolute URL
+        items=page_items,
+        total=len(filtered_items),
+    )
+```
+
+- Field `examples` can use relative paths (documentation only)
+- Runtime `$schema` value must be absolute (e.g., `http://api.example.com/schemas/ItemsData.json`)
+- Also add `Link` header with `rel="describedBy"` for discoverability
+
+---
 
 - FastAPI style
   - Use `async def` for I/O-bound endpoints and services.
@@ -151,7 +361,7 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
     ```
 
 - Pydantic schemas (`app/models/`)
-  - Always use `model_config = {...}` or `model_config = ConfigDict(...)` at class level. Never use the deprecated `class Config:` inner class.
+  - Always use `model_config = ConfigDict(...)` at class level for type safety and IDE support. Never use the deprecated `class Config:` inner class or plain `dict`.
   - Use `extra="forbid"` for request models to reject unknown fields.
   - Response models typically omit `extra="forbid"` unless strict output is required.
   - **Response models should NOT inherit from request base models** that have `extra="forbid"`. Define full entity models separately to avoid rejecting extra fields in responses:
@@ -179,6 +389,14 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
         created_at: datetime = Field(...)
         updated_at: datetime = Field(...)
     ```
+  - **Use `serialize_by_alias=True`** for models with field aliases (e.g., `alias="$schema"`). This ensures `model_dump()` uses aliases by default, matching FastAPI's `response_model_by_alias=True` behavior. This setting was introduced in Pydantic v2.11 and will default to `True` in v3:
+    ```python
+    class HealthResponse(BaseModel):
+        model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
+
+        schema_url: str | None = Field(default=None, alias="$schema", ...)
+        message: str = Field(...)
+    ```
   - Use `from_attributes=True` for models that need to be constructed from ORM-like objects or dataclasses.
   - Use Pydantic v2 `.model_dump()` for serialization instead of deprecated `.dict()`. Use `exclude_unset=True` for partial updates.
   - Add docstrings to models describing their purpose.
@@ -189,7 +407,7 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
     PROFILE_COLLECTION = "profiles"
     ```
     Import and use in services to ensure consistency.
-  - **Field-level examples (required)**: Every field MUST have `Field(examples=[...])` for OpenAPI documentation. This provides per-field examples in Swagger/ReDoc:
+  - **Field-level examples**: Scalar fields MUST have `Field(examples=[...])` for OpenAPI documentation. Array/list fields of nested models should **omit** examples since the nested schema provides documentation automatically:
     ```python
     from pydantic import BaseModel, EmailStr, Field
 
@@ -213,10 +431,10 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
     | `float` | `examples=[19.99]` |
     | `bool` | `examples=[True]` |
     | `datetime` | `examples=["2025-01-15T10:30:00Z"]` (use ISO 8601 string for JSON Schema) |
-    | `list[str]` | `examples=[["item1", "item2"]]` |
+    | `list[str]` | `examples=[["item1", "item2"]]` (array of primitives) |
+    | `list[Model]` | **Omit examples** (nested schema auto-documents via `$ref`) |
     | `EmailStr` | `examples=["user@example.com"]` |
-    | `T | None` | Provide example for `T`; omit `None` |
-    | Nested models | Omit examples (schema auto-documents) |
+    | `T \| None` | Provide example for `T`; omit `None` |
 
 - Schema naming conventions
   - **Never reuse a response model as a request body.** Keep request and response models strictly separate.
@@ -266,83 +484,55 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
   - **When NOT to use shared types**: If validation is one-off or needs context-specific error messages, keep inline.
 
 - Domain exceptions (`app/exceptions/`)
-  - Define domain exceptions with HTTP semantics in `app/exceptions/`. Exceptions carry `status_code`, `detail`, and optional `headers` for automatic HTTP response conversion:
+  - Define domain exceptions using `fastapi-problem` base classes:
     ```python
     # app/exceptions/base.py
-    class DomainError(Exception):
-        """
-        Base for all domain exceptions with HTTP semantics.
+    from fastapi_problem.error import (
+        BadRequestProblem,
+        ConflictProblem,
+        ForbiddenProblem,
+        NotFoundProblem,
+        ServerProblem,
+        UnauthorisedProblem,
+        UnprocessableProblem,
+    )
 
-        Supports optional headers for cases like rate limiting (Retry-After).
-        """
-
-        status_code: int = 500
-        detail: str = "Internal error"
-        headers: dict[str, str] | None = None
-
-        def __init__(self, detail: str | None = None, headers: dict[str, str] | None = None) -> None:
-            self.detail = detail or self.__class__.detail
-            self.headers = headers
-            super().__init__(self.detail)
-
-    class NotFoundError(DomainError):
-        """
-        Base for resource not found errors.
-        """
-
-        status_code = 404
-        detail = "Resource not found"
-
-    class ConflictError(DomainError):
-        """
-        Base for resource conflict errors.
-        """
-
-        status_code = 409
-        detail = "Resource conflict"
+    __all__ = [
+        "BadRequestProblem",
+        "ConflictProblem",
+        "ForbiddenProblem",
+        "NotFoundProblem",
+        "ServerProblem",
+        "UnauthorisedProblem",
+        "UnprocessableProblem",
+    ]
     ```
   - Create resource-specific exceptions:
     ```python
     # app/exceptions/profile.py
-    from app.exceptions.base import ConflictError, NotFoundError
+    from fastapi_problem.error import ConflictProblem, NotFoundProblem
 
-    class ProfileNotFoundError(NotFoundError):
-        """
-        Raised when a profile cannot be found.
-        """
+    class ProfileNotFoundError(NotFoundProblem):
+        """Raised when a profile cannot be found."""
+        title = "Profile not found"
 
-        detail = "Profile not found"
-
-    class ProfileAlreadyExistsError(ConflictError):
-        """
-        Raised when attempting to create a duplicate profile.
-        """
-
-        detail = "Profile already exists"
+    class ProfileAlreadyExistsError(ConflictProblem):
+        """Raised when attempting to create a duplicate profile."""
+        title = "Profile already exists"
     ```
-  - Exception handlers are modular under `app/core/handlers/`:
-    - `domain.py` - Handles `DomainError` subclasses, returns JSON with `status_code`, `detail`, and optional `headers`
-    - `http.py` - Handles `HTTPException` with appropriate logging (error for 5xx, warning for 4xx)
-    - `validation.py` - Handles `RequestValidationError` for 422 responses
-    - `registration.py` - Exports `register_exception_handlers(app)` to wire all handlers
-  - Import handlers via the package root: `from app.core.handlers import register_exception_handlers`
-  - Register handlers in `main.py` using `register_exception_handlers(app)`.
-  - In routers and services, import exceptions from the package root:
+  - Exception handling is centralized via `app/core/exception_handler.py`:
+    - Uses `fastapi-problem` singleton `eh` with pre/post hooks
+    - Handles validation errors with structured format via `validation_error_handler`
+    - Adds `X-Request-ID` to all error responses
+    - Adds `$schema` field and `Link` header with `rel="describedBy"` to all error responses via `schema_link_post_hook`
+    - Supports CBOR error responses via `CBORProblemPostHook`
+    - Strips extras from 5xx errors in production via `StripExtrasPostHook`
+  - Register handlers in `main.py`: `add_exception_handler(app, eh)`
+  - Import exceptions from the package root:
     ```python
-    # Preferred - import from package root
     from app.exceptions import ProfileNotFoundError, ProfileAlreadyExistsError
-
-    # In submodules, import from base
-    from app.exceptions.base import ConflictError, NotFoundError
     ```
-  - In routers, catch and re-raise domain exceptions to let the handler convert them. Use `from None` to suppress exception chaining in generic error responses:
-    ```python
-    except (HTTPException, ProfileNotFoundError):
-        raise
-    except Exception:
-        logger.exception("Error getting profile", extra={"user_id": current_user.uid})
-        raise HTTPException(status_code=500, detail="Failed to retrieve profile") from None
-    ```
+  - Domain exceptions are automatically converted to RFC 9457 Problem Details responses.
 
 - Types & structure
   - Ruff ANN rules enforce type annotations. Reuse existing domain models; prefer narrow types over `dict[str, object]`.
@@ -433,9 +623,9 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
    - Include edge cases, error handling, and auth/permission scenarios.
 
 2) Structure & style
-   - Unit tests → `tests/unit/**` (mirror `app/` folder structure)
-   - Integration tests → `tests/integration/**` (mirror `app/routers/` structure)
-   - E2E tests → `tests/e2e/**` (local only, requires Firebase emulators)
+   - Unit tests: `tests/unit/**` (mirror `app/` folder structure)
+   - Integration tests: `tests/integration/**` (mirror `app/routers/` structure)
+   - E2E tests: `tests/e2e/**` (local only, requires Firebase emulators)
    - Use `pytest` with `pytest-asyncio` for async tests (`asyncio_mode = "auto"` in pyproject.toml; no decorator needed).
    - Unit tests must not use real network/Firestore; mock Firebase Admin/clients.
    - Integration tests use the FastAPI app test client; keep external calls mocked.
@@ -455,18 +645,18 @@ Use uv consistently (do not mix with pip/poetry within this repo). Prefer `just`
 
 - FastAPI generates OpenAPI automatically. Keep `response_model`, `responses`, `tags`, and docstrings accurate.
 - Provide request/response examples where useful using FastAPI `examples` in model/route definitions.
-- If introducing a shared error format, define a canonical error model (e.g., `ErrorResponse`) and reuse it across endpoints.
+- If introducing a shared error format, define a canonical error model (e.g., `ProblemResponse`) and reuse it across endpoints.
 - **Never use `content` or `content_from_model()`** in `responses` declarations. FastAPI auto-generates schema from the `model` parameter:
   ```python
   # Correct - include model for all status codes (2XX and errors)
   responses={
       200: {"model": ItemResponse, "description": "Item retrieved successfully"},
-      404: {"model": ErrorResponse, "description": "Not found"},
+      404: {"model": ProblemResponse, "description": "Not found"},
   }
 
   # Wrong - do not use content or content_from_model
   responses={
-      404: {"model": ErrorResponse, "description": "Not found", "content": content_from_model(...)},
+      404: {"model": ProblemResponse, "description": "Not found", "content": content_from_model(...)},
   }
   ```
 
@@ -504,14 +694,14 @@ This ensures generated client methods have predictable names (e.g., `client.prof
 Configure common settings at the router level to reduce repetition:
 ```python
 from fastapi import APIRouter
-from app.models.error import ErrorResponse
+from app.models.error import ProblemResponse
 
 router = APIRouter(
     prefix="/profile",
     tags=["Profile"],
     responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized"},
-        500: {"model": ErrorResponse, "description": "Server error"},
+        401: {"model": ProblemResponse, "description": "Unauthorized"},
+        500: {"model": ProblemResponse, "description": "Server error"},
     },
 )
 ```
@@ -525,8 +715,9 @@ All API routes must use Pydantic response models for type safety and OpenAPI doc
 **Required for every route:**
 1. Return type annotation with a Pydantic model class (or explicit `response_model=`)
 2. `responses={}` dict with:
-   - Success status code (200/201/204) with `model=` and `description` for clear OpenAPI docs
-   - Error status codes (400, 401, 403, 404, 409, 500) with `model=ErrorResponse`
+   - Success status code (200/201) with `model=` and `description` for clear OpenAPI docs
+   - **204 No Content**: Omit `model=` (HTTP spec prohibits body); only `description` is required
+   - Error status codes (400, 401, 403, 404, 409, 500) with `model=ProblemResponse`
 
 **Example with 2XX success response:**
 ```python
@@ -536,7 +727,7 @@ All API routes must use Pydantic response models for type safety and OpenAPI doc
     operation_id="profile_create",
     responses={
         201: {"model": ProfileResponse, "description": "Profile created successfully"},
-        409: {"model": ErrorResponse, "description": "Profile already exists"},
+        409: {"model": ProblemResponse, "description": "Profile already exists"},
     },
 )
 async def create_profile(...) -> ProfileResponse:
@@ -556,10 +747,26 @@ async def update_profile(...) -> ProfileResponse:
     ...
 ```
 
+**For DELETE endpoints with 204 No Content:**
+```python
+@router.delete(
+    "/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="profile_delete",
+    responses={
+        204: {"description": "Profile deleted successfully"},  # No model - HTTP spec prohibits body
+        404: {"model": ProblemResponse, "description": "Profile not found"},
+    },
+)
+async def delete_profile(...) -> None:
+    ...
+    return None
+```
+
 **Common issues to fix:**
 - Missing return type annotation or `response_model` parameter
-- Missing `model=` or `description` for 2XX success responses
-- `responses` dict without `model=` for error codes
+- Missing `model=` or `description` for 2XX success responses (except 204)
+- `responses` dict without `model=ProblemResponse` for error codes
 - Returning raw dicts instead of Pydantic models
 - Using `dict` or `Any` as return type instead of specific model
 - Missing `operation_id` for client SDK stability
@@ -570,13 +777,13 @@ async def update_profile(...) -> ProfileResponse:
 
 - `app/` — FastAPI app:
   - `auth/` — Firebase authentication (`verify_firebase_token`, `FirebaseUser`, `security` HTTPBearer scheme)
-  - `core/` — Configuration (`config.py`), Firebase initialization (`firebase.py`), exception handlers (`handlers/`)
-  - `core/handlers/` — Modular exception handlers: `domain.py`, `http.py`, `validation.py`, `registration.py`
+  - `core/` — Configuration (`config.py`), Firebase initialization (`firebase.py`), exception handler (`exception_handler.py`), CBOR support (`cbor.py`), validation (`validation.py`)
   - `dependencies.py` — Dependency injection aliases (`CurrentUser`, `ProfileServiceDep`, service providers)
-  - `exceptions/` — Domain exceptions with HTTP semantics (`base.py`: `DomainError`, `NotFoundError`, `ConflictError`; resource-specific in e.g., `profile.py`)
-  - `middleware/` — ASGI middleware (body limit, logging with Cloud Trace correlation, security headers); exports `log_audit_event`, `setup_logging`, `get_logger`
-  - `models/` — Pydantic schemas (`profile.py`, `error.py`, `health.py`), shared type aliases (`types.py`: `NormalizedEmail`, `Phone`, `LanguageCode`, `CountryCode`)
-  - `routers/` — API route definitions (`profile.py`, `health.py`)
+  - `exceptions/` — Domain exceptions using `fastapi-problem` (`base.py` re-exports, resource-specific in e.g., `profile.py`)
+  - `middleware/` — ASGI middleware (body limit, logging with W3C traceparent correlation, security headers); exports `log_audit_event`, `setup_logging`, `get_logger`
+  - `models/` — Pydantic schemas (`profile.py`, `error.py` with ProblemResponse, `health.py`), shared type aliases (`types.py`: `NormalizedEmail`, `Phone`, `LanguageCode`, `CountryCode`)
+  - `pagination/` — Cursor-based pagination utilities (`cursor.py`, `link.py`, `paginator.py`, `params.py`)
+  - `routers/` — API route definitions (`profile.py`, `health.py`, `hello.py`, `items.py`)
   - `services/` — Business logic and async Firestore operations with transactions
 - `tests/` — unit and integration tests
 - `functions/` — Firebase Cloud Functions (Python 3.14) codebase (`main.py`, its own `pyproject.toml`)
@@ -591,11 +798,11 @@ When adding features, decide if logic belongs in the FastAPI service (`app/`) or
 
 | Scenario | Prefer FastAPI (`app/`) | Prefer Cloud Function (`functions/`) |
 | -------- | ----------------------- | ------------------------------------ |
-| Multiple cohesive REST endpoints | ✅ | ❌ |
-| Single lightweight webhook / experimental endpoint | ❌ | ✅ |
-| Requires custom middleware chain / shared service layer | ✅ | ❌ |
-| Spiky, low average traffic (cost optimize) | ⚠️ | ✅ |
-| Long-lived streaming / websockets | ✅ | ❌ |
+| Multiple cohesive REST endpoints | Yes | No |
+| Single lightweight webhook / experimental endpoint | No | Yes |
+| Requires custom middleware chain / shared service layer | Yes | No |
+| Spiky, low average traffic (cost optimize) | Maybe | Yes |
+| Long-lived streaming / websockets | Yes | No |
 
 Cloud Functions specifics:
 - Runtime pinned via `firebase.json` (`python314`, region `europe-west4`).

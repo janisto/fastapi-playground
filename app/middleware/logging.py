@@ -28,7 +28,7 @@ _logging_configured = False
 
 
 # Context: request-scoped trace/span for Cloud Trace correlation
-_request_context: ContextVar[dict[str, str] | None] = ContextVar("request_context", default=None)
+_request_context: ContextVar[dict[str, str | bool] | None] = ContextVar("request_context", default=None)
 
 
 def _severity_for_level(levelno: int) -> str:
@@ -99,15 +99,19 @@ class CloudRunJSONFormatter(logging.Formatter):
         }
 
         # Attach request context if available (trace, span, request_id)
+        # Uses logging.googleapis.com/* field names for Cloud Logging trace correlation
         ctx = _request_context.get()
         if ctx:
             trace = ctx.get("trace")
             span_id = ctx.get("span_id")
+            trace_sampled = ctx.get("trace_sampled")
             request_id = ctx.get("request_id")
             if trace:
-                payload["trace"] = trace
+                payload["logging.googleapis.com/trace"] = trace
             if span_id:
-                payload["spanId"] = span_id
+                payload["logging.googleapis.com/spanId"] = span_id
+            if trace_sampled is not None:
+                payload["logging.googleapis.com/trace_sampled"] = trace_sampled
             if request_id:
                 payload["request_id"] = request_id
 
@@ -139,15 +143,30 @@ class RequestContextLogMiddleware(BaseHTTPMiddleware):
     Starlette/FastAPI middleware to propagate request context into logs.
 
     Handles:
-    1. Cloud Trace correlation via "X-Cloud-Trace-Context" header:
-       - Header format: TRACE_ID/SPAN_ID;o=TRACE_TRUE
-       - Adds `trace` = projects/<project-id>/traces/<TRACE_ID>
-       - Adds `spanId` = <SPAN_ID>
+    1. Trace correlation via W3C "traceparent" header (RFC trace context):
+       - Header format: {version}-{trace-id}-{parent-id}-{trace-flags}
+       - Example: 00-a0892f3577b34da6a3ce929d0e0e4736-f03067aa0ba902b7-01
+       - Adds `trace` = projects/<project-id>/traces/<trace-id>
+       - Adds `spanId` = <parent-id>
 
     2. Request ID for client traceability:
        - Uses incoming "X-Request-ID" header if present, otherwise generates UUID
        - Adds request_id to all logs during request lifecycle
        - Returns "X-Request-ID" header in response for client reference
+
+    Note on BaseHTTPMiddleware:
+        This middleware uses Starlette's BaseHTTPMiddleware for simplicity.
+        BaseHTTPMiddleware has a known limitation: contextvars set within endpoints
+        do NOT propagate upward to middleware after call_next() returns.
+
+        Current usage is SAFE because:
+        - This middleware SETS the contextvar before calling the endpoint
+        - Downstream code (logger, endpoint) READS the contextvar
+        - No code modifies the contextvar expecting middleware to see changes
+
+        If future features require reading endpoint-modified contextvars in middleware,
+        consider rewriting as Pure ASGI middleware. See Starlette docs:
+        https://www.starlette.io/middleware/#limitations
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -159,22 +178,30 @@ class RequestContextLogMiddleware(BaseHTTPMiddleware):
         headers = {k.lower(): v for k, v in request.headers.items()}
 
         # Build request context
-        ctx: dict[str, str] = {}
+        ctx: dict[str, str | bool] = {}
 
         # Extract or generate request ID for client traceability
         request_id = headers.get("x-request-id") or str(uuid.uuid4())
         ctx["request_id"] = request_id
 
-        # Parse Cloud Trace header if present
-        trace_header = headers.get("x-cloud-trace-context")
+        # Store request_id in request.state for exception handler access
+        request.state.request_id = request_id
+
+        # Parse W3C traceparent header if present
+        # Format: {version}-{trace-id}-{parent-id}-{trace-flags}
+        # Example: 00-a0892f3577b34da6a3ce929d0e0e4736-f03067aa0ba902b7-01
+        # trace-flags bit 0 = sampled (01 = sampled, 00 = not sampled)
+        trace_header = headers.get("traceparent")
         if trace_header:
-            # Format: TRACE_ID/SPAN_ID;o=1
-            parts = trace_header.split("/", 1)
-            if len(parts) == 2:
-                trace_id_part = parts[0]
-                span_id_part = parts[1].split(";", 1)[0]
-                ctx["trace"] = f"projects/{self._project_id}/traces/{trace_id_part}"
-                ctx["span_id"] = span_id_part
+            parts = trace_header.split("-")
+            if len(parts) >= 4:
+                trace_id = parts[1]
+                span_id = parts[2]
+                trace_flags = parts[3]
+                ctx["trace"] = f"projects/{self._project_id}/traces/{trace_id}"
+                ctx["span_id"] = span_id
+                # trace-flags: "01" = sampled, "00" = not sampled
+                ctx["trace_sampled"] = trace_flags == "01"
 
         token = _request_context.set(ctx)
         try:

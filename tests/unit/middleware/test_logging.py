@@ -195,13 +195,39 @@ class TestCloudRunJSONFormatter:
             args=(),
             exc_info=None,
         )
-        ctx = {"trace": "projects/test-proj/traces/abc123", "span_id": "def456"}
+        ctx = {"trace": "projects/test-proj/traces/abc123", "span_id": "def456", "trace_sampled": True}
         token = _request_context.set(ctx)
         try:
             output = formatter.format(record)
             parsed = json.loads(output)
-            assert parsed["trace"] == "projects/test-proj/traces/abc123"
-            assert parsed["spanId"] == "def456"
+            assert parsed["logging.googleapis.com/trace"] == "projects/test-proj/traces/abc123"
+            assert parsed["logging.googleapis.com/spanId"] == "def456"
+            assert parsed["logging.googleapis.com/trace_sampled"] is True
+        finally:
+            _request_context.reset(token)
+
+    def test_includes_trace_sampled_false(self) -> None:
+        """
+        Verify trace_sampled=False is included in logs.
+        """
+        from app.middleware.logging import _request_context
+
+        formatter = CloudRunJSONFormatter(include_source=False)
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="test.py",
+            lineno=1,
+            msg="Test message",
+            args=(),
+            exc_info=None,
+        )
+        ctx = {"trace": "projects/test-proj/traces/abc123", "span_id": "def456", "trace_sampled": False}
+        token = _request_context.set(ctx)
+        try:
+            output = formatter.format(record)
+            parsed = json.loads(output)
+            assert parsed["logging.googleapis.com/trace_sampled"] is False
         finally:
             _request_context.reset(token)
 
@@ -226,8 +252,8 @@ class TestCloudRunJSONFormatter:
         try:
             output = formatter.format(record)
             parsed = json.loads(output)
-            assert parsed["trace"] == "projects/test-proj/traces/abc123"
-            assert "spanId" not in parsed
+            assert parsed["logging.googleapis.com/trace"] == "projects/test-proj/traces/abc123"
+            assert "logging.googleapis.com/spanId" not in parsed
         finally:
             _request_context.reset(token)
 
@@ -252,8 +278,8 @@ class TestCloudRunJSONFormatter:
         try:
             output = formatter.format(record)
             parsed = json.loads(output)
-            assert "trace" not in parsed
-            assert parsed["spanId"] == "def456"
+            assert "logging.googleapis.com/trace" not in parsed
+            assert parsed["logging.googleapis.com/spanId"] == "def456"
         finally:
             _request_context.reset(token)
 
@@ -442,13 +468,13 @@ class TestCloudRunJSONFormatter:
             args=(),
             exc_info=None,
         )
-        ctx: dict[str, str] = {}
+        ctx: dict[str, str | bool] = {}
         token = _request_context.set(ctx)
         try:
             output = formatter.format(record)
             parsed = json.loads(output)
-            assert "trace" not in parsed
-            assert "spanId" not in parsed
+            assert "logging.googleapis.com/trace" not in parsed
+            assert "logging.googleapis.com/spanId" not in parsed
             assert "request_id" not in parsed
         finally:
             _request_context.reset(token)
@@ -478,8 +504,8 @@ class TestCloudRunJSONFormatter:
         try:
             output = formatter.format(record)
             parsed = json.loads(output)
-            assert parsed["trace"] == "projects/my-proj/traces/trace-123"
-            assert parsed["spanId"] == "span-456"
+            assert parsed["logging.googleapis.com/trace"] == "projects/my-proj/traces/trace-123"
+            assert parsed["logging.googleapis.com/spanId"] == "span-456"
             assert parsed["request_id"] == "req-789"
         finally:
             _request_context.reset(token)
@@ -490,9 +516,9 @@ class TestRequestContextLogMiddleware:
     Tests for RequestContextLogMiddleware trace correlation.
     """
 
-    def test_parses_cloud_trace_header(self) -> None:
+    def test_parses_traceparent_header(self) -> None:
         """
-        Verify trace context is extracted from header.
+        Verify trace context is extracted from traceparent header.
         """
 
         async def ping(request: Request) -> PlainTextResponse:
@@ -508,7 +534,7 @@ class TestRequestContextLogMiddleware:
             with TestClient(app) as client:
                 response = client.get(
                     "/ping",
-                    headers={"X-Cloud-Trace-Context": "abc123/def456;o=1"},
+                    headers={"traceparent": "00-abc123def456789012345678901234-def456789012345678-01"},
                 )
                 assert response.status_code == 200
 
@@ -531,9 +557,9 @@ class TestRequestContextLogMiddleware:
                 response = client.get("/ping")
                 assert response.status_code == 200
 
-    def test_handles_malformed_trace_header(self) -> None:
+    def test_handles_malformed_traceparent_header(self) -> None:
         """
-        Verify middleware handles malformed trace headers gracefully.
+        Verify middleware handles malformed traceparent headers gracefully.
         """
 
         async def ping(request: Request) -> PlainTextResponse:
@@ -549,7 +575,7 @@ class TestRequestContextLogMiddleware:
             with TestClient(app) as client:
                 response = client.get(
                     "/ping",
-                    headers={"X-Cloud-Trace-Context": "malformed-header"},
+                    headers={"traceparent": "malformed-header"},
                 )
                 assert response.status_code == 200
 
@@ -559,7 +585,7 @@ class TestRequestContextLogMiddleware:
         """
         from app.middleware.logging import _request_context
 
-        captured_context: dict[str, str] | None = None
+        captured_context: dict[str, str | bool] | None = None
 
         async def capture_context(request: Request) -> PlainTextResponse:
             nonlocal captured_context
@@ -576,22 +602,23 @@ class TestRequestContextLogMiddleware:
             with TestClient(app) as client:
                 response = client.get(
                     "/ping",
-                    headers={"X-Cloud-Trace-Context": "trace123abc/span456def;o=1"},
+                    headers={"traceparent": "00-trace123abc456def7890123456789012-span456def78901234-01"},
                 )
                 assert response.status_code == 200
 
         assert captured_context is not None
-        assert captured_context["trace"] == "projects/my-project/traces/trace123abc"
-        assert captured_context["span_id"] == "span456def"
+        assert captured_context["trace"] == "projects/my-project/traces/trace123abc456def7890123456789012"
+        assert captured_context["span_id"] == "span456def78901234"
+        assert captured_context["trace_sampled"] is True
         assert "request_id" in captured_context
 
-    def test_handles_trace_header_without_options(self) -> None:
+    def test_handles_traceparent_header_without_flags(self) -> None:
         """
-        Verify trace header without ;o=1 options is parsed correctly.
+        Verify traceparent with minimal flags is parsed correctly.
         """
         from app.middleware.logging import _request_context
 
-        captured_context: dict[str, str] | None = None
+        captured_context: dict[str, str | bool] | None = None
 
         async def capture_context(request: Request) -> PlainTextResponse:
             nonlocal captured_context
@@ -608,13 +635,45 @@ class TestRequestContextLogMiddleware:
             with TestClient(app) as client:
                 response = client.get(
                     "/ping",
-                    headers={"X-Cloud-Trace-Context": "trace-id/span-id"},
+                    headers={"traceparent": "00-traceid1234567890abcdef12345678-spanid1234567890ab-00"},
                 )
                 assert response.status_code == 200
 
         assert captured_context is not None
-        assert captured_context["trace"] == "projects/test-project/traces/trace-id"
-        assert captured_context["span_id"] == "span-id"
+        assert captured_context["trace"] == "projects/test-project/traces/traceid1234567890abcdef12345678"
+        assert captured_context["span_id"] == "spanid1234567890ab"
+        assert captured_context["trace_sampled"] is False
+
+    def test_trace_sampled_with_invalid_flags(self) -> None:
+        """
+        Verify trace_sampled defaults to False when flags cannot be parsed.
+        """
+        from app.middleware.logging import _request_context
+
+        captured_context: dict[str, str | bool] | None = None
+
+        async def capture_context(request: Request) -> PlainTextResponse:
+            nonlocal captured_context
+            captured_context = _request_context.get()
+            return PlainTextResponse("pong")
+
+        with patch("app.middleware.logging.get_settings") as mock_settings:
+            mock_settings.return_value.firebase_project_id = "test-project"
+            app = build_starlette_app(
+                routes=[("/ping", capture_context, ["GET"])],
+                middleware=[(RequestContextLogMiddleware, {})],
+            )
+
+            with TestClient(app) as client:
+                # Use invalid hex flags "zz"
+                response = client.get(
+                    "/ping",
+                    headers={"traceparent": "00-traceid1234567890abcdef12345678-spanid1234567890ab-zz"},
+                )
+                assert response.status_code == 200
+
+        assert captured_context is not None
+        assert captured_context["trace_sampled"] is False
 
     def test_context_reset_after_exception(self) -> None:
         """
@@ -725,6 +784,59 @@ class TestRequestIdHeader:
 
         assert captured_context is not None
         assert captured_context.get("request_id") == "test-request-id"
+
+    def test_request_id_stored_in_request_state(self) -> None:
+        """
+        Verify request_id is stored in request.state for exception handler access.
+        """
+        captured_request_id: str | None = None
+
+        async def capture_state(request: Request) -> PlainTextResponse:
+            nonlocal captured_request_id
+            captured_request_id = getattr(request.state, "request_id", None)
+            return PlainTextResponse("pong")
+
+        with patch("app.middleware.logging.get_settings") as mock_settings:
+            mock_settings.return_value.firebase_project_id = "test-project"
+            app = build_starlette_app(
+                routes=[("/ping", capture_state, ["GET"])],
+                middleware=[(RequestContextLogMiddleware, {})],
+            )
+
+            with TestClient(app) as client:
+                response = client.get(
+                    "/ping",
+                    headers={"X-Request-ID": "state-test-id"},
+                )
+                assert response.status_code == 200
+
+        assert captured_request_id == "state-test-id"
+
+    def test_request_state_request_id_generated_when_not_provided(self) -> None:
+        """
+        Verify request.state.request_id is generated when header not present.
+        """
+        captured_request_id: str | None = None
+
+        async def capture_state(request: Request) -> PlainTextResponse:
+            nonlocal captured_request_id
+            captured_request_id = getattr(request.state, "request_id", None)
+            return PlainTextResponse("pong")
+
+        with patch("app.middleware.logging.get_settings") as mock_settings:
+            mock_settings.return_value.firebase_project_id = "test-project"
+            app = build_starlette_app(
+                routes=[("/ping", capture_state, ["GET"])],
+                middleware=[(RequestContextLogMiddleware, {})],
+            )
+
+            with TestClient(app) as client:
+                response = client.get("/ping")
+                assert response.status_code == 200
+
+        assert captured_request_id is not None
+        assert len(captured_request_id) == 36
+        assert captured_request_id.count("-") == 4
 
 
 class TestGetLogger:

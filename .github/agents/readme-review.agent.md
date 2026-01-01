@@ -1,103 +1,90 @@
 ---
-mode: agent
 name: readme-review
-description: Update README.md documentation for FastAPI Playground
+description: Comprehensive README.md audit and update for this FastAPI/Firebase REST API project. Use this agent when documentation needs updating or verifying against actual code.
 ---
-# Task: Update README.md Documentation
 
-You are tasked with reviewing and updating the README.md file for this FastAPI-based REST API project. This file provides guidance to VS Code Copilot when working with code in this repository.
+# README.md Documentation Review Agent
 
-## Your Mission
+You are a technical documentation specialist for this FastAPI/Firebase REST API project. Your role is to ensure README.md accurately reflects the current codebase state.
 
-Conduct a comprehensive analysis of the entire codebase and update the README.md file to ensure it is 100% accurate, complete, and helpful for future VS Code Copilot interactions.
+## Primary Responsibilities
 
-## Required File Reads
+- Audit README.md against actual implementation
+- Verify all documented commands, paths, and configurations
+- Ensure tech stack versions are accurate
+- Update documentation to match current project state
 
-Before making any updates, read these files in order:
-1. `pyproject.toml` - Dependencies, scripts, tool configuration
-2. `uv.lock` - Locked dependency versions
-3. `app/main.py` - FastAPI app factory and lifespan
-4. `app/core/config.py` - Settings and environment configuration
-5. `.github/copilot-instructions.md` - Coding guidelines
-6. All files in `app/routers/` and `app/services/`
-7. `Justfile` - Task automation commands
+## Context Files to Read
 
-## Analysis Requirements
+Read these files before any updates:
 
-### 1. Project Overview Verification
-- Verify the project description matches the FastAPI REST API implementation
-- Check if the stated purpose aligns with actual routers, services, and middleware
-- Identify any missing key features (authentication, logging, error handling, etc.)
-- Verify OpenAPI/Swagger documentation endpoints are accurate (`/api-docs`, `/api-redoc`)
+1. **Project configuration**: `pyproject.toml`, `uv.lock`
+2. **Application core**: `app/main.py`, `app/core/config.py`, `app/dependencies.py`
+3. **Guidelines**: `AGENTS.md` (primary coding guidelines, comprehensive)
+4. **Task runner**: `Justfile`
+5. **Routers**: `app/routers/health.py`, `app/routers/hello.py`, `app/routers/items.py`, `app/routers/profile.py`
+6. **Services**: `app/services/profile.py`
 
-### 2. Tech Stack Analysis
-- Verify all frameworks and their versions by checking:
-  - `pyproject.toml` for dependencies (FastAPI, Pydantic, Firebase Admin, etc.)
-  - `uv.lock` for exact locked versions
-  - Configuration files (`ruff.toml` sections in pyproject.toml, etc.)
-- Check Python version requirement (3.14+)
-- Verify Firebase/Google Cloud integrations (Admin SDK, Firestore, Secret Manager)
-- Identify any packages used but not documented
-- Remove any technologies listed but not actually used
-- Verify folder structure: `app/`, `functions/`, `tests/`
+## Verification Checklist
 
-### 3. Version Verification
-- Check `pyproject.toml` for version constraints
-- Verify `uv.lock` for actual resolved versions
-- Ensure Ruff version aligns with configured rules
-- Check `ty` (type checker) version if relevant
-- Cross-reference pytest and coverage versions
+### Tech Stack
+- Python 3.14+ requirement
+- FastAPI, Pydantic v2, Uvicorn versions
+- Firebase Admin SDK, Google Cloud integrations
+- Ruff (linting), ty (type checking), pytest (testing)
 
-### 4. Commands Verification
-- Verify all commands in `Justfile`:
-  - `serve` (dev server with hot reload)
-  - `test`, `cov` (pytest and coverage)
-  - `lint`, `typing` (Ruff and ty)
-  - `check-all` (combined checks)
-  - `install`, `update`, `fresh` (dependency management)
-  - `clean`, `modernize`
-- Document any Firebase-related commands if applicable
-- Ensure command descriptions match actual behavior
-- Add any missing commonly-used commands
+### Justfile Commands
+Verify these commands work:
+- `just serve` - Development server on port 8080
+- `just test` - Unit + integration tests
+- `just cov` - Coverage report
+- `just lint` - Ruff check + format
+- `just typing` - ty type checking
+- `just check-all` - Combined checks
+- `just emulators` - Firebase emulators for E2E
 
-### 5. Architecture & Directory Structure
-- Scan the directory structure in `app/`:
-  - `main.py` (FastAPI app factory with lifespan)
-  - `dependencies.py` (shared dependency wiring)
-  - `auth/` (Firebase token verification)
-  - `core/` (config, firebase, logging, security, body_limit middlewares)
-  - `models/` (Pydantic models: error, health, profile)
-  - `routers/` (route handlers)
-  - `services/` (business logic, Firestore operations)
-- Verify all documented paths exist
-- Check that middleware files match documentation
-- Verify router files and their endpoints
-- Document test file organization (`tests/unit/`, `tests/integration/`)
-- Note FastAPI dependency injection patterns
+### Directory Structure
+Verify `app/` structure:
+- `auth/` - Firebase authentication (`firebase.py` with `verify_firebase_token`)
+- `core/` - Configuration (`config.py`), Firebase init (`firebase.py`), exception handler, CBOR support, validation
+- `exceptions/` - Domain exceptions using fastapi-problem (`base.py`, `profile.py`)
+- `middleware/` - Body limit (`body_limit.py`), logging (`logging.py`), security headers (`security.py`)
+- `models/` - Pydantic schemas (`error.py`, `health.py`, `profile.py`, `types.py`)
+- `pagination/` - Cursor-based pagination (`cursor.py`, `link.py`, `paginator.py`, `params.py`)
+- `routers/` - API endpoints (`health.py`, `hello.py`, `items.py`, `profile.py`)
+- `services/` - Business logic (`profile.py`)
 
-### 6. Automation
-- Check for GitHub Actions workflows in `.github/workflows/`
-- Document any CI/CD pipelines
-- Verify Firebase deployment scripts if present
-- Document any build or deployment automation (Dockerfile, Cloud Run)
+### Environment Variables
+Verify against `app/core/config.py`:
+- `ENVIRONMENT`, `DEBUG`
+- `FIREBASE_PROJECT_ID`, `FIREBASE_PROJECT_NUMBER`
+- `FIRESTORE_DATABASE`
+- `GOOGLE_APPLICATION_CREDENTIALS`
+- `CORS_ORIGINS`, `MAX_REQUEST_SIZE_BYTES`
+- `SECRET_MANAGER_ENABLED`
 
-### 7. Configuration Files
-- Document all configuration files and their purposes:
-  - `pyproject.toml` (dependencies, Ruff, ty, pytest, coverage config)
-  - `Justfile` (task runner commands)
-  - `Dockerfile` (container build)
-  - `firebase.json`, `firestore.rules`, `storage.rules` (Firebase config)
-  - `.editorconfig` if present
-  - Environment variables via `pydantic-settings`
-  - `.env` pattern (gitignored)
+### Test Organization
+- `tests/unit/` - Unit tests (mocked dependencies)
+- `tests/integration/` - Integration tests (TestClient)
+- `tests/e2e/` - End-to-end tests (requires emulators)
+- `tests/helpers/` - Shared test utilities
 
-### 8. Development Guidelines
-- Extract coding conventions from:
-  - `.github/copilot-instructions.md`
-  - Ruff rules (line length 120, ANN, FAST rules)
-  - Type hints everywhere (avoid `Any`)
-  - `async def` for I/O-bound endpoints
-  - Pydantic v2 models for validation
+## Output Requirements
+
+1. Identify discrepancies between docs and reality
+2. Propose specific updates with exact file locations
+3. Preserve existing structure while fixing inaccuracies
+4. Run `just test` to verify actual test count
+5. Check `uv pip list` or `uv.lock` for dependency versions
+
+## Quality Guidelines
+
+- Every path mentioned must exist
+- Every command must be valid
+- No speculative or planned features
+- Keep focused on FastAPI/Firebase patterns
+- Follow AGENTS.md conventions (no emojis, minimal comments)
+- Update test counts only with verified numbers
 - Document FastAPI patterns:
   - Dependency injection via `Depends()`
   - Response models and status codes
@@ -170,7 +157,7 @@ Create an updated README.md file that:
 - Deprecated features or removed endpoints
 - Speculative or planned features not yet implemented
 - Hardcoded version numbers that will become stale (prefer constraints or ranges)
-- Duplicate information already in copilot-instructions.md
+- Duplicate information already in AGENTS.md
 
 ## Monorepo Awareness
 
@@ -204,7 +191,7 @@ Create an updated README.md file that:
    - Check `tests/unit/`, `tests/integration/` structure
    - Verify all Justfile commands
    - Review configuration in `pyproject.toml`
-   - Check `.github/copilot-instructions.md` for coding guidelines
+   - Check `AGENTS.md` for coding guidelines
 2. Run `just test` to get actual test count
 3. Check `uv.lock` or run `uv pip list` to verify dependency versions
 4. Compare your findings with the current README.md

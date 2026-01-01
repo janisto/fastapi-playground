@@ -17,7 +17,7 @@ from tests.helpers.starlette_utils import build_starlette_app
 def _create_app(
     hsts: bool = True,
     x_frame_options: str = "DENY",
-    referrer_policy: str = "same-origin",
+    referrer_policy: str = "strict-origin-when-cross-origin",
 ) -> Starlette:
     """
     Create a minimal Starlette app with security middleware.
@@ -63,13 +63,13 @@ class TestSecurityHeaders:
             response = client.get("/ping")
             assert response.headers.get("x-content-type-options") == "nosniff"
 
-    def test_referrer_policy_same_origin(self) -> None:
+    def test_referrer_policy_strict_origin_when_cross_origin(self) -> None:
         """
-        Verify Referrer-Policy header is set to same-origin.
+        Verify Referrer-Policy header is set to strict-origin-when-cross-origin.
         """
         with TestClient(_create_app()) as client:
             response = client.get("/ping")
-            assert response.headers.get("referrer-policy") == "same-origin"
+            assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
 
     def test_custom_x_frame_options(self) -> None:
         """
@@ -248,6 +248,165 @@ class TestHSTSHeader:
                 assert "preload" in hsts
 
 
+class TestCrossOriginOpenerPolicyHeader:
+    """
+    Tests for Cross-Origin-Opener-Policy header.
+
+    COOP isolates the browsing context to exclusively same-origin documents,
+    protecting against Spectre-style side-channel attacks.
+    """
+
+    def test_coop_same_origin_by_default(self) -> None:
+        """
+        Verify Cross-Origin-Opener-Policy header is set to same-origin by default.
+        """
+        with TestClient(_create_app()) as client:
+            response = client.get("/ping")
+            assert response.headers.get("cross-origin-opener-policy") == "same-origin"
+
+    def test_custom_coop(self) -> None:
+        """
+        Verify custom Cross-Origin-Opener-Policy value can be configured.
+        """
+
+        async def ping(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("pong")
+
+        app = build_starlette_app(
+            routes=[("/ping", ping, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {"cross_origin_opener_policy": "same-origin-allow-popups"})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/ping")
+            assert response.headers.get("cross-origin-opener-policy") == "same-origin-allow-popups"
+
+    def test_empty_coop_not_set(self) -> None:
+        """
+        Verify empty Cross-Origin-Opener-Policy config omits the header.
+        """
+
+        async def ping(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("pong")
+
+        app = build_starlette_app(
+            routes=[("/ping", ping, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {"cross_origin_opener_policy": ""})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/ping")
+            assert "cross-origin-opener-policy" not in response.headers
+
+
+class TestCrossOriginResourcePolicyHeader:
+    """
+    Tests for Cross-Origin-Resource-Policy header.
+
+    CORP prevents cross-origin reads of resources, providing defense
+    against Spectre-style side-channel attacks.
+    """
+
+    def test_corp_same_origin_by_default(self) -> None:
+        """
+        Verify Cross-Origin-Resource-Policy header is set to same-origin by default.
+        """
+        with TestClient(_create_app()) as client:
+            response = client.get("/ping")
+            assert response.headers.get("cross-origin-resource-policy") == "same-origin"
+
+    def test_custom_corp(self) -> None:
+        """
+        Verify custom Cross-Origin-Resource-Policy value can be configured.
+        """
+
+        async def ping(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("pong")
+
+        app = build_starlette_app(
+            routes=[("/ping", ping, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {"cross_origin_resource_policy": "same-site"})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/ping")
+            assert response.headers.get("cross-origin-resource-policy") == "same-site"
+
+    def test_empty_corp_not_set(self) -> None:
+        """
+        Verify empty Cross-Origin-Resource-Policy config omits the header.
+        """
+
+        async def ping(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("pong")
+
+        app = build_starlette_app(
+            routes=[("/ping", ping, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {"cross_origin_resource_policy": ""})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/ping")
+            assert "cross-origin-resource-policy" not in response.headers
+
+
+class TestPermissionsPolicyHeader:
+    """
+    Tests for Permissions-Policy header.
+
+    Permissions-Policy (formerly Feature-Policy) disables browser features
+    not needed by REST APIs, reducing the attack surface.
+    """
+
+    def test_permissions_policy_set_by_default(self) -> None:
+        """
+        Verify Permissions-Policy header is set with disabled features by default.
+        """
+        with TestClient(_create_app()) as client:
+            response = client.get("/ping")
+            policy = response.headers.get("permissions-policy")
+            assert policy is not None
+            assert "accelerometer=()" in policy
+            assert "camera=()" in policy
+            assert "geolocation=()" in policy
+            assert "microphone=()" in policy
+            assert "payment=()" in policy
+
+    def test_custom_permissions_policy(self) -> None:
+        """
+        Verify custom Permissions-Policy value can be configured.
+        """
+
+        async def ping(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("pong")
+
+        app = build_starlette_app(
+            routes=[("/ping", ping, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {"permissions_policy": "geolocation=(), camera=()"})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/ping")
+            assert response.headers.get("permissions-policy") == "geolocation=(), camera=()"
+
+    def test_empty_permissions_policy_not_set(self) -> None:
+        """
+        Verify empty Permissions-Policy config omits the header.
+        """
+
+        async def ping(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("pong")
+
+        app = build_starlette_app(
+            routes=[("/ping", ping, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {"permissions_policy": ""})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/ping")
+            assert "permissions-policy" not in response.headers
+
+
 class TestSecurityHeadersDisabled:
     """
     Tests for disabled security headers.
@@ -330,13 +489,16 @@ class TestContentSecurityPolicyHeader:
     are accidentally rendered as HTML.
     """
 
-    def test_csp_default_src_none_by_default(self) -> None:
+    def test_csp_frame_ancestors_none_by_default(self) -> None:
         """
-        Verify Content-Security-Policy header is set to default-src 'none' by default.
+        Verify Content-Security-Policy header is set to frame-ancestors 'none' by default.
+
+        Per OWASP REST API Security Cheat Sheet, frame-ancestors 'none' is recommended
+        for REST APIs to prevent clickjacking without being overly restrictive.
         """
         with TestClient(_create_app()) as client:
             response = client.get("/ping")
-            assert response.headers.get("content-security-policy") == "default-src 'none'"
+            assert response.headers.get("content-security-policy") == "frame-ancestors 'none'"
 
     def test_custom_csp(self) -> None:
         """
@@ -371,57 +533,6 @@ class TestContentSecurityPolicyHeader:
         with TestClient(app) as client:
             response = client.get("/ping")
             assert "content-security-policy" not in response.headers
-
-
-class TestPermissionsPolicyHeader:
-    """
-    Tests for Permissions-Policy header.
-
-    This header disables various browser features like FLoC tracking.
-    While low priority for JSON APIs, it provides defense-in-depth.
-    """
-
-    def test_permissions_policy_disables_floc_by_default(self) -> None:
-        """
-        Verify Permissions-Policy header disables interest-cohort (FLoC) by default.
-        """
-        with TestClient(_create_app()) as client:
-            response = client.get("/ping")
-            assert response.headers.get("permissions-policy") == "interest-cohort=()"
-
-    def test_custom_permissions_policy(self) -> None:
-        """
-        Verify custom Permissions-Policy value can be configured.
-        """
-
-        async def ping(request: Request) -> PlainTextResponse:
-            return PlainTextResponse("pong")
-
-        app = build_starlette_app(
-            routes=[("/ping", ping, ["GET"])],
-            middleware=[(SecurityHeadersMiddleware, {"permissions_policy": "geolocation=(), microphone=()"})],
-        )
-
-        with TestClient(app) as client:
-            response = client.get("/ping")
-            assert response.headers.get("permissions-policy") == "geolocation=(), microphone=()"
-
-    def test_empty_permissions_policy_not_set(self) -> None:
-        """
-        Verify empty Permissions-Policy config omits the header.
-        """
-
-        async def ping(request: Request) -> PlainTextResponse:
-            return PlainTextResponse("pong")
-
-        app = build_starlette_app(
-            routes=[("/ping", ping, ["GET"])],
-            middleware=[(SecurityHeadersMiddleware, {"permissions_policy": ""})],
-        )
-
-        with TestClient(app) as client:
-            response = client.get("/ping")
-            assert "permissions-policy" not in response.headers
 
 
 class TestCSPDocumentationExemption:
@@ -472,7 +583,7 @@ class TestCSPDocumentationExemption:
         with TestClient(app) as client:
             response = client.get("/api/users")
             assert response.status_code == 200
-            assert response.headers.get("content-security-policy") == "default-src 'none'"
+            assert response.headers.get("content-security-policy") == "frame-ancestors 'none'"
 
     def test_other_security_headers_still_applied_for_documentation_paths(self) -> None:
         """
@@ -497,6 +608,5 @@ class TestCSPDocumentationExemption:
             # But other security headers should still be present
             assert response.headers.get("x-content-type-options") == "nosniff"
             assert response.headers.get("x-frame-options") == "DENY"
-            assert response.headers.get("referrer-policy") == "same-origin"
+            assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
             assert response.headers.get("cache-control") == "no-store"
-            assert response.headers.get("permissions-policy") == "interest-cohort=()"

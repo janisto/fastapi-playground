@@ -7,7 +7,7 @@ from httpx import Response
 
 def assert_error_response(response: Response, expected_status: int) -> dict:
     """
-    Assert response matches ErrorResponse schema.
+    Assert response matches RFC 9457 Problem Details schema.
 
     Args:
         response: The HTTP response to validate.
@@ -18,8 +18,10 @@ def assert_error_response(response: Response, expected_status: int) -> dict:
     """
     assert response.status_code == expected_status
     body = response.json()
-    assert "detail" in body, f"Missing 'detail': {body}"
-    assert isinstance(body["detail"], str)
+    assert "title" in body, f"Missing 'title': {body}"
+    assert isinstance(body["title"], str)
+    assert "status" in body, f"Missing 'status': {body}"
+    assert body["status"] == expected_status
     return body
 
 
@@ -36,9 +38,9 @@ def assert_validation_error(response: Response, field: str) -> dict:
     """
     assert response.status_code == 422
     body = response.json()
-    assert "detail" in body
-    errors = body["detail"]
+    assert "errors" in body
+    errors = body["errors"]
     assert isinstance(errors, list), f"Expected list of errors: {errors}"
-    field_mentioned = any(field in str(err.get("loc", [])) for err in errors)
+    field_mentioned = any(field in str(err.get("location", "")) for err in errors)
     assert field_mentioned, f"Field '{field}' not found in validation errors: {errors}"
     return body

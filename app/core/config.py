@@ -2,10 +2,42 @@
 Configuration settings for the application.
 """
 
+import json
 from functools import cache
+from typing import Annotated
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+def parse_cors_origins(value: str | list[str]) -> list[str]:
+    """
+    Parse CORS origins from either JSON array or comma-separated string.
+
+    Supports:
+    - JSON array: '["http://localhost:3000", "https://example.com"]'
+    - Comma-separated: 'http://localhost:3000,https://example.com'
+    - Already-parsed list (passthrough)
+    """
+    if isinstance(value, list):
+        return value
+
+    if not value or not value.strip():
+        return []
+
+    value = value.strip()
+
+    # Try JSON first (starts with '[')
+    if value.startswith("["):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if item]
+        except json.JSONDecodeError:
+            pass
+
+    # Fall back to comma-separated
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 class Settings(BaseSettings):
@@ -36,10 +68,30 @@ class Settings(BaseSettings):
 
     # Security / Limits
     max_request_size_bytes: int = Field(default=1_000_000, description="Maximum request body size in bytes")
-    cors_origins: list[str] = Field(
+
+    # CORS configuration - when allow_credentials=True, wildcards are forbidden per CORS spec
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description="Allowed CORS origins (JSON array or comma-separated)",
     )
+    cors_methods: list[str] = Field(
+        default=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        description="Allowed CORS methods",
+    )
+    cors_headers: list[str] = Field(
+        default=["Authorization", "Content-Type", "traceparent", "X-Request-ID"],
+        description="Allowed CORS headers",
+    )
+    cors_expose_headers: list[str] = Field(
+        default=["Link", "Location", "X-Request-ID"],
+        description="CORS headers exposed to browser",
+    )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins_field(cls, v: str | list[str]) -> list[str]:
+        """Parse CORS origins from JSON array or comma-separated string."""
+        return parse_cors_origins(v)
 
     model_config = SettingsConfigDict(
         env_file=".env",

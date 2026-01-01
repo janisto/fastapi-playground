@@ -4,6 +4,7 @@ Unit tests for body size limit middleware.
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import cbor2
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
@@ -106,12 +107,12 @@ class TestBodySizeLimit:
 
 class TestBodySizeLimitErrorResponse:
     """
-    Tests for 413 error response format.
+    Tests for 413 error response RFC 9457 Problem Details format.
     """
 
     def test_413_response_format(self) -> None:
         """
-        Verify 413 response has correct JSON format.
+        Verify 413 response has RFC 9457 Problem Details format.
         """
         with patch("app.middleware.body_limit.get_settings") as mock_settings:
             mock_settings.return_value.max_request_size_bytes = 10
@@ -119,10 +120,11 @@ class TestBodySizeLimitErrorResponse:
             with TestClient(app) as client:
                 response = client.post("/echo", content=b"x" * 100)
                 assert response.status_code == 413
-                assert response.headers.get("content-type") == "application/json"
+                assert response.headers.get("content-type") == "application/problem+json"
                 body = response.json()
-                assert "detail" in body
-                assert isinstance(body["detail"], str)
+                assert body["title"] == "Payload Too Large"
+                assert body["status"] == 413
+                assert body["detail"] == "Request body too large"
 
     def test_413_response_detail_message(self) -> None:
         """
@@ -134,6 +136,78 @@ class TestBodySizeLimitErrorResponse:
             with TestClient(app) as client:
                 response = client.post("/echo", content=b"x" * 100)
                 assert response.json()["detail"] == "Request body too large"
+
+    def test_413_response_includes_request_id(self) -> None:
+        """
+        Verify 413 response includes X-Request-ID header.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post("/echo", content=b"x" * 100)
+                assert response.status_code == 413
+                assert "x-request-id" in response.headers
+
+    def test_413_response_echoes_incoming_request_id(self) -> None:
+        """
+        Verify 413 response echoes incoming X-Request-ID header.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/echo",
+                    content=b"x" * 100,
+                    headers={"X-Request-ID": "test-request-id-123"},
+                )
+                assert response.status_code == 413
+                assert response.headers.get("x-request-id") == "test-request-id-123"
+
+
+class TestBodySizeLimitCBORNegotiation:
+    """
+    Tests for CBOR content negotiation in 413 responses.
+    """
+
+    def test_413_returns_cbor_when_accept_cbor(self) -> None:
+        """
+        Verify 413 response returns CBOR when Accept: application/cbor.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/echo",
+                    content=b"x" * 100,
+                    headers={"Accept": "application/cbor"},
+                )
+                assert response.status_code == 413
+                assert response.headers.get("content-type") == "application/problem+cbor"
+                body = cbor2.loads(response.content)
+                assert body["title"] == "Payload Too Large"
+                assert body["status"] == 413
+                assert body["detail"] == "Request body too large"
+
+    def test_413_returns_json_without_cbor_accept(self) -> None:
+        """
+        Verify 413 response returns JSON when Accept header does not include CBOR.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/echo",
+                    content=b"x" * 100,
+                    headers={"Accept": "application/json"},
+                )
+                assert response.status_code == 413
+                assert response.headers.get("content-type") == "application/problem+json"
+                body = response.json()
+                assert body["title"] == "Payload Too Large"
 
 
 class TestBodySizeLimitEdgeCases:

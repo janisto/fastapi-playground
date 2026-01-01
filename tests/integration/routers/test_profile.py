@@ -33,10 +33,44 @@ class TestCreateProfile:
 
         assert response.status_code == 201
         body = response.json()
-        assert body["success"] is True
-        assert body["message"] == "Profile created successfully"
-        assert body["profile"] is not None
+        assert "id" in body
+        assert "firstname" in body
+        assert response.headers.get("Location") == "/profile/"
         mock_profile_service.create_profile.assert_awaited_once()
+
+    def test_returns_schema_url(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify POST /profile/ returns $schema URL.
+        """
+        mock_profile_service.create_profile.return_value = make_profile()
+
+        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+
+        body = response.json()
+        assert "$schema" in body
+        assert "schemas/ProfileData.json" in body["$schema"]
+
+    def test_returns_describedby_link_header(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify POST /profile/ returns Link header with describedBy.
+        """
+        mock_profile_service.create_profile.return_value = make_profile()
+
+        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+
+        link = response.headers.get("link", "")
+        assert 'rel="describedBy"' in link
+        assert "/schemas/ProfileData.json" in link
 
     def test_returns_409_when_duplicate(
         self,
@@ -52,7 +86,7 @@ class TestCreateProfile:
         response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
 
         assert response.status_code == 409
-        assert response.json()["detail"] == "Profile already exists"
+        assert response.json()["title"] == "Profile already exists"
 
     def test_returns_500_on_unexpected_error(
         self,
@@ -132,7 +166,25 @@ class TestCreateProfile:
 
         assert response.status_code == 422
         body = response.json()
-        assert any(missing_field in str(err.get("loc", [])) for err in body["detail"])
+        assert any(missing_field in str(err.get("location", "")) for err in body["errors"])
+
+    def test_returns_422_when_terms_false(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify terms=False returns 422 validation error.
+        """
+        payload = make_profile_payload_dict(terms=False)
+
+        response = client.post(f"{BASE_URL}/", json=payload)
+
+        assert response.status_code == 422
+        body = response.json()
+        assert any("terms" in str(err.get("location", "")) for err in body["errors"])
+        assert any("terms must be accepted" in str(err.get("message", "")) for err in body["errors"])
 
 
 class TestGetProfile:
@@ -155,9 +207,43 @@ class TestGetProfile:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["success"] is True
-        assert body["profile"] is not None
+        assert "id" in body
+        assert "firstname" in body
         mock_profile_service.get_profile.assert_awaited_once()
+
+    def test_returns_schema_url(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify GET /profile/ returns $schema URL.
+        """
+        mock_profile_service.get_profile.return_value = make_profile()
+
+        response = client.get(f"{BASE_URL}/")
+
+        body = response.json()
+        assert "$schema" in body
+        assert "schemas/ProfileData.json" in body["$schema"]
+
+    def test_returns_describedby_link_header(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify GET /profile/ returns Link header with describedBy.
+        """
+        mock_profile_service.get_profile.return_value = make_profile()
+
+        response = client.get(f"{BASE_URL}/")
+
+        link = response.headers.get("link", "")
+        assert 'rel="describedBy"' in link
+        assert "/schemas/ProfileData.json" in link
 
     def test_returns_404_when_not_found(
         self,
@@ -173,7 +259,7 @@ class TestGetProfile:
         response = client.get(f"{BASE_URL}/")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Profile not found"
+        assert response.json()["title"] == "Profile not found"
 
     def test_returns_500_on_unexpected_error(
         self,
@@ -224,9 +310,42 @@ class TestUpdateProfile:
 
         assert response.status_code == 200
         body = response.json()
-        assert body["success"] is True
-        assert body["message"] == "Profile updated successfully"
+        assert body["firstname"] == "Updated"
         mock_profile_service.update_profile.assert_awaited_once()
+
+    def test_returns_schema_url(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify PATCH /profile/ returns $schema URL.
+        """
+        mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
+
+        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+
+        body = response.json()
+        assert "$schema" in body
+        assert "schemas/ProfileData.json" in body["$schema"]
+
+    def test_returns_describedby_link_header(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify PATCH /profile/ returns Link header with describedBy.
+        """
+        mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
+
+        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+
+        link = response.headers.get("link", "")
+        assert 'rel="describedBy"' in link
+        assert "/schemas/ProfileData.json" in link
 
     def test_returns_404_when_not_found(
         self,
@@ -242,7 +361,7 @@ class TestUpdateProfile:
         response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Profile not found"
+        assert response.json()["title"] == "Profile not found"
 
     def test_returns_500_on_unexpected_error(
         self,
@@ -308,23 +427,21 @@ class TestDeleteProfile:
     Tests for DELETE /profile/.
     """
 
-    def test_returns_200_on_success(
+    def test_returns_204_on_success(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
         """
-        Verify successful profile deletion returns 200.
+        Verify successful profile deletion returns 204 No Content.
         """
-        mock_profile_service.delete_profile.return_value = make_profile()
+        mock_profile_service.delete_profile.return_value = None
 
         response = client.delete(f"{BASE_URL}/")
 
-        assert response.status_code == 200
-        body = response.json()
-        assert body["success"] is True
-        assert body["message"] == "Profile deleted successfully"
+        assert response.status_code == 204
+        assert response.content == b""
         mock_profile_service.delete_profile.assert_awaited_once()
 
     def test_returns_404_when_not_found(
@@ -341,7 +458,7 @@ class TestDeleteProfile:
         response = client.delete(f"{BASE_URL}/")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Profile not found"
+        assert response.json()["title"] == "Profile not found"
 
     def test_returns_500_on_unexpected_error(
         self,
@@ -396,9 +513,9 @@ class TestProfileResponseFormat:
         response = client.get(f"{BASE_URL}/")
 
         body = response.json()
-        assert body["profile"]["firstname"] == "John"
-        assert body["profile"]["lastname"] == "Doe"
-        assert body["profile"]["email"] == "john@example.com"
+        assert body["firstname"] == "John"
+        assert body["lastname"] == "Doe"
+        assert body["email"] == "john@example.com"
 
     def test_response_includes_timestamps(
         self,
@@ -414,5 +531,5 @@ class TestProfileResponseFormat:
         response = client.get(f"{BASE_URL}/")
 
         body = response.json()
-        assert "created_at" in body["profile"]
-        assert "updated_at" in body["profile"]
+        assert "created_at" in body
+        assert "updated_at" in body

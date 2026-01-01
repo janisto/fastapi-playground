@@ -14,12 +14,12 @@ Use these rules for tests under `tests/**` (Python 3.14, FastAPI, pytest, pytest
 > Run `just lint` to check. This document focuses on project-specific test conventions.
 
 Structure
-- Unit tests → `tests/unit/**` (mirror `app/**` folder structure)
-- Integration/API tests → `tests/integration/**` (mirror `app/routers/**` structure)
-- Fixtures → `tests/conftest.py` and scoped `conftest.py` files
-- Helpers → `tests/helpers/**` (factory functions, context managers, utilities)
-- Mocks → `tests/mocks/**` (reusable stubs, Protocol types, mock configurations)
-- E2E tests → `tests/e2e/**` (local only, requires Firebase emulators)
+- Unit tests: `tests/unit/**` (mirror `app/**` folder structure)
+- Integration/API tests: `tests/integration/**` (mirror `app/routers/**` structure)
+- Fixtures: `tests/conftest.py` and scoped `conftest.py` files
+- Helpers: `tests/helpers/**` (factory functions, context managers, utilities)
+- Mocks: `tests/mocks/**` (reusable stubs, Protocol types, mock configurations)
+- E2E tests: `tests/e2e/**` (local only, requires Firebase emulators)
 
 Folder Structure (mirrors `app/`):
 ```
@@ -38,37 +38,46 @@ tests/
 │   └── services.py                   # Service layer mocks
 ├── unit/                             # Mirrors app/ structure
 │   ├── conftest.py                   # Unit-specific fixtures (reset_settings_cache)
-│   ├── test_dependencies.py          # ← app/dependencies.py
-│   ├── test_main.py                  # ← app/main.py (lifespan, app config)
+│   ├── test_dependencies.py          # tests app/dependencies.py
+│   ├── test_main.py                  # tests app/main.py (lifespan, app config)
 │   ├── auth/
-│   │   └── test_firebase.py          # ← app/auth/firebase.py
+│   │   └── test_firebase.py          # tests app/auth/firebase.py
 │   ├── core/
-│   │   ├── test_config.py            # ← app/core/config.py
-│   │   ├── test_firebase.py          # ← app/core/firebase.py
-│   │   └── handlers/
-│   │       ├── test_domain.py        # ← app/core/handlers/domain.py
-│   │       ├── test_http.py          # ← app/core/handlers/http.py
-│   │       └── test_validation.py    # ← app/core/handlers/validation.py
+│   │   ├── test_cbor.py              # tests app/core/cbor.py
+│   │   ├── test_config.py            # tests app/core/config.py
+│   │   ├── test_exception_handler.py # tests app/core/exception_handler.py
+│   │   ├── test_firebase.py          # tests app/core/firebase.py
+│   │   └── test_validation.py        # tests app/core/validation.py
 │   ├── exceptions/
-│   │   ├── test_base.py              # ← app/exceptions/base.py
-│   │   └── test_profile.py           # ← app/exceptions/profile.py
+│   │   ├── test_base.py              # tests app/exceptions/base.py
+│   │   └── test_profile.py           # tests app/exceptions/profile.py
 │   ├── middleware/
-│   │   ├── test_body_limit.py        # ← app/middleware/body_limit.py
-│   │   ├── test_logging.py           # ← app/middleware/logging.py
-│   │   └── test_security.py          # ← app/middleware/security.py
+│   │   ├── test_body_limit.py        # tests app/middleware/body_limit.py
+│   │   ├── test_logging.py           # tests app/middleware/logging.py
+│   │   └── test_security.py          # tests app/middleware/security.py
 │   ├── models/
-│   │   ├── test_error.py             # ← app/models/error.py
-│   │   ├── test_health.py            # ← app/models/health.py
-│   │   ├── test_profile_model.py     # ← app/models/profile.py
-│   │   └── test_types.py             # ← app/models/types.py
+│   │   ├── test_error.py             # tests app/models/error.py
+│   │   ├── test_health.py            # tests app/models/health.py
+│   │   ├── test_profile_model.py     # tests app/models/profile.py
+│   │   └── test_types.py             # tests app/models/types.py
+│   ├── pagination/
+│   │   ├── test_cursor.py            # tests app/pagination/cursor.py
+│   │   ├── test_link.py              # tests app/pagination/link.py
+│   │   ├── test_paginator.py         # tests app/pagination/paginator.py
+│   │   └── test_params.py            # tests app/pagination/params.py
 │   └── services/
-│       └── test_profile.py           # ← app/services/profile.py
+│       └── test_profile.py           # tests app/services/profile.py
 ├── integration/                      # Mirrors app/routers/ structure
 │   ├── conftest.py                   # Integration fixtures (mock_profile_service, client)
+│   ├── test_error_schema.py          # Error response schema tests
+│   ├── test_request_id.py            # X-Request-ID header tests
 │   └── routers/
-│       ├── test_health.py            # ← app/routers/health.py
-│       ├── test_root.py              # ← app/main.py (root endpoint)
-│       └── test_profile.py           # ← app/routers/profile.py
+│       ├── test_cbor.py              # CBOR content negotiation tests
+│       ├── test_health.py            # tests app/routers/health.py
+│       ├── test_hello.py             # tests app/routers/hello.py
+│       ├── test_items.py             # tests app/routers/items.py
+│       ├── test_profile.py           # tests app/routers/profile.py
+│       └── test_root.py              # tests app/main.py (root endpoint)
 └── e2e/                              # Real Firebase emulator tests
     ├── conftest.py                   # E2E fixtures (emulator detection, cleanup)
     └── routers/
@@ -96,11 +105,15 @@ Test File Mapping:
 | `app/main.py` | `tests/unit/test_main.py` | `tests/integration/routers/test_root.py` |
 | `app/dependencies.py` | `tests/unit/test_dependencies.py` | - |
 | `app/auth/firebase.py` | `tests/unit/auth/test_firebase.py` | - |
+| `app/core/cbor.py` | `tests/unit/core/test_cbor.py` | - |
 | `app/core/config.py` | `tests/unit/core/test_config.py` | - |
+| `app/core/exception_handler.py` | `tests/unit/core/test_exception_handler.py` | - |
 | `app/core/firebase.py` | `tests/unit/core/test_firebase.py` | - |
-| `app/core/handlers/domain.py` | `tests/unit/core/handlers/test_domain.py` | - |
-| `app/core/handlers/http.py` | `tests/unit/core/handlers/test_http.py` | - |
-| `app/core/handlers/validation.py` | `tests/unit/core/handlers/test_validation.py` | - |
+| `app/core/validation.py` | `tests/unit/core/test_validation.py` | - |
+| `app/pagination/cursor.py` | `tests/unit/pagination/test_cursor.py` | - |
+| `app/pagination/link.py` | `tests/unit/pagination/test_link.py` | - |
+| `app/pagination/paginator.py` | `tests/unit/pagination/test_paginator.py` | - |
+| `app/pagination/params.py` | `tests/unit/pagination/test_params.py` | - |
 | `app/exceptions/base.py` | `tests/unit/exceptions/test_base.py` | - |
 | `app/exceptions/profile.py` | `tests/unit/exceptions/test_profile.py` | - |
 | `app/middleware/body_limit.py` | `tests/unit/middleware/test_body_limit.py` | - |
@@ -112,6 +125,8 @@ Test File Mapping:
 | `app/models/types.py` | `tests/unit/models/test_types.py` | - |
 | `app/services/profile.py` | `tests/unit/services/test_profile.py` | - |
 | `app/routers/health.py` | - | `tests/integration/routers/test_health.py` |
+| `app/routers/hello.py` | - | `tests/integration/routers/test_hello.py` |
+| `app/routers/items.py` | - | `tests/integration/routers/test_items.py` |
 | `app/routers/profile.py` | - | `tests/integration/routers/test_profile.py` |
 
 Conventions
@@ -514,6 +529,12 @@ def make_profile_update(**kwargs: object) -> ProfileUpdate:
 
 def make_profile_payload_dict(
     *,
+    firstname: str = "John",
+    lastname: str = "Doe",
+    email: str = "john@example.com",
+    phone_number: str = "+1234567890",
+    marketing: bool = True,
+    terms: bool = True,
     overrides: dict[str, object] | None = None,
     omit: list[str] | None = None,
 ) -> dict[str, object]:
@@ -523,12 +544,12 @@ def make_profile_payload_dict(
     Use `overrides` to change values and `omit` to drop specific keys to test validation errors.
     """
     payload: dict[str, object] = {
-        "firstname": "John",
-        "lastname": "Doe",
-        "email": "john@example.com",
-        "phone_number": "+1234567890",
-        "marketing": True,
-        "terms": True,
+        "firstname": firstname,
+        "lastname": lastname,
+        "email": email,
+        "phone_number": phone_number,
+        "marketing": marketing,
+        "terms": terms,
     }
     if overrides:
         payload.update(overrides)
@@ -545,7 +566,7 @@ from httpx import Response
 
 def assert_error_response(response: Response, expected_status: int) -> dict:
     """
-    Assert response matches ErrorResponse schema.
+    Assert response matches RFC 9457 Problem Details schema.
 
     Args:
         response: The HTTP response to validate.
@@ -556,8 +577,10 @@ def assert_error_response(response: Response, expected_status: int) -> dict:
     """
     assert response.status_code == expected_status
     body = response.json()
-    assert "detail" in body, f"Missing 'detail': {body}"
-    assert isinstance(body["detail"], str)
+    assert "title" in body, f"Missing 'title': {body}"
+    assert isinstance(body["title"], str)
+    assert "status" in body, f"Missing 'status': {body}"
+    assert body["status"] == expected_status
     return body
 
 
@@ -574,10 +597,10 @@ def assert_validation_error(response: Response, field: str) -> dict:
     """
     assert response.status_code == 422
     body = response.json()
-    assert "detail" in body
-    errors = body["detail"]
+    assert "errors" in body
+    errors = body["errors"]
     assert isinstance(errors, list), f"Expected list of errors: {errors}"
-    field_mentioned = any(field in str(err.get("loc", [])) for err in errors)
+    field_mentioned = any(field in str(err.get("location", "")) for err in errors)
     assert field_mentioned, f"Field '{field}' not found in validation errors: {errors}"
     return body
 ```
@@ -588,7 +611,8 @@ from tests.helpers.assertions import assert_error_response, assert_validation_er
 
 def test_returns_404_when_not_found(client: TestClient, with_fake_user: None) -> None:
     response = client.get("/profile/")
-    assert_error_response(response, 404)
+    body = assert_error_response(response, 404)
+    assert body["title"] == "Profile not found"
 
 def test_returns_422_for_invalid_email(client: TestClient, with_fake_user: None) -> None:
     response = client.post("/profile/", json={"email": "invalid"})
@@ -985,7 +1009,8 @@ def test_create_profile_missing_required_field_returns_422(
     res = client.post("/profile/", json=payload)
     assert res.status_code == 422
     body = res.json()
-    assert any(missing_field in str(err.get("loc", [])) for err in body["detail"])
+    # Validation errors use 'errors' array with 'location' field
+    assert any(missing_field in err.get("location", "") for err in body["errors"])
 ```
 
 Multiple parameters - combine with nested parametrize:
@@ -1142,7 +1167,7 @@ def test_profile_get_with_fake_auth() -> None:
 ```
 
 4) Asserting errors and validation
-- Raise/propagate HTTP errors with clear `detail` and correct codes; assert both.
+- Errors use RFC 9457 Problem Details format with `type`, `title`, `status`, and `detail` fields.
 
 ```python
 from fastapi.testclient import TestClient
@@ -1162,7 +1187,9 @@ def test_profile_not_found_details() -> None:
 		with TestClient(app) as client:
 			r = client.get("/profile/")
 			if r.status_code == 404:
-				assert r.json()["detail"] == "Profile not found"
+				body = r.json()
+				assert body["status"] == 404
+				assert body["title"] == "Profile not found"
 	finally:
 		app.dependency_overrides.clear()
 ```
@@ -1366,7 +1393,8 @@ class TestCreateProfile:
 
         assert response.status_code == 201
         body = response.json()
-        assert body["success"] is True
+        assert body["id"] is not None  # Resource returned directly, no wrapper
+        assert "Location" in response.headers
         mock_profile_service.create_profile.assert_awaited_once()
 
     def test_returns_409_when_duplicate(
@@ -1383,7 +1411,9 @@ class TestCreateProfile:
         response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
 
         assert response.status_code == 409
-        assert response.json()["detail"] == "Profile already exists"
+        body = response.json()
+        assert body["status"] == 409
+        assert body["title"] == "Profile already exists"
 
     def test_returns_401_without_auth(
         self,
@@ -1462,15 +1492,15 @@ finally:
 ```
 
 Common pitfalls (and fixes)
-- Not clearing `app.dependency_overrides` → tests influence each other. Use `try/finally` or context manager.
-- Mixing sync TestClient inside async tests → use `httpx.AsyncClient` or keep tests sync.
-- Creating `TestClient(app)` without context manager → lifespan may not run; use fixture with `with`.
-- Real Firebase/GCP calls in tests → must be mocked.
-- Weak assertions → assert status, body shape, and headers.
-- Real outbound HTTP not mocked → use `pytest-httpx`.
-- Using `@pytest.mark.asyncio` when not needed → with `asyncio_mode="auto"`, remove the decorator.
-- Forgetting to clear cached settings → call `get_settings.cache_clear()` after `monkeypatch.setenv()`.
-- Applying marks to fixtures → deprecated in pytest 8+; use fixture dependencies instead.
+- Not clearing `app.dependency_overrides`: tests influence each other. Use `try/finally` or context manager.
+- Mixing sync TestClient inside async tests: use `httpx.AsyncClient` or keep tests sync.
+- Creating `TestClient(app)` without context manager: lifespan may not run; use fixture with `with`.
+- Real Firebase/GCP calls in tests: must be mocked.
+- Weak assertions: assert status, body shape, and headers.
+- Real outbound HTTP not mocked: use `pytest-httpx`.
+- Using `@pytest.mark.asyncio` when not needed: with `asyncio_mode="auto"`, remove the decorator.
+- Forgetting to clear cached settings: call `get_settings.cache_clear()` after `monkeypatch.setenv()`.
+- Applying marks to fixtures: deprecated in pytest 8+; use fixture dependencies instead.
 
 Anti-Patterns
 

@@ -50,11 +50,12 @@ Use `@firestore.async_transactional` for atomic operations. Define transaction m
 ```python
 @staticmethod
 @firestore.async_transactional
-async def _create_in_transaction(
+async def _create_in_transaction(  # pragma: no cover
     transaction: AsyncTransaction,
     doc_ref: AsyncDocumentReference,
     data: dict,
 ) -> None:
+    # Tested via E2E tests with Firebase emulators; unit tests mock this method
     snapshot = await doc_ref.get(transaction=transaction)
     if snapshot.exists:
         raise ResourceAlreadyExistsError("Resource already exists")
@@ -120,17 +121,19 @@ Use transactions to ensure atomicity and return merged data:
 ```python
 @staticmethod
 @firestore.async_transactional
-async def _update_in_transaction(
+async def _update_in_transaction(  # pragma: no cover
     transaction: AsyncTransaction,
     doc_ref: AsyncDocumentReference,
     updates: dict,
 ) -> dict | None:
+    # Tested via E2E tests with Firebase emulators; unit tests mock this method
     snapshot = await doc_ref.get(transaction=transaction)
     if not snapshot.exists:
         return None
     existing_data = snapshot.to_dict() or {}
     transaction.update(doc_ref, updates)
     return {**existing_data, **updates}
+
 
 async def update_resource(self, user_id: str, resource_data: ResourceUpdate) -> Resource:
     """
@@ -165,16 +168,18 @@ async def update_resource(self, user_id: str, resource_data: ResourceUpdate) -> 
 ```python
 @staticmethod
 @firestore.async_transactional
-async def _delete_in_transaction(
+async def _delete_in_transaction(  # pragma: no cover
     transaction: AsyncTransaction,
     doc_ref: AsyncDocumentReference,
 ) -> dict | None:
+    # Tested via E2E tests with Firebase emulators; unit tests mock this method
     snapshot = await doc_ref.get(transaction=transaction)
     if not snapshot.exists:
         return None
     data = snapshot.to_dict()
     transaction.delete(doc_ref)
     return data
+
 
 async def delete_resource(self, user_id: str) -> Resource:
     """
@@ -258,17 +263,25 @@ if TYPE_CHECKING:
 
 ## Testing
 
-Transaction methods are tested via E2E tests with Firebase emulators. Unit tests mock the transactional methods:
+Transaction methods are tested via E2E tests with Firebase emulators. Add `# pragma: no cover` comment and explanatory note:
 
 ```python
-# Add pragma comment for coverage
 @staticmethod
 @firestore.async_transactional
-async def _create_in_transaction(
+async def _create_in_transaction(  # pragma: no cover
     transaction: AsyncTransaction,
     doc_ref: AsyncDocumentReference,
     data: dict,
-) -> None:  # pragma: no cover
+) -> None:
     # Tested via E2E tests with Firebase emulators; unit tests mock this method
     ...
+```
+
+Unit tests mock the transactional methods or the service itself:
+
+```python
+from unittest.mock import AsyncMock
+
+mock_service = AsyncMock(spec=ResourceService)
+mock_service.create_resource.return_value = make_resource()
 ```

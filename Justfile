@@ -62,9 +62,10 @@ typing:
 check-all: lint typing test
 
 # Run development server
+# --no-server-header: Hide server fingerprinting (OWASP recommendation)
 [group('run')]
 serve:
-    uv run {{ ARGS_SERVE }} -m fastapi dev app/main.py --port {{ PORT }}
+    uv run {{ ARGS_SERVE }} uvicorn app.main:app --reload --port {{ PORT }} --no-server-header
 
 # Send HTTP request to development server
 [group('run')]

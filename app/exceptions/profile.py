@@ -2,20 +2,20 @@
 Profile-related exceptions.
 """
 
-from app.exceptions.base import ConflictError, NotFoundError
+from fastapi_problem.error import ConflictProblem, NotFoundProblem
 
 
-class ProfileNotFoundError(NotFoundError):
+class ProfileNotFoundError(NotFoundProblem):
     """
     Raised when a profile cannot be found.
     """
 
-    detail = "Profile not found"
+    title = "Profile not found"
 
 
-class ProfileAlreadyExistsError(ConflictError):
+class ProfileAlreadyExistsError(ConflictProblem):
     """
     Raised when attempting to create a duplicate profile.
     """
 
-    detail = "Profile already exists"
+    title = "Profile already exists"
