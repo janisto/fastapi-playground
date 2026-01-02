@@ -18,7 +18,7 @@ class HealthResponse(BaseModel):
         default=None,
         alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["/schemas/HealthData.json"],
+        examples=["/schemas/HealthResponse.json"],
     )
     message: Literal["healthy"] = Field(
         ...,

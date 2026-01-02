@@ -88,7 +88,10 @@ class CloudRunJSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         # Build base payload
-        iso_ts = datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="microseconds")
+        # Use Z suffix instead of +00:00 for compactness (both are valid RFC 3339)
+        iso_ts = (
+            datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+        )
         payload: dict[str, Any] = {
             "severity": _severity_for_level(record.levelno),
             "message": record.getMessage(),

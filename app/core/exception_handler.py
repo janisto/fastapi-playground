@@ -97,11 +97,12 @@ def schema_link_post_hook(
     The Link header with rel="describedBy" provides discoverability per RFC 8288.
 
     Note: $schema must be an absolute URI per JSON Schema specification.
+    The $schema field is prepended to maintain consistent field ordering.
     """
     # Only add $schema if not already present (custom handlers may set their own)
     if "$schema" not in content:
         schema_url = str(request.base_url).rstrip("/") + ERROR_SCHEMA_PATH
-        content["$schema"] = schema_url
+        content = {"$schema": schema_url, **content}
         response.body = response.render(content)
         response.headers["content-length"] = str(len(response.body))
 

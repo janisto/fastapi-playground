@@ -80,7 +80,7 @@ This project follows modern REST API best practices:
 - Return resources directly without wrapper envelopes
 - POST endpoints return 201 Created with `Location` header
 - DELETE endpoints return 204 No Content
-- All timestamps use ISO 8601 format with UTC timezone (RFC 3339)
+- All timestamps use ISO 8601 format with UTC timezone and explicit milliseconds (e.g., `2025-01-15T10:30:00.000Z`)
 
 ```python
 # Correct - return resource directly
@@ -386,8 +386,8 @@ async def list_items(request: Request, response: Response) -> ItemList:
         id: str = Field(...)
         firstname: str = Field(...)
         # ... all fields defined explicitly
-        created_at: datetime = Field(...)
-        updated_at: datetime = Field(...)
+        created_at: UtcDatetime = Field(...)
+        updated_at: UtcDatetime = Field(...)
     ```
   - **Use `serialize_by_alias=True`** for models with field aliases (e.g., `alias="$schema"`). This ensures `model_dump()` uses aliases by default, matching FastAPI's `response_model_by_alias=True` behavior. This setting was introduced in Pydantic v2.11 and will default to `True` in v3:
     ```python
@@ -430,7 +430,7 @@ async def list_items(request: Request, response: Response) -> ItemList:
     | `int` | `examples=[123]` |
     | `float` | `examples=[19.99]` |
     | `bool` | `examples=[True]` |
-    | `datetime` | `examples=["2025-01-15T10:30:00Z"]` (use ISO 8601 string for JSON Schema) |
+    | `UtcDatetime` | `examples=["2025-01-15T10:30:00.000Z"]` (use .000Z format for consistency) |
     | `list[str]` | `examples=[["item1", "item2"]]` (array of primitives) |
     | `list[Model]` | **Omit examples** (nested schema auto-documents via `$ref`) |
     | `EmailStr` | `examples=["user@example.com"]` |
@@ -452,8 +452,16 @@ async def list_items(request: Request, response: Response) -> ItemList:
   - Use predefined type aliases for common constrained strings instead of inline constraints. Create `app/models/types.py` for reusable types:
     ```python
     # app/models/types.py
+    from datetime import datetime
     from typing import Annotated
-    from pydantic import AfterValidator, EmailStr, StringConstraints
+    from pydantic import AfterValidator, EmailStr, PlainSerializer, StringConstraints
+
+    def _serialize_datetime_ms(value: datetime) -> str:
+        """Serialize datetime with explicit milliseconds (.000Z format)."""
+        return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
+
+    # UTC datetime with consistent .000Z milliseconds format
+    UtcDatetime = Annotated[datetime, PlainSerializer(_serialize_datetime_ms)]
 
     def normalize_email(email: str) -> str:
         return email.lower().strip()
@@ -475,11 +483,16 @@ async def list_items(request: Request, response: Response) -> ItemList:
     ```
   - Usage in models:
     ```python
-    from app.models.types import NormalizedEmail, Phone
+    from app.models.types import NormalizedEmail, Phone, UtcDatetime
 
     class ProfileBase(BaseModel):
         email: NormalizedEmail = Field(..., description="Email (auto-lowercased)")
         phone_number: Phone = Field(..., description="Phone in E.164 format")
+
+    class Profile(BaseModel):
+        # ... other fields
+        created_at: UtcDatetime = Field(..., description="Creation timestamp", examples=["2025-01-15T10:30:00.000Z"])
+        updated_at: UtcDatetime = Field(..., description="Last update timestamp", examples=["2025-01-15T10:30:00.000Z"])
     ```
   - **When NOT to use shared types**: If validation is one-off or needs context-specific error messages, keep inline.
 

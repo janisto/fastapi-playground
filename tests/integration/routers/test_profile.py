@@ -29,13 +29,13 @@ class TestCreateProfile:
         """
         mock_profile_service.create_profile.return_value = make_profile()
 
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 201
         body = response.json()
         assert "id" in body
         assert "firstname" in body
-        assert response.headers.get("Location") == "/profile/"
+        assert response.headers.get("Location") == "/profile"
         mock_profile_service.create_profile.assert_awaited_once()
 
     def test_returns_schema_url(
@@ -49,7 +49,7 @@ class TestCreateProfile:
         """
         mock_profile_service.create_profile.return_value = make_profile()
 
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         body = response.json()
         assert "$schema" in body
@@ -66,7 +66,7 @@ class TestCreateProfile:
         """
         mock_profile_service.create_profile.return_value = make_profile()
 
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
@@ -83,7 +83,7 @@ class TestCreateProfile:
         """
         mock_profile_service.create_profile.side_effect = ProfileAlreadyExistsError()
 
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 409
         assert response.json()["title"] == "Profile already exists"
@@ -99,7 +99,7 @@ class TestCreateProfile:
         """
         mock_profile_service.create_profile.side_effect = RuntimeError("Database connection failed")
 
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 500
         assert response.json()["detail"] == "Failed to create profile"
@@ -112,7 +112,7 @@ class TestCreateProfile:
         """
         Verify unauthenticated request returns 401.
         """
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 401
 
@@ -127,7 +127,7 @@ class TestCreateProfile:
         """
         payload = make_profile_payload_dict(email="not-an-email")
 
-        response = client.post(f"{BASE_URL}/", json=payload)
+        response = client.post(BASE_URL, json=payload)
 
         assert response.status_code == 422
 
@@ -142,7 +142,7 @@ class TestCreateProfile:
         """
         payload = make_profile_payload_dict(omit=["firstname"])
 
-        response = client.post(f"{BASE_URL}/", json=payload)
+        response = client.post(BASE_URL, json=payload)
 
         assert response.status_code == 422
 
@@ -162,7 +162,7 @@ class TestCreateProfile:
         """
         payload = make_profile_payload_dict(omit=[missing_field])
 
-        response = client.post(f"{BASE_URL}/", json=payload)
+        response = client.post(BASE_URL, json=payload)
 
         assert response.status_code == 422
         body = response.json()
@@ -179,7 +179,7 @@ class TestCreateProfile:
         """
         payload = make_profile_payload_dict(terms=False)
 
-        response = client.post(f"{BASE_URL}/", json=payload)
+        response = client.post(BASE_URL, json=payload)
 
         assert response.status_code == 422
         body = response.json()
@@ -203,7 +203,7 @@ class TestGetProfile:
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         assert response.status_code == 200
         body = response.json()
@@ -222,7 +222,7 @@ class TestGetProfile:
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         body = response.json()
         assert "$schema" in body
@@ -239,7 +239,7 @@ class TestGetProfile:
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
@@ -256,7 +256,7 @@ class TestGetProfile:
         """
         mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         assert response.status_code == 404
         assert response.json()["title"] == "Profile not found"
@@ -272,7 +272,7 @@ class TestGetProfile:
         """
         mock_profile_service.get_profile.side_effect = RuntimeError("Database connection failed")
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         assert response.status_code == 500
         assert response.json()["detail"] == "Failed to retrieve profile"
@@ -285,7 +285,7 @@ class TestGetProfile:
         """
         Verify unauthenticated request returns 401.
         """
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         assert response.status_code == 401
 
@@ -306,7 +306,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
 
-        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"firstname": "Updated"})
 
         assert response.status_code == 200
         body = response.json()
@@ -324,7 +324,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
 
-        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"firstname": "Updated"})
 
         body = response.json()
         assert "$schema" in body
@@ -341,7 +341,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
 
-        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"firstname": "Updated"})
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
@@ -358,7 +358,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.side_effect = ProfileNotFoundError()
 
-        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"firstname": "Updated"})
 
         assert response.status_code == 404
         assert response.json()["title"] == "Profile not found"
@@ -374,7 +374,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.side_effect = RuntimeError("Database connection failed")
 
-        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"firstname": "Updated"})
 
         assert response.status_code == 500
         assert response.json()["detail"] == "Failed to update profile"
@@ -387,7 +387,7 @@ class TestUpdateProfile:
         """
         Verify unauthenticated request returns 401.
         """
-        response = client.patch(f"{BASE_URL}/", json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"firstname": "Updated"})
 
         assert response.status_code == 401
 
@@ -402,7 +402,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.return_value = make_profile(lastname="NewLast")
 
-        response = client.patch(f"{BASE_URL}/", json={"lastname": "NewLast"})
+        response = client.patch(BASE_URL, json={"lastname": "NewLast"})
 
         assert response.status_code == 200
 
@@ -417,7 +417,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.return_value = make_profile()
 
-        response = client.patch(f"{BASE_URL}/", json={})
+        response = client.patch(BASE_URL, json={})
 
         assert response.status_code == 200
 
@@ -438,7 +438,7 @@ class TestDeleteProfile:
         """
         mock_profile_service.delete_profile.return_value = None
 
-        response = client.delete(f"{BASE_URL}/")
+        response = client.delete(BASE_URL)
 
         assert response.status_code == 204
         assert response.content == b""
@@ -455,7 +455,7 @@ class TestDeleteProfile:
         """
         mock_profile_service.delete_profile.side_effect = ProfileNotFoundError()
 
-        response = client.delete(f"{BASE_URL}/")
+        response = client.delete(BASE_URL)
 
         assert response.status_code == 404
         assert response.json()["title"] == "Profile not found"
@@ -471,7 +471,7 @@ class TestDeleteProfile:
         """
         mock_profile_service.delete_profile.side_effect = RuntimeError("Database connection failed")
 
-        response = client.delete(f"{BASE_URL}/")
+        response = client.delete(BASE_URL)
 
         assert response.status_code == 500
         assert response.json()["detail"] == "Failed to delete profile"
@@ -484,7 +484,7 @@ class TestDeleteProfile:
         """
         Verify unauthenticated request returns 401.
         """
-        response = client.delete(f"{BASE_URL}/")
+        response = client.delete(BASE_URL)
 
         assert response.status_code == 401
 
@@ -510,7 +510,7 @@ class TestProfileResponseFormat:
         )
         mock_profile_service.get_profile.return_value = profile
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         body = response.json()
         assert body["firstname"] == "John"
@@ -528,7 +528,7 @@ class TestProfileResponseFormat:
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         body = response.json()
         assert "created_at" in body

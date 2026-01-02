@@ -11,42 +11,42 @@ class TestHelloGet:
 
     def test_returns_200(self, client: TestClient) -> None:
         """Verify GET /hello/ returns 200 OK."""
-        response = client.get("/hello/")
+        response = client.get("/hello")
 
         assert response.status_code == 200
 
     def test_returns_greeting_message(self, client: TestClient) -> None:
         """Verify GET /hello/ returns greeting message."""
-        response = client.get("/hello/")
+        response = client.get("/hello")
 
         body = response.json()
         assert body["message"] == "Hello, World!"
 
     def test_returns_schema_url(self, client: TestClient) -> None:
         """Verify GET /hello/ returns $schema URL."""
-        response = client.get("/hello/")
+        response = client.get("/hello")
 
         body = response.json()
         assert "$schema" in body
-        assert "schemas/HelloData.json" in body["$schema"]
+        assert "schemas/Greeting.json" in body["$schema"]
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """Verify GET /hello/ returns Link header with describedBy."""
-        response = client.get("/hello/")
+        response = client.get("/hello")
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/HelloData.json" in link
+        assert "/schemas/Greeting.json" in link
 
     def test_returns_json_by_default(self, client: TestClient) -> None:
         """Verify GET /hello/ returns JSON content type."""
-        response = client.get("/hello/")
+        response = client.get("/hello")
 
         assert "application/json" in response.headers.get("content-type", "")
 
     def test_accepts_cbor_negotiation(self, client: TestClient) -> None:
         """Verify GET /hello/ returns CBOR when requested."""
-        response = client.get("/hello/", headers={"Accept": "application/cbor"})
+        response = client.get("/hello", headers={"Accept": "application/cbor"})
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/cbor"
@@ -59,49 +59,55 @@ class TestHelloPost:
 
     def test_returns_201_created(self, client: TestClient) -> None:
         """Verify POST /hello/ returns 201 Created."""
-        response = client.post("/hello/", json={"name": "Alice"})
+        response = client.post("/hello", json={"name": "Alice"})
 
         assert response.status_code == 201
 
-    def test_returns_location_header(self, client: TestClient) -> None:
-        """Verify POST /hello/ includes Location header."""
-        response = client.post("/hello/", json={"name": "Alice"})
+    def test_no_location_header_for_transient_resource(self, client: TestClient) -> None:
+        """
+        Verify POST /hello/ omits Location header for transient greeting.
 
-        assert response.headers.get("location") == "/hello/"
+        Per RFC 9110, Location header should only point to a retrievable resource.
+        Since POST /hello creates a transient greeting (not persisted), no Location
+        header is appropriate.
+        """
+        response = client.post("/hello", json={"name": "Alice"})
+
+        assert response.headers.get("location") is None
 
     def test_returns_schema_url(self, client: TestClient) -> None:
         """Verify POST /hello/ returns $schema URL."""
-        response = client.post("/hello/", json={"name": "Alice"})
+        response = client.post("/hello", json={"name": "Alice"})
 
         body = response.json()
         assert "$schema" in body
-        assert "schemas/HelloData.json" in body["$schema"]
+        assert "schemas/Greeting.json" in body["$schema"]
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """Verify POST /hello/ returns Link header with describedBy."""
-        response = client.post("/hello/", json={"name": "Alice"})
+        response = client.post("/hello", json={"name": "Alice"})
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/HelloData.json" in link
+        assert "/schemas/Greeting.json" in link
 
     def test_returns_personalized_greeting(self, client: TestClient) -> None:
         """Verify POST /hello/ returns personalized greeting."""
-        response = client.post("/hello/", json={"name": "Alice"})
+        response = client.post("/hello", json={"name": "Alice"})
 
         body = response.json()
         assert body["message"] == "Hello, Alice!"
 
     def test_supports_language_parameter(self, client: TestClient) -> None:
         """Verify POST /hello/ supports language parameter."""
-        response = client.post("/hello/", json={"name": "Alice", "language": "fi"})
+        response = client.post("/hello", json={"name": "Alice", "language": "fi"})
 
         body = response.json()
         assert body["message"] == "Hei, Alice!"
 
     def test_invalid_language_returns_422(self, client: TestClient) -> None:
         """Verify invalid language code returns validation error."""
-        response = client.post("/hello/", json={"name": "Bob", "language": "xx"})
+        response = client.post("/hello", json={"name": "Bob", "language": "xx"})
 
         assert response.status_code == 422
         body = response.json()
@@ -114,7 +120,7 @@ class TestHelloPost:
         payload = cbor2.dumps({"name": "Alice"})
 
         response = client.post(
-            "/hello/",
+            "/hello",
             content=payload,
             headers={"Content-Type": "application/cbor"},
         )
@@ -128,7 +134,7 @@ class TestHelloPost:
         payload = cbor2.dumps({"name": "Alice"})
 
         response = client.post(
-            "/hello/",
+            "/hello",
             content=payload,
             headers={
                 "Content-Type": "application/cbor",
@@ -152,7 +158,7 @@ class TestHelloValidation:
 
     def test_empty_name_returns_422(self, client: TestClient) -> None:
         """Verify empty name returns 422 validation error."""
-        response = client.post("/hello/", json={"name": ""})
+        response = client.post("/hello", json={"name": ""})
 
         assert response.status_code == 422
         body = response.json()
@@ -163,7 +169,7 @@ class TestHelloValidation:
 
     def test_missing_name_returns_422(self, client: TestClient) -> None:
         """Verify missing name returns 422 validation error."""
-        response = client.post("/hello/", json={})
+        response = client.post("/hello", json={})
 
         assert response.status_code == 422
         body = response.json()
@@ -173,7 +179,7 @@ class TestHelloValidation:
 
     def test_extra_field_returns_422(self, client: TestClient) -> None:
         """Verify extra field returns 422 (extra=forbid)."""
-        response = client.post("/hello/", json={"name": "Alice", "unknown": "field"})
+        response = client.post("/hello", json={"name": "Alice", "unknown": "field"})
 
         assert response.status_code == 422
         body = response.json()
@@ -186,7 +192,7 @@ class TestHelloValidation:
 
         Per RFC 9457, 'type' is omitted when about:blank (the default).
         """
-        response = client.post("/hello/", json={"name": ""})
+        response = client.post("/hello", json={"name": ""})
 
         body = response.json()
         assert "type" not in body  # RFC 9457: type omitted when about:blank

@@ -18,6 +18,7 @@ from pydantic.alias_generators import to_camel
 
 from app.core.cbor import CBORRoute
 from app.models.error import ProblemResponse, ValidationProblemResponse
+from app.models.types import UtcDatetime
 from app.pagination import CursorParam, LimitParam, paginate
 
 VALID_CATEGORIES = Literal["electronics", "tools", "accessories", "robotics", "power", "components"]
@@ -37,7 +38,7 @@ class Item(BaseModel):
         alias="$schema",
         serialization_alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["/schemas/ItemData.json"],
+        examples=["/schemas/Item.json"],
         exclude_if=lambda v: v is None,
     )
     id: str = Field(..., description="Unique item identifier", examples=["item-001"])
@@ -45,7 +46,7 @@ class Item(BaseModel):
     category: VALID_CATEGORIES = Field(..., description="Item category", examples=["electronics"])
     price: float = Field(..., ge=0, description="Item price in USD", examples=[29.99])
     in_stock: bool = Field(..., description="Availability status", examples=[True])
-    created_at: datetime = Field(..., description="Creation timestamp", examples=["2024-01-15T10:30:00Z"])
+    created_at: UtcDatetime = Field(..., description="Creation timestamp", examples=["2024-01-15T10:30:00.000Z"])
     description: str = Field(
         ..., description="Detailed description of the item", examples=["A versatile electronic widget for everyday use"]
     )
@@ -60,7 +61,7 @@ class ItemList(BaseModel):
         default=None,
         alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["/schemas/ItemsData.json"],
+        examples=["/schemas/ItemList.json"],
     )
     items: list[Item] = Field(..., description="List of items in current page")
     total: int = Field(..., ge=0, description="Total number of items matching filter", examples=[30])
@@ -353,7 +354,7 @@ router = APIRouter(
 
 
 @router.get(
-    "/",
+    "",
     summary="List items",
     description="Returns a paginated list of items with optional category filter.",
     operation_id="items_list",
@@ -405,11 +406,11 @@ async def list_items(
     links: list[str] = []
     if result.link_header:
         links.append(result.link_header)
-    links.append('</schemas/ItemsData.json>; rel="describedBy"')
+    links.append('</schemas/ItemList.json>; rel="describedBy"')
     response.headers["Link"] = ", ".join(links)
 
     return ItemList(
-        schema_url=str(request.base_url) + "schemas/ItemsData.json",
+        schema_url=str(request.base_url) + "schemas/ItemList.json",
         items=result.items,
         total=result.total,
     )

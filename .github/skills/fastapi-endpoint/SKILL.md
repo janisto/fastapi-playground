@@ -248,7 +248,7 @@ app.include_router(resource.router)
 
 ## URL Conventions
 
-- Always use trailing slashes (e.g., `/resource/` not `/resource`)
+- Always use paths without trailing slashes (e.g., `/resource` not `/resource/`)
 - Use plural nouns for collection endpoints
 - Keep routes RESTful: POST for create, GET for read, PATCH for update, DELETE for delete
 

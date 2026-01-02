@@ -109,7 +109,7 @@ class TestRouterConfiguration:
         from app.main import app
 
         routes = [route.path for route in app.routes]
-        assert "/profile/" in routes or "/profile" in routes
+        assert "/profile" in routes
 
     def test_health_router_included(self) -> None:
         """
@@ -118,7 +118,7 @@ class TestRouterConfiguration:
         from app.main import app
 
         routes = [route.path for route in app.routes]
-        assert "/health/" in routes or "/health" in routes
+        assert "/health" in routes
 
 
 class TestRootEndpoint:

@@ -37,7 +37,7 @@ class Greeting(BaseModel):
         default=None,
         alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["/schemas/HelloData.json"],
+        examples=["/schemas/Greeting.json"],
     )
     message: str = Field(..., description="Greeting message", examples=["Hello, World!"])
 
@@ -73,7 +73,7 @@ router = APIRouter(
 
 
 @router.get(
-    "/",
+    "",
     summary="Get greeting",
     description="Returns a simple greeting message.",
     operation_id="hello_get",
@@ -88,15 +88,15 @@ async def get_greeting(request: Request, response: Response) -> Greeting:
     Demonstrates a basic GET endpoint with no parameters that returns
     a JSON (or CBOR) response.
     """
-    response.headers["Link"] = '</schemas/HelloData.json>; rel="describedBy"'
+    response.headers["Link"] = '</schemas/Greeting.json>; rel="describedBy"'
     return Greeting(
-        schema_url=str(request.base_url) + "schemas/HelloData.json",
+        schema_url=str(request.base_url) + "schemas/Greeting.json",
         message="Hello, World!",
     )
 
 
 @router.post(
-    "/",
+    "",
     status_code=status.HTTP_201_CREATED,
     summary="Create personalized greeting",
     description="Creates a personalized greeting for the given name.",
@@ -113,15 +113,16 @@ async def create_greeting(http_request: Request, greeting_request: GreetingReque
     Demonstrates POST endpoint with:
     - Request body validation
     - 201 Created status code
-    - Location header in response
     - Validation errors (422) for invalid input
+
+    Note: No Location header since this creates a transient greeting,
+    not a persistent resource retrievable at a URI.
     """
     greeting_word = GREETINGS[greeting_request.language]
     message = f"{greeting_word}, {greeting_request.name}!"
 
-    response.headers["Location"] = "/hello/"
-    response.headers["Link"] = '</schemas/HelloData.json>; rel="describedBy"'
+    response.headers["Link"] = '</schemas/Greeting.json>; rel="describedBy"'
     return Greeting(
-        schema_url=str(http_request.base_url) + "schemas/HelloData.json",
+        schema_url=str(http_request.base_url) + "schemas/Greeting.json",
         message=message,
     )

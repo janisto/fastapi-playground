@@ -33,12 +33,12 @@ class TestHealthResponse:
         Verify health response with schema serializes correctly.
         """
         health = HealthResponse(
-            schema_url="http://localhost/schemas/HealthData.json",
+            schema_url="http://localhost/schemas/HealthResponse.json",
             message="healthy",
         )
         data = health.model_dump()
         assert data == {
-            "$schema": "http://localhost/schemas/HealthData.json",
+            "$schema": "http://localhost/schemas/HealthResponse.json",
             "message": "healthy",
         }
 

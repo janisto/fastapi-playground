@@ -273,14 +273,14 @@ def test_update_resource_with_invalid_email_returns_422() -> None: ...
 
 ## URL Conventions
 
-Always use trailing slashes in tests to match routes:
+Always use paths without trailing slashes to match routes:
 
 ```python
 # Correct
-response = client.get("/resource/")
-
-# Wrong - may cause 307 redirect
 response = client.get("/resource")
+
+# Wrong - returns 404 (redirect_slashes=False)
+response = client.get("/resource/")
 ```
 
 ## HTTP Mocking with pytest-httpx

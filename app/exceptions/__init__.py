@@ -12,6 +12,7 @@ from app.exceptions.base import (
     UnprocessableProblem,
 )
 from app.exceptions.profile import ProfileAlreadyExistsError, ProfileNotFoundError
+from app.exceptions.schema import SchemaNotFoundError
 
 __all__ = [
     "BadRequestProblem",
@@ -20,6 +21,7 @@ __all__ = [
     "NotFoundProblem",
     "ProfileAlreadyExistsError",
     "ProfileNotFoundError",
+    "SchemaNotFoundError",
     "ServerProblem",
     "UnauthorisedProblem",
     "UnprocessableProblem",

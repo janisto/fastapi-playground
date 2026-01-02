@@ -2,10 +2,12 @@
 Unit tests for shared type aliases.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from app.models.types import CountryCode, LanguageCode, NormalizedEmail, Phone
+from app.models.types import CountryCode, LanguageCode, NormalizedEmail, Phone, UtcDatetime
 
 
 class TestNormalizedEmail:
@@ -178,3 +180,65 @@ class TestCountryCode:
 
         with pytest.raises(ValidationError):
             TestModel(country=invalid_code)
+
+
+class TestUtcDatetime:
+    """
+    Tests for UtcDatetime type alias with .000Z milliseconds format.
+    """
+
+    def test_serializes_with_milliseconds(self) -> None:
+        """
+        Verify datetime is serialized with explicit .000Z milliseconds format.
+        """
+
+        class TestModel(BaseModel):
+            timestamp: UtcDatetime
+
+        dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        result = TestModel(timestamp=dt)
+        assert result.model_dump()["timestamp"] == "2025-01-15T10:30:00.000Z"
+
+    def test_serializes_with_actual_milliseconds(self) -> None:
+        """
+        Verify datetime with microseconds is serialized with millisecond precision.
+        """
+
+        class TestModel(BaseModel):
+            timestamp: UtcDatetime
+
+        dt = datetime(2025, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
+        result = TestModel(timestamp=dt)
+        assert result.model_dump()["timestamp"] == "2025-01-15T10:30:00.123Z"
+
+    def test_json_serialization(self) -> None:
+        """
+        Verify JSON output uses .000Z format.
+        """
+
+        class TestModel(BaseModel):
+            timestamp: UtcDatetime
+
+        dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
+        result = TestModel(timestamp=dt)
+        assert '"timestamp":"2025-01-15T10:30:00.000Z"' in result.model_dump_json()
+
+    def test_preserves_full_precision(self) -> None:
+        """
+        Verify milliseconds from various microsecond values are calculated correctly.
+        """
+
+        class TestModel(BaseModel):
+            timestamp: UtcDatetime
+
+        test_cases = [
+            (0, "000"),
+            (1000, "001"),
+            (500000, "500"),
+            (999000, "999"),
+        ]
+        for microseconds, expected_ms in test_cases:
+            dt = datetime(2025, 1, 15, 10, 30, 0, microseconds, tzinfo=UTC)
+            result = TestModel(timestamp=dt)
+            serialized = result.model_dump()["timestamp"]
+            assert serialized.endswith(f".{expected_ms}Z"), f"Expected .{expected_ms}Z, got {serialized}"

@@ -2,9 +2,24 @@
 Shared Pydantic type aliases for validation and normalization.
 """
 
+from datetime import datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, EmailStr, StringConstraints
+from pydantic import AfterValidator, EmailStr, PlainSerializer, StringConstraints
+
+
+def _serialize_datetime_ms(value: datetime) -> str:
+    """
+    Serialize datetime with explicit milliseconds (.000Z format).
+
+    Both `2025-01-15T10:30:00Z` and `2025-01-15T10:30:00.000Z` are valid ISO 8601,
+    but this ensures consistent millisecond precision across all API responses.
+    """
+    return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
+
+
+# UTC datetime with consistent .000Z milliseconds format
+UtcDatetime = Annotated[datetime, PlainSerializer(_serialize_datetime_ms)]
 
 
 def normalize_email(email: str) -> str:

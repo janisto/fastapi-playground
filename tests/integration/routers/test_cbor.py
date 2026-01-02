@@ -29,7 +29,7 @@ class TestCBORRequest:
         cbor_body = cbor2.dumps(payload)
 
         response = client.post(
-            f"{BASE_URL}/",
+            BASE_URL,
             content=cbor_body,
             headers={"Content-Type": "application/cbor"},
         )
@@ -52,7 +52,7 @@ class TestCBORRequest:
         cbor_body = cbor2.dumps(payload)
 
         response = client.post(
-            f"{BASE_URL}/",
+            BASE_URL,
             content=cbor_body,
             headers={
                 "Content-Type": "application/cbor",
@@ -76,7 +76,7 @@ class TestCBORRequest:
         Verify unsupported Content-Type returns 415 Unsupported Media Type.
         """
         response = client.post(
-            f"{BASE_URL}/",
+            BASE_URL,
             content=b"some data",
             headers={"Content-Type": "text/plain"},
         )
@@ -95,7 +95,7 @@ class TestCBORRequest:
         Verify invalid CBOR data returns 400 Bad Request.
         """
         response = client.post(
-            f"{BASE_URL}/",
+            BASE_URL,
             content=b"\xff\xff\xff",
             headers={"Content-Type": "application/cbor"},
         )
@@ -120,7 +120,7 @@ class TestCBORResponse:
         mock_profile_service.get_profile.return_value = make_profile()
 
         response = client.get(
-            f"{BASE_URL}/",
+            BASE_URL,
             headers={"Accept": "application/cbor"},
         )
 
@@ -142,7 +142,7 @@ class TestCBORResponse:
         mock_profile_service.get_profile.return_value = make_profile()
 
         response = client.get(
-            f"{BASE_URL}/",
+            BASE_URL,
             headers={"Accept": "application/json"},
         )
 
@@ -163,7 +163,7 @@ class TestCBORResponse:
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
 
         assert response.status_code == 200
         assert "application/json" in response.headers["content-type"]
@@ -182,7 +182,7 @@ class TestCBORResponse:
         mock_profile_service.delete_profile.return_value = None
 
         response = client.delete(
-            f"{BASE_URL}/",
+            BASE_URL,
             headers={"Accept": "application/cbor"},
         )
 
@@ -207,7 +207,7 @@ class TestCBORErrorResponse:
         mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
 
         response = client.get(
-            f"{BASE_URL}/",
+            BASE_URL,
             headers={"Accept": "application/cbor"},
         )
 
@@ -232,7 +232,7 @@ class TestCBORErrorResponse:
         cbor_body = cbor2.dumps(payload)
 
         response = client.post(
-            f"{BASE_URL}/",
+            BASE_URL,
             content=cbor_body,
             headers={
                 "Content-Type": "application/cbor",
