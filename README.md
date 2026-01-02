@@ -88,9 +88,9 @@ For requests, use `Content-Type: application/cbor` to send CBOR-encoded bodies.
 
 ### Timestamps
 
-All timestamps use ISO 8601 format with UTC timezone (RFC 3339):
+All timestamps use ISO 8601 format with UTC timezone and explicit milliseconds:
 ```
-2025-01-15T10:30:00Z
+2025-01-15T10:30:00.000Z
 ```
 
 ### Pagination
@@ -198,8 +198,8 @@ Profile endpoints return the resource directly (no wrapper envelope):
   "phone_number": "+358401234567", // E.164 format
   "marketing": false,           // Boolean opt-in
   "terms": true,                // Must be true when creating
-  "created_at": "2025-01-15T10:30:00Z",
-  "updated_at": "2025-01-15T10:30:00Z"
+  "created_at": "2025-01-15T10:30:00.000Z",
+  "updated_at": "2025-01-15T10:30:00.000Z"
 }
 ```
 
@@ -688,7 +688,7 @@ Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md).
 | Firestore | Async client required | Use `get_async_firestore_client()` for async ops |
 | Pydantic v2 | API changes from v1 | Use `model_dump()` not `.dict()`, `model_validate()` not `.parse_obj()` |
 | Pydantic aliases | `model_dump()` ignores aliases by default | Use `serialize_by_alias=True` in `ConfigDict` for models with `alias=` fields |
-| Trailing slashes | FastAPI redirects without | Always use paths with trailing slash (e.g., `/profile/`) |
+| Trailing slashes | `redirect_slashes=False` | Always use paths without trailing slash (e.g., `/profile`) |
 
 ## For AI Assistants
 

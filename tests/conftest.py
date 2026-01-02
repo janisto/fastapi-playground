@@ -45,7 +45,7 @@ def with_fake_user(fake_user: FirebaseUser) -> Generator[None]:
 
     Usage:
         def test_x(client, with_fake_user):
-            res = client.get("/profile/")
+            res = client.get("/profile")
             ...
     """
     with override_current_user(lambda: fake_user):

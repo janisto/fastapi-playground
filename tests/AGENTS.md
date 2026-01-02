@@ -135,7 +135,7 @@ Conventions
 - HTTP client and mocking: use `httpx` in code; stub outbound HTTP with `pytest-httpx` via the `httpx_mock` fixture. Do not hit the real network.
 - **Prefer `pytest-mock` (`mocker` fixture) over `monkeypatch`** when mocking. Use `mocker.patch()` for patching with `MagicMock`/`AsyncMock` features (call assertions, return values, side effects). Reserve `monkeypatch` for simpler cases: environment variables (`setenv`), `sys.path` manipulation, or `chdir`. Choose the right tool for the task.
 - Override dependencies via `app.dependency_overrides` (e.g., auth/user, database/session). Reset overrides after each test to avoid leakage.
-- **URL formatting**: Always use paths with a trailing slash (e.g., `"/profile/"` not `"/profile"`). This ensures consistency and avoids 307 redirects.
+- **URL formatting**: Always use paths without trailing slashes (e.g., `"/profile"` not `"/profile/"`). The app has `redirect_slashes=False`, so requests must match the exact path.
 - Aim ≥90% coverage overall; 100% on critical business logic (auth, security, error handling).
 - Validate API contracts: assert status codes, JSON shapes, and headers.
 - Use realistic but synthetic fixtures. Never log or include secrets/PII in test data.

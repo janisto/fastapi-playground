@@ -25,7 +25,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.types import NormalizedEmail, Phone
+from app.models.types import NormalizedEmail, Phone, UtcDatetime
 
 # Firestore collection name
 RESOURCE_COLLECTION = "resources"
@@ -134,15 +134,15 @@ class Resource(BaseModel):
         description="Whether the resource is active",
         examples=[True],
     )
-    created_at: datetime = Field(
+    created_at: UtcDatetime = Field(
         ...,
         description="Creation timestamp",
-        examples=["2025-01-15T10:30:00Z"],
+        examples=["2025-01-15T10:30:00.000Z"],
     )
-    updated_at: datetime = Field(
+    updated_at: UtcDatetime = Field(
         ...,
         description="Last update timestamp",
-        examples=["2025-01-15T10:30:00Z"],
+        examples=["2025-01-15T10:30:00.000Z"],
     )
 ```
 
@@ -177,7 +177,7 @@ Example formats by type:
 | `int` | `examples=[123]` |
 | `float` | `examples=[19.99]` |
 | `bool` | `examples=[True]` |
-| `datetime` | `examples=["2025-01-15T10:30:00Z"]` |
+| `UtcDatetime` | `examples=["2025-01-15T10:30:00.000Z"]` |
 | `list[str]` | `examples=[["item1", "item2"]]` |
 | `list[Model]` | **Omit examples** (nested schema auto-documents via `$ref`) |
 | `EmailStr` | `examples=["user@example.com"]` |
@@ -186,6 +186,7 @@ Example formats by type:
 ## Shared Type Aliases
 
 Use predefined types from `app/models/types.py`:
+- `UtcDatetime` for timestamps with consistent `.000Z` milliseconds format
 - `NormalizedEmail` for auto-lowercased emails
 - `Phone` for E.164 phone numbers
 - `LanguageCode` for ISO 639-1 codes

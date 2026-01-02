@@ -27,7 +27,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/",
+    "",
     status_code=status.HTTP_201_CREATED,
     summary="Create user profile",
     description="Create a new profile for the authenticated user.",
@@ -53,7 +53,7 @@ async def create_profile(
     """
     try:
         profile = await service.create_profile(current_user.uid, profile_data)
-        response.headers["Location"] = "/profile/"
+        response.headers["Location"] = "/profile"
         response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
         return Profile(
             schema_url=str(request.base_url) + "schemas/ProfileData.json",
@@ -77,7 +77,7 @@ async def create_profile(
 
 
 @router.get(
-    "/",
+    "",
     summary="Get user profile",
     description="Get the profile of the authenticated user.",
     operation_id="profile_get",
@@ -122,7 +122,7 @@ async def get_profile(
 
 
 @router.patch(
-    "/",
+    "",
     response_model=Profile,
     response_model_exclude_unset=True,
     summary="Update user profile",
@@ -172,7 +172,7 @@ async def update_profile(
 
 
 @router.delete(
-    "/",
+    "",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete user profile",
     description="Delete the profile of the authenticated user.",

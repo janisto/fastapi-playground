@@ -17,7 +17,7 @@ router = APIRouter(
 
 
 @router.get(
-    "/",
+    "",
     response_model=HealthResponse,
     summary="Service health",
     description="Lightweight health probe for liveness checks.",
@@ -33,8 +33,8 @@ async def health_check(request: Request, response: Response) -> HealthResponse:
     Returns a simple status response without database or external service checks.
     Suitable for Kubernetes liveness probes and load balancer health checks.
     """
-    response.headers["Link"] = '</schemas/HealthData.json>; rel="describedBy"'
+    response.headers["Link"] = '</schemas/HealthResponse.json>; rel="describedBy"'
     return HealthResponse(
-        schema_url=str(request.base_url) + "schemas/HealthData.json",
+        schema_url=str(request.base_url) + "schemas/HealthResponse.json",
         message="healthy",
     )

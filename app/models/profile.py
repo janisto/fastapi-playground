@@ -9,11 +9,9 @@ configuration surface and enforce a single collection naming convention across e
 Change here if a rename is ever required; update related tests accordingly.
 """
 
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.types import NormalizedEmail, Phone
+from app.models.types import NormalizedEmail, Phone, UtcDatetime
 
 # Firestore collection name for profiles
 PROFILE_COLLECTION = "profiles"
@@ -178,13 +176,13 @@ class Profile(BaseModel):
         description="Terms acceptance",
         examples=[True],
     )
-    created_at: datetime = Field(
+    created_at: UtcDatetime = Field(
         ...,
         description="Creation timestamp",
-        examples=["2025-01-15T10:30:00Z"],
+        examples=["2025-01-15T10:30:00.000Z"],
     )
-    updated_at: datetime = Field(
+    updated_at: UtcDatetime = Field(
         ...,
         description="Last update timestamp",
-        examples=["2025-01-15T10:30:00Z"],
+        examples=["2025-01-15T10:30:00.000Z"],
     )

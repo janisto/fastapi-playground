@@ -18,7 +18,8 @@ from app.middleware import (
     SecurityHeadersMiddleware,
     setup_logging,
 )
-from app.routers import health, hello, items, profile
+from app.routers import health, hello, items, profile, schemas
+from app.routers.schemas import populate_schema_cache
 
 
 @asynccontextmanager
@@ -43,6 +44,7 @@ app = FastAPI(
     version="0.1.0",
     docs_url="/api-docs",
     redoc_url="/api-redoc",
+    redirect_slashes=False,
     lifespan=lifespan,
 )
 
@@ -51,6 +53,10 @@ app.include_router(profile.router)
 app.include_router(health.router)
 app.include_router(hello.router)
 app.include_router(items.router)
+app.include_router(schemas.router)
+
+# Populate schema cache from OpenAPI spec (must be after all routers are registered)
+populate_schema_cache(app.openapi())
 
 # Register RFC 9457 Problem Details exception handler
 add_exception_handler(app, eh)

@@ -26,7 +26,7 @@ class TestRequestIdPropagation:
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
-        response = client.get("/profile/")
+        response = client.get("/profile")
 
         assert response.status_code == 200
         assert "X-Request-ID" in response.headers
@@ -46,7 +46,7 @@ class TestRequestIdPropagation:
         mock_profile_service.get_profile.return_value = make_profile()
 
         response = client.get(
-            "/profile/",
+            "/profile",
             headers={"X-Request-ID": "my-custom-request-id"},
         )
 
@@ -70,7 +70,7 @@ class TestRequestIdInErrorResponses:
         """
         mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
 
-        response = client.get("/profile/")
+        response = client.get("/profile")
 
         assert response.status_code == 404
         assert "X-Request-ID" in response.headers
@@ -89,7 +89,7 @@ class TestRequestIdInErrorResponses:
         mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
 
         response = client.get(
-            "/profile/",
+            "/profile",
             headers={"X-Request-ID": "error-test-request-id"},
         )
 
@@ -106,7 +106,7 @@ class TestRequestIdInErrorResponses:
         Verify X-Request-ID is returned in 422 validation error response.
         """
         response = client.post(
-            "/profile/",
+            "/profile",
             json={},
             headers={"X-Request-ID": "validation-error-test-id"},
         )
@@ -123,7 +123,7 @@ class TestRequestIdInErrorResponses:
         Verify X-Request-ID is returned in 401 unauthorized response.
         """
         response = client.get(
-            "/profile/",
+            "/profile",
             headers={"X-Request-ID": "unauthorized-test-id"},
         )
 
