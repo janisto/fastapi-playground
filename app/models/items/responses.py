@@ -1,4 +1,6 @@
-"""Items response models."""
+"""
+Items response models.
+"""
 
 from typing import Literal
 
@@ -11,7 +13,9 @@ VALID_CATEGORIES = Literal["electronics", "tools", "accessories", "robotics", "p
 
 
 class Item(BaseModel):
-    """An item in the inventory."""
+    """
+    An item in the inventory.
+    """
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -39,7 +43,9 @@ class Item(BaseModel):
 
 
 class ItemList(BaseModel):
-    """Paginated list of items."""
+    """
+    Paginated list of items.
+    """
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 

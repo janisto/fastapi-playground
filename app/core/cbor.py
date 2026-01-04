@@ -40,7 +40,9 @@ def normalize_media_type(media_type: str) -> str:
 
 
 def _parse_qvalue(params: list[str]) -> float:
-    """Parse quality value from media type parameters. Returns 1.0 if not specified."""
+    """
+    Parse quality value from media type parameters. Returns 1.0 if not specified.
+    """
     for raw_param in params:
         param = raw_param.strip()
         if param.lower().startswith("q="):
@@ -52,7 +54,9 @@ def _parse_qvalue(params: list[str]) -> float:
 
 
 def _matches_media_range(range_type: str, target: str, target_parts: list[str], *, explicit_only: bool) -> bool:
-    """Check if a media range matches the target media type."""
+    """
+    Check if a media range matches the target media type.
+    """
     # Exact match
     if range_type == target:
         return True
@@ -137,7 +141,9 @@ def content_type_is_allowed(content_type: str, allowed: frozenset[str]) -> bool:
 
 
 class CBORDecodeError(Exception):
-    """Raised when CBOR decoding fails."""
+    """
+    Raised when CBOR decoding fails.
+    """
 
     def __init__(self, detail: str = "Invalid CBOR data") -> None:
         self.detail = detail
@@ -157,13 +163,17 @@ class CBORDecodeHTTPException(HTTPException):
 
 
 class CBORDecodeProblem(BadRequestProblem):
-    """Returned when CBOR decoding fails."""
+    """
+    Returned when CBOR decoding fails.
+    """
 
     title = "Invalid CBOR"
 
 
 class UnsupportedMediaTypeProblem(StatusProblem):
-    """Returned when Content-Type is not supported."""
+    """
+    Returned when Content-Type is not supported.
+    """
 
     title = "Unsupported Media Type"
     status = 415
@@ -227,7 +237,9 @@ class CBORRequest(StarletteRequest):
         return self._body
 
     def _update_content_type_to_json(self) -> None:
-        """Update Content-Type header in scope to application/json."""
+        """
+        Update Content-Type header in scope to application/json.
+        """
         # Rebuild headers without original content-type, then add json content-type
         new_headers = [(key, value) for key, value in self.scope["headers"] if key.lower() != b"content-type"]
         new_headers.append((b"content-type", b"application/json"))
@@ -301,12 +313,16 @@ class CBORRoute(APIRoute):
 
 
 class CBORResponse(Response):
-    """Response with CBOR serialization."""
+    """
+    Response with CBOR serialization.
+    """
 
     media_type = CBOR_MEDIA_TYPE
 
     def render(self, content: object) -> bytes:
-        """Serialize content as CBOR with datetime as epoch timestamps."""
+        """
+        Serialize content as CBOR with datetime as epoch timestamps.
+        """
         return cbor2.dumps(content, datetime_as_timestamp=True, timezone=UTC)
 
 

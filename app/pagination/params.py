@@ -1,4 +1,6 @@
-"""Shared pagination parameter types."""
+"""
+Shared pagination parameter types.
+"""
 
 from typing import Annotated
 

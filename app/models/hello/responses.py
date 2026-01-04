@@ -1,10 +1,14 @@
-"""Hello response models."""
+"""
+Hello response models.
+"""
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class Greeting(BaseModel):
-    """Response model for greeting endpoint."""
+    """
+    Response model for greeting endpoint.
+    """
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 

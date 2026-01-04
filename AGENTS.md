@@ -37,6 +37,18 @@ Keep output and code/doc comments minimal and purposeful.
 - Avoid speculative TODOs; only leave a TODO if it is immediately actionable, clearly scoped, and required. Prefer creating a tracked issue instead.
 - Do not insert review-style remarks ("nit:", "consider:") inside committed files.
 - Keep examples free of progress chatter—only the example code and essential annotations.
+- **Docstrings must be multi-line**: Always use multi-line format for all docstrings, even single-sentence ones. The opening `"""` should be on its own line:
+  ```python
+  # Correct
+  def example() -> None:
+      """
+      Brief description of the function.
+      """
+
+  # Wrong
+  def example() -> None:
+      """Brief description of the function."""
+  ```
 
 Violations should be removed before a PR is marked ready. Default to silence unless a comment adds enduring value.
 

@@ -1,4 +1,6 @@
-"""Mock data for items demonstration."""
+"""
+Mock data for items demonstration.
+"""
 
 from datetime import UTC, datetime
 

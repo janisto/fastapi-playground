@@ -1,4 +1,6 @@
-"""Health domain models."""
+"""
+Health domain models.
+"""
 
 from app.models.health.responses import HealthResponse
 

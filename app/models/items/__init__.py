@@ -1,4 +1,6 @@
-"""Items domain models."""
+"""
+Items domain models.
+"""
 
 from app.models.items.data import MOCK_ITEMS
 from app.models.items.responses import VALID_CATEGORIES, Item, ItemList

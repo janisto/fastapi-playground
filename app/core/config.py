@@ -90,7 +90,9 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins_field(cls, v: str | list[str]) -> list[str]:
-        """Parse CORS origins from JSON array or comma-separated string."""
+        """
+        Parse CORS origins from JSON array or comma-separated string.
+        """
         return parse_cors_origins(v)
 
     model_config = SettingsConfigDict(

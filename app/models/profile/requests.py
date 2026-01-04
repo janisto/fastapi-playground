@@ -1,4 +1,6 @@
-"""Profile request models."""
+"""
+Profile request models.
+"""
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -58,7 +60,9 @@ class ProfileCreate(ProfileBase):
     @field_validator("terms", mode="after")
     @classmethod
     def terms_must_be_accepted(cls, v: bool) -> bool:
-        """Enforce terms acceptance on profile creation."""
+        """
+        Enforce terms acceptance on profile creation.
+        """
         if not v:
             raise ValueError("terms must be accepted")
         return v

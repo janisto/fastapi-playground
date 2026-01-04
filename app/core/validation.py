@@ -48,7 +48,9 @@ def loc_to_dot_notation(loc: Sequence[str | int]) -> str:
 
 
 def is_sensitive_field(loc: Sequence[str | int]) -> bool:
-    """Check if any segment of the location path is a sensitive field."""
+    """
+    Check if any segment of the location path is a sensitive field.
+    """
     return any(isinstance(segment, str) and segment.lower() in SENSITIVE_FIELD_NAMES for segment in loc)
 
 

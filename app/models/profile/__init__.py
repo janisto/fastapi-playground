@@ -1,4 +1,6 @@
-"""Profile domain models."""
+"""
+Profile domain models.
+"""
 
 from app.models.profile.requests import ProfileBase, ProfileCreate, ProfileUpdate
 from app.models.profile.responses import PROFILE_COLLECTION, Profile

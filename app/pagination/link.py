@@ -1,4 +1,6 @@
-"""RFC 8288 Link header builder."""
+"""
+RFC 8288 Link header builder.
+"""
 
 from urllib.parse import urlencode
 

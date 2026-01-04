@@ -1,4 +1,6 @@
-"""API routers with versioning."""
+"""
+API routers with versioning.
+"""
 
 from fastapi import APIRouter
 

@@ -1,4 +1,6 @@
-"""Hello request models."""
+"""
+Hello request models.
+"""
 
 from typing import Literal
 
@@ -17,7 +19,9 @@ GREETINGS: dict[SupportedLanguage, str] = {
 
 
 class GreetingRequest(BaseModel):
-    """Request model for creating a personalized greeting."""
+    """
+    Request model for creating a personalized greeting.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
