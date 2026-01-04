@@ -36,5 +36,5 @@ async def health_check(request: Request, response: Response) -> HealthResponse:
     response.headers["Link"] = '</schemas/HealthResponse.json>; rel="describedBy"'
     return HealthResponse(
         schema_url=str(request.base_url) + "schemas/HealthResponse.json",
-        message="healthy",
+        status="healthy",
     )

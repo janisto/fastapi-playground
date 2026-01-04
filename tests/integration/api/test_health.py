@@ -18,14 +18,14 @@ class TestHealthEndpoint:
 
         assert response.status_code == 200
 
-    def test_returns_healthy_message(self, client: TestClient) -> None:
+    def test_returns_healthy_status(self, client: TestClient) -> None:
         """
-        Verify health endpoint returns healthy message.
+        Verify health endpoint returns healthy status.
         """
         response = client.get("/health")
 
         body = response.json()
-        assert body["message"] == "healthy"
+        assert body["status"] == "healthy"
 
     def test_returns_schema_url(self, client: TestClient) -> None:
         """
