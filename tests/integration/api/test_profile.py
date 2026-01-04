@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
 from tests.helpers.profiles import make_profile, make_profile_payload_dict
 
-BASE_URL = "/profile"
+BASE_URL = "/v1/profile"
 
 
 class TestCreateProfile:
@@ -35,7 +35,7 @@ class TestCreateProfile:
         body = response.json()
         assert "id" in body
         assert "firstname" in body
-        assert response.headers.get("Location") == "/profile"
+        assert response.headers.get("Location") == "/v1/profile"
         mock_profile_service.create_profile.assert_awaited_once()
 
     def test_returns_schema_url(

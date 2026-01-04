@@ -8,9 +8,5 @@
       "source.organizeImports": "explicit",
       "source.fixAll": "explicit"
     }
-  },
-  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
-  "github.copilot.chat.agent.thinkingTool": true,
-  "chat.todoListTool.enabled": true,
-  "chat.mcp.autostart": "newAndOutdated"
+  }
 }

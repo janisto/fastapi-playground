@@ -8,58 +8,11 @@ This router provides example endpoints showing:
 - Validation errors (422 with structured format)
 """
 
-from typing import Literal
-
 from fastapi import APIRouter, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.cbor import CBORRoute
 from app.models.error import ProblemResponse, ValidationProblemResponse
-
-# Supported language codes for greetings
-SupportedLanguage = Literal["en", "fi", "es", "fr", "de"]
-
-GREETINGS: dict[SupportedLanguage, str] = {
-    "en": "Hello",
-    "fi": "Hei",
-    "es": "Hola",
-    "fr": "Bonjour",
-    "de": "Hallo",
-}
-
-
-class Greeting(BaseModel):
-    """Response model for greeting endpoint."""
-
-    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
-
-    schema_url: str | None = Field(
-        default=None,
-        alias="$schema",
-        description="JSON Schema URL for this response",
-        examples=["/schemas/Greeting.json"],
-    )
-    message: str = Field(..., description="Greeting message", examples=["Hello, World!"])
-
-
-class GreetingRequest(BaseModel):
-    """Request model for creating a personalized greeting."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    name: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Name for personalized greeting",
-        examples=["Alice"],
-    )
-    language: SupportedLanguage = Field(
-        default="en",
-        description="Language code for greeting (en, fi, es, fr, de)",
-        examples=["en", "fi", "es"],
-    )
-
+from app.models.hello import GREETINGS, Greeting, GreetingRequest
 
 router = APIRouter(
     prefix="/hello",

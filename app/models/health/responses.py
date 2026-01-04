@@ -1,5 +1,5 @@
 """
-Health-related response models.
+Health response models.
 """
 
 from typing import Literal
@@ -20,8 +20,8 @@ class HealthResponse(BaseModel):
         description="JSON Schema URL for this response",
         examples=["/schemas/HealthResponse.json"],
     )
-    message: Literal["healthy"] = Field(
+    status: Literal["healthy"] = Field(
         ...,
-        description="Service health status message",
+        description="Service health status",
         examples=["healthy"],
     )

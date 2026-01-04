@@ -180,7 +180,7 @@ def test_returns_404_when_not_found(
 ) -> None:
     mock_resource_service.get_resource.side_effect = ResourceNotFoundError()
 
-    response = client.get("/resource/")
+    response = client.get("/v1/resource")
 
     assert response.status_code == 404
     body = response.json()

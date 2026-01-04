@@ -52,12 +52,12 @@ from fastapi.testclient import TestClient
 from app.exceptions import ResourceAlreadyExistsError, ResourceNotFoundError
 from tests.helpers.resources import make_resource, make_resource_payload_dict
 
-BASE_URL = "/resource"
+BASE_URL = "/v1/resource"
 
 
 class TestCreateResource:
     """
-    Tests for POST /resource/.
+    Tests for POST /v1/resource.
     """
 
     def test_returns_201_on_success(
@@ -71,7 +71,7 @@ class TestCreateResource:
         """
         mock_resource_service.create_resource.return_value = make_resource()
 
-        response = client.post(f"{BASE_URL}/", json=make_resource_payload_dict())
+        response = client.post(BASE_URL, json=make_resource_payload_dict())
 
         assert response.status_code == 201
         assert "Location" in response.headers
@@ -88,7 +88,7 @@ class TestCreateResource:
         """
         mock_resource_service.create_resource.side_effect = ResourceAlreadyExistsError()
 
-        response = client.post(f"{BASE_URL}/", json=make_resource_payload_dict())
+        response = client.post(BASE_URL, json=make_resource_payload_dict())
 
         assert response.status_code == 409
         body = response.json()
@@ -102,7 +102,7 @@ class TestCreateResource:
         """
         Verify unauthenticated request returns 401.
         """
-        response = client.post(f"{BASE_URL}/", json=make_resource_payload_dict())
+        response = client.post(BASE_URL, json=make_resource_payload_dict())
 
         assert response.status_code == 401
 ```
@@ -223,7 +223,7 @@ def test_returns_422_for_missing_fields(
     """
     payload = make_resource_payload_dict(omit=[missing_field])
 
-    response = client.post(f"{BASE_URL}/", json=payload)
+    response = client.post(BASE_URL, json=payload)
 
     assert response.status_code == 422
 ```
@@ -276,11 +276,11 @@ def test_update_resource_with_invalid_email_returns_422() -> None: ...
 Always use paths without trailing slashes to match routes:
 
 ```python
-# Correct
-response = client.get("/resource")
+# Correct - use versioned path without trailing slash
+response = client.get("/v1/resource")
 
-# Wrong - returns 404 (redirect_slashes=False)
-response = client.get("/resource/")
+# Wrong - trailing slash returns 404 (redirect_slashes=False)
+response = client.get("/v1/resource/")
 ```
 
 ## HTTP Mocking with pytest-httpx

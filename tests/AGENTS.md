@@ -15,7 +15,7 @@ Use these rules for tests under `tests/**` (Python 3.14, FastAPI, pytest, pytest
 
 Structure
 - Unit tests: `tests/unit/**` (mirror `app/**` folder structure)
-- Integration/API tests: `tests/integration/**` (mirror `app/routers/**` structure)
+- Integration/API tests: `tests/integration/**` (mirror `app/api/**` structure)
 - Fixtures: `tests/conftest.py` and scoped `conftest.py` files
 - Helpers: `tests/helpers/**` (factory functions, context managers, utilities)
 - Mocks: `tests/mocks/**` (reusable stubs, Protocol types, mock configurations)
@@ -57,8 +57,8 @@ tests/
 │   │   └── test_security.py          # tests app/middleware/security.py
 │   ├── models/
 │   │   ├── test_error.py             # tests app/models/error.py
-│   │   ├── test_health.py            # tests app/models/health.py
-│   │   ├── test_profile_model.py     # tests app/models/profile.py
+│   │   ├── test_health.py            # tests app/models/health/
+│   │   ├── test_profile_model.py     # tests app/models/profile/
 │   │   └── test_types.py             # tests app/models/types.py
 │   ├── pagination/
 │   │   ├── test_cursor.py            # tests app/pagination/cursor.py
@@ -66,21 +66,21 @@ tests/
 │   │   ├── test_paginator.py         # tests app/pagination/paginator.py
 │   │   └── test_params.py            # tests app/pagination/params.py
 │   └── services/
-│       └── test_profile.py           # tests app/services/profile.py
-├── integration/                      # Mirrors app/routers/ structure
+│       └── test_profile.py           # tests app/services/profile/service.py
+├── integration/                      # Mirrors app/api/ structure
 │   ├── conftest.py                   # Integration fixtures (mock_profile_service, client)
 │   ├── test_error_schema.py          # Error response schema tests
 │   ├── test_request_id.py            # X-Request-ID header tests
-│   └── routers/
+│   └── api/
 │       ├── test_cbor.py              # CBOR content negotiation tests
-│       ├── test_health.py            # tests app/routers/health.py
-│       ├── test_hello.py             # tests app/routers/hello.py
-│       ├── test_items.py             # tests app/routers/items.py
-│       ├── test_profile.py           # tests app/routers/profile.py
-│       └── test_root.py              # tests app/main.py (root endpoint)
+│       ├── test_health.py            # tests app/api/health.py
+│       ├── test_hello.py             # tests app/api/hello.py
+│       ├── test_items.py             # tests app/api/items.py
+│       ├── test_profile.py           # tests app/api/profile.py
+│       └── test_schemas.py           # tests app/api/schemas.py
 └── e2e/                              # Real Firebase emulator tests
     ├── conftest.py                   # E2E fixtures (emulator detection, cleanup)
-    └── routers/
+    └── api/
         └── test_profile.py           # Profile CRUD with real Firestore
 ```
 
@@ -101,8 +101,8 @@ Unit vs Integration vs E2E: The Simple Rule
 Test File Mapping:
 
 | `app/` module | `tests/unit/` path | `tests/integration/` path |
-|---------------|--------------------|-----------------------------|
-| `app/main.py` | `tests/unit/test_main.py` | `tests/integration/routers/test_root.py` |
+|---------------|--------------------|---------------------------|
+| `app/main.py` | `tests/unit/test_main.py` | - |
 | `app/dependencies.py` | `tests/unit/test_dependencies.py` | - |
 | `app/auth/firebase.py` | `tests/unit/auth/test_firebase.py` | - |
 | `app/core/cbor.py` | `tests/unit/core/test_cbor.py` | - |
@@ -120,14 +120,15 @@ Test File Mapping:
 | `app/middleware/logging.py` | `tests/unit/middleware/test_logging.py` | - |
 | `app/middleware/security.py` | `tests/unit/middleware/test_security.py` | - |
 | `app/models/error.py` | `tests/unit/models/test_error.py` | - |
-| `app/models/health.py` | `tests/unit/models/test_health.py` | - |
-| `app/models/profile.py` | `tests/unit/models/test_profile_model.py` | - |
+| `app/models/health/` | `tests/unit/models/test_health.py` | - |
+| `app/models/profile/` | `tests/unit/models/test_profile_model.py` | - |
 | `app/models/types.py` | `tests/unit/models/test_types.py` | - |
-| `app/services/profile.py` | `tests/unit/services/test_profile.py` | - |
-| `app/routers/health.py` | - | `tests/integration/routers/test_health.py` |
-| `app/routers/hello.py` | - | `tests/integration/routers/test_hello.py` |
-| `app/routers/items.py` | - | `tests/integration/routers/test_items.py` |
-| `app/routers/profile.py` | - | `tests/integration/routers/test_profile.py` |
+| `app/services/profile/service.py` | `tests/unit/services/test_profile.py` | - |
+| `app/api/health.py` | - | `tests/integration/api/test_health.py` |
+| `app/api/hello.py` | - | `tests/integration/api/test_hello.py` |
+| `app/api/items.py` | - | `tests/integration/api/test_items.py` |
+| `app/api/profile.py` | - | `tests/integration/api/test_profile.py` |
+| `app/api/schemas.py` | - | `tests/integration/api/test_schemas.py` |
 
 Conventions
 - No real network, files, or Firebase/Google Cloud in unit/integration tests; mock `firebase_admin` and any external I/O.
@@ -135,7 +136,7 @@ Conventions
 - HTTP client and mocking: use `httpx` in code; stub outbound HTTP with `pytest-httpx` via the `httpx_mock` fixture. Do not hit the real network.
 - **Prefer `pytest-mock` (`mocker` fixture) over `monkeypatch`** when mocking. Use `mocker.patch()` for patching with `MagicMock`/`AsyncMock` features (call assertions, return values, side effects). Reserve `monkeypatch` for simpler cases: environment variables (`setenv`), `sys.path` manipulation, or `chdir`. Choose the right tool for the task.
 - Override dependencies via `app.dependency_overrides` (e.g., auth/user, database/session). Reset overrides after each test to avoid leakage.
-- **URL formatting**: Always use paths without trailing slashes (e.g., `"/profile"` not `"/profile/"`). The app has `redirect_slashes=False`, so requests must match the exact path.
+- **URL formatting**: Always use paths without trailing slashes (e.g., `"/v1/profile"` not `"/v1/profile/"`). The app has `redirect_slashes=False`, so requests must match the exact path. Business endpoints are under `/v1/` prefix (e.g., `/v1/profile`, `/v1/hello`, `/v1/items`).
 - Aim ≥90% coverage overall; 100% on critical business logic (auth, security, error handling).
 - Validate API contracts: assert status codes, JSON shapes, and headers.
 - Use realistic but synthetic fixtures. Never log or include secrets/PII in test data.
@@ -169,11 +170,11 @@ When to use classes vs standalone functions:
 
 BASE_URL pattern - define a module-level constant for endpoint tests:
 ```python
-BASE_URL = "/profile"
+BASE_URL = "/v1/profile"
 
 class TestGetProfile:
     def test_returns_profile(self, client: TestClient) -> None:
-        response = client.get(f"{BASE_URL}/")
+        response = client.get(BASE_URL)
         assert response.status_code == 200
 ```
 
@@ -610,12 +611,12 @@ Usage:
 from tests.helpers.assertions import assert_error_response, assert_validation_error
 
 def test_returns_404_when_not_found(client: TestClient, with_fake_user: None) -> None:
-    response = client.get("/profile/")
+    response = client.get("/v1/profile")
     body = assert_error_response(response, 404)
     assert body["title"] == "Profile not found"
 
 def test_returns_422_for_invalid_email(client: TestClient, with_fake_user: None) -> None:
-    response = client.post("/profile/", json={"email": "invalid"})
+    response = client.post("/v1/profile", json={"email": "invalid"})
     assert_validation_error(response, "email")
 ```
 
@@ -1006,7 +1007,7 @@ def test_create_profile_missing_required_field_returns_422(
     client: TestClient, with_fake_user: None, missing_field: str
 ) -> None:
     payload = make_profile_payload_dict(omit=[missing_field])
-    res = client.post("/profile/", json=payload)
+    res = client.post("/v1/profile", json=payload)
     assert res.status_code == 422
     body = res.json()
     # Validation errors use 'errors' array with 'location' field
@@ -1021,7 +1022,7 @@ def test_create_profile_non_boolean_fields_return_422(
     client: TestClient, with_fake_user: None, field: str, bad_value: object
 ) -> None:
     payload = make_profile_payload_dict(overrides={field: bad_value})
-    res = client.post("/profile/", json=payload)
+    res = client.post("/v1/profile", json=payload)
     assert res.status_code == 422
 ```
 
@@ -1051,13 +1052,13 @@ def test_updates_first_name(self, client: TestClient) -> None:
     """
     Update first_name and verify persistence.
     """
-    response = client.put(f"{BASE_URL}/", json={"firstname": "Updated"})
+    response = client.put(BASE_URL, json={"firstname": "Updated"})
 
     assert response.status_code == 200
     assert response.json()["firstname"] == "Updated"
 
     # Verify persistence via GET
-    get_response = client.get(f"{BASE_URL}/")
+    get_response = client.get(BASE_URL)
     assert get_response.json()["firstname"] == "Updated"
 ```
 
@@ -1118,13 +1119,12 @@ Writing tests (examples)
 from fastapi.testclient import TestClient
 from app.main import app
 
-def test_root_ok() -> None:
+def test_health_ok() -> None:
 	with TestClient(app) as client:
-		r = client.get("/")
+		r = client.get("/health")
 		assert r.status_code == 200
 		body = r.json()
-		assert body["message"] == "Hello"
-		assert body["docs"] == "/api-docs"
+		assert body["message"] == "healthy"
 ```
 
 2) Async test (true async using httpx AsyncClient)
@@ -1159,7 +1159,7 @@ def test_profile_get_with_fake_auth() -> None:
 	app.dependency_overrides[verify_firebase_token] = lambda: _fake_user()
 	try:
 		with TestClient(app) as client:
-			r = client.get("/profile/")
+			r = client.get("/v1/profile")
 			# Depending on service state, this may be 404 if profile is missing.
 			assert r.status_code in (200, 404)
 	finally:
@@ -1175,7 +1175,7 @@ from app.main import app
 
 def test_unauthorized_without_bearer() -> None:
 	with TestClient(app) as client:
-		r = client.get("/profile/")  # missing Authorization header
+		r = client.get("/v1/profile")  # missing Authorization header
 		assert r.status_code == 403 or r.status_code == 401  # depends on security scheme behavior
 
 def test_profile_not_found_details() -> None:
@@ -1185,7 +1185,7 @@ def test_profile_not_found_details() -> None:
 	app.dependency_overrides[verify_firebase_token] = lambda: FirebaseUser(uid="no-profile-uid")
 	try:
 		with TestClient(app) as client:
-			r = client.get("/profile/")
+			r = client.get("/v1/profile")
 			if r.status_code == 404:
 				body = r.json()
 				assert body["status"] == 404
@@ -1210,8 +1210,8 @@ def client() -> Generator[TestClient]:
 	with TestClient(app) as c:
 		yield c
 
-def test_root_with_fixture(client: TestClient) -> None:
-	assert client.get("/").status_code == 200
+def test_health_with_fixture(client: TestClient) -> None:
+	assert client.get("/health").status_code == 200
 ```
 
 6) Headers and security
@@ -1223,7 +1223,7 @@ from app.main import app
 
 def test_security_headers() -> None:
 	with TestClient(app) as client:
-		r = client.get("/")
+		r = client.get("/health")
 		# Use lowercase header names (HTTP/2 compliant, Starlette normalizes)
 		assert r.headers.get("x-frame-options") == "DENY"
 		assert r.headers.get("referrer-policy") == "same-origin"
@@ -1347,21 +1347,21 @@ class TestProfileEndpoint:
         """
         Authenticated request returns profile.
         """
-        response = client.get("/profile/")
+        response = client.get("/v1/profile")
         assert response.status_code in (200, 404)
 
     def test_returns_401_without_auth(self, client: TestClient) -> None:
         """
         Unauthenticated request returns 401.
         """
-        response = client.get("/profile/")
+        response = client.get("/v1/profile")
         assert response.status_code == 401
         assert response.headers.get("www-authenticate") == "Bearer"
 ```
 
 Integration tests with mock_profile_service fixture (preferred pattern):
 ```python
-# tests/integration/routers/test_profile.py
+# tests/integration/api/test_profile.py
 from unittest.mock import AsyncMock
 
 import pytest
@@ -1370,12 +1370,12 @@ from fastapi.testclient import TestClient
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
 from tests.helpers.profiles import make_profile, make_profile_payload_dict
 
-BASE_URL = "/profile"
+BASE_URL = "/v1/profile"
 
 
 class TestCreateProfile:
     """
-    Tests for POST /profile/.
+    Tests for POST /v1/profile.
     """
 
     def test_returns_201_on_success(
@@ -1389,7 +1389,7 @@ class TestCreateProfile:
         """
         mock_profile_service.create_profile.return_value = make_profile()
 
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 201
         body = response.json()
@@ -1408,7 +1408,7 @@ class TestCreateProfile:
         """
         mock_profile_service.create_profile.side_effect = ProfileAlreadyExistsError()
 
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 409
         body = response.json()
@@ -1423,7 +1423,7 @@ class TestCreateProfile:
         """
         Verify unauthenticated request returns 401.
         """
-        response = client.post(f"{BASE_URL}/", json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 401
 
@@ -1443,7 +1443,7 @@ class TestCreateProfile:
         """
         payload = make_profile_payload_dict(omit=[missing_field])
 
-        response = client.post(f"{BASE_URL}/", json=payload)
+        response = client.post(BASE_URL, json=payload)
 
         assert response.status_code == 422
 ```
@@ -1464,7 +1464,7 @@ def test_create_profile_success(client: TestClient, with_fake_user: None) -> Non
     app.dependency_overrides[get_profile_service] = lambda: mock_service
     try:
         payload = make_profile_payload_dict()
-        res = client.post("/profile/", json=payload)
+        res = client.post("/v1/profile", json=payload)
         assert res.status_code == 201
     finally:
         app.dependency_overrides.pop(get_profile_service, None)

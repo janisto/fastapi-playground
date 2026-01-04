@@ -109,7 +109,7 @@ class TestRouterConfiguration:
         from app.main import app
 
         routes = [route.path for route in app.routes]
-        assert "/profile" in routes
+        assert "/v1/profile" in routes
 
     def test_health_router_included(self) -> None:
         """
@@ -119,47 +119,6 @@ class TestRouterConfiguration:
 
         routes = [route.path for route in app.routes]
         assert "/health" in routes
-
-
-class TestRootEndpoint:
-    """
-    Tests for root endpoint.
-    """
-
-    def test_returns_200(self) -> None:
-        """
-        Verify root endpoint returns 200.
-        """
-        with (
-            patch("app.main.setup_logging"),
-            patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
-        ):
-            from app.main import app
-
-            with TestClient(app) as client:
-                response = client.get("/")
-
-            assert response.status_code == 200
-
-    def test_returns_expected_json(self) -> None:
-        """
-        Verify root endpoint returns expected JSON structure.
-        """
-        with (
-            patch("app.main.setup_logging"),
-            patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
-        ):
-            from app.main import app
-
-            with TestClient(app) as client:
-                response = client.get("/")
-
-            body = response.json()
-            assert "message" in body
-            assert "docs" in body
-            assert body["docs"] == "/api-docs"
 
 
 class TestCorsMiddleware:

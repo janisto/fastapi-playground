@@ -16,8 +16,8 @@ Before analysis, read these files:
 5. `app/middleware/logging.py` - Structured logging with trace correlation
 6. `app/core/config.py` - Configuration and secrets handling
 7. `app/core/exception_handler.py` - Error handling and RFC 9457 Problem Details
-8. `app/routers/health.py`, `app/routers/hello.py`, `app/routers/items.py`, `app/routers/profile.py` - Endpoint definitions
-9. `app/services/profile.py` - Business logic
+8. `app/api/health.py`, `app/api/hello.py`, `app/api/items.py`, `app/api/profile.py` - Endpoint definitions
+9. `app/services/profile/service.py` - Business logic
 10. `app/dependencies.py` - Shared dependencies and DI aliases
 11. `app/exceptions/profile.py` - Domain exception definitions
 

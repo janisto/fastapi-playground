@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from tests.helpers.profiles import make_profile, make_profile_payload_dict
 
-BASE_URL = "/profile"
+BASE_URL = "/v1/profile"
 
 
 class TestCBORRequest:

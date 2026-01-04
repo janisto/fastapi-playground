@@ -1,4 +1,6 @@
-"""Pagination utilities."""
+"""
+Pagination utilities.
+"""
 
 from app.pagination.cursor import Cursor, InvalidCursorError, decode_cursor
 from app.pagination.link import build_link_header

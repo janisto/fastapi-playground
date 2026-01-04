@@ -1,28 +1,38 @@
-"""Cursor encoding/decoding for pagination."""
+"""
+Cursor encoding/decoding for pagination.
+"""
 
 import base64
 from dataclasses import dataclass
 
 
 class InvalidCursorError(Exception):
-    """Raised when cursor cannot be decoded."""
+    """
+    Raised when cursor cannot be decoded.
+    """
 
 
 @dataclass
 class Cursor:
-    """Pagination cursor with type and value."""
+    """
+    Pagination cursor with type and value.
+    """
 
     type: str
     value: str
 
     def encode(self) -> str:
-        """Encode as URL-safe base64 without padding."""
+        """
+        Encode as URL-safe base64 without padding.
+        """
         data = f"{self.type}:{self.value}"
         return base64.urlsafe_b64encode(data.encode()).rstrip(b"=").decode()
 
 
 def decode_cursor(s: str) -> Cursor:
-    """Decode URL-safe base64 cursor."""
+    """
+    Decode URL-safe base64 cursor.
+    """
     if not s:
         return Cursor(type="", value="")
     padding = 4 - len(s) % 4

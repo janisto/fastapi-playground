@@ -1,6 +1,6 @@
 # FastAPI Playground
 
-A FastAPI application demonstrating Firebase Authentication, Firestore CRUD operations, typed Pydantic v2 models, and a modern Python development workflow using `uv` (dependency & virtualenv manager) and `just` (task runner). This README is optimized for AI code assistants.
+A FastAPI application demonstrating Firebase Authentication, Firestore CRUD operations, and modern Python development workflow using `uv` (dependency & virtualenv manager) and `just` (task runner).
 
 <img src="assets/python.svg" alt="Python logo" width="400">
 
@@ -8,42 +8,36 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 
 ## Features
 
-- **FastAPI** (Python 3.14+) with async endpoints and OpenAPI docs (`/api-docs`, `/api-redoc`)
-- **Firebase Authentication** (ID token verification via Admin SDK with revocation checks)
-- **Firestore persistence** for user profile documents with async transactional operations
-- **Firebase Cloud Functions** (Python 3.14 runtime) example with regional config & scaling limits
-- **Structured JSON logging** (Cloud Run compatible, trace correlation via W3C `traceparent`)
-- **Pydantic v2** models + `pydantic-settings` for type-safe configuration
-- **Custom middlewares**: security headers, request body size limiting, request-context logging
-- **Domain exceptions** with HTTP semantics for clean error handling
-- **Strict CORS** allowlist (deny-by-default)
-- **Tests** (unit, integration, E2E) via `pytest` / `pytest-asyncio` with coverage reports
-- **Linting + formatting** via Ruff (`check` + `format` + comprehensive rules)
-- **Static typing** via `ty`
-- **Container build** with multi-stage Dockerfile for Cloud Run deployment
+- Layered middleware architecture with security headers, CORS, request IDs, and structured access logs
+- Request-scoped logging with Google Cloud Trace correlation via [W3C Trace Context](https://www.w3.org/TR/trace-context/) `traceparent` header
+- [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) for all error responses with field-level validation errors
+- Content negotiation supporting [JSON (RFC 8259)](https://datatracker.ietf.org/doc/html/rfc8259) and [CBOR (RFC 8949)](https://datatracker.ietf.org/doc/html/rfc8949) formats via `Accept` header
+- Cursor-based pagination with [RFC 8288 Link](https://datatracker.ietf.org/doc/html/rfc8288) headers
+- [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) documentation with Swagger UI and ReDoc
+- Firebase Authentication with ID token verification and revocation checks
+- Firestore persistence with async transactional operations
+- Health check endpoint (`/health`) for liveness probes
 
 ## API Design Principles
 
-This project follows modern REST API guidelines:
+### URI Design
 
-### Resource-Oriented Design
-
-- Resources are the key abstraction; URLs identify resources, not actions
-- Use nouns for endpoints (e.g., `/profile/`, `/items/`) not verbs
+- Use plural nouns for collections (`/items/`, not `/item/`)
+- Avoid verbs in URIs; let HTTP methods convey the action
 - Return resources directly without wrapper envelopes
 
-### HTTP Methods and Status Codes
+### HTTP Methods & Status Codes
 
-| Method | Use Case | Success | Common Errors |
-|--------|----------|---------|---------------|
-| `GET` | Retrieve resource | 200 OK | 404 Not Found |
-| `POST` | Create resource | 201 Created + Location header | 400 Bad Request, 409 Conflict |
-| `PATCH` | Partial update | 200 OK | 400, 404 |
-| `DELETE` | Remove resource | 204 No Content | 404 |
+| Method | Purpose | Success Status |
+|--------|---------|----------------|
+| GET | Retrieve resource(s) | 200 OK |
+| POST | Create a resource | 201 Created + Location header |
+| PATCH | Partial update | 200 OK |
+| DELETE | Remove a resource | 204 No Content |
 
-### Error Responses (RFC 9457 Problem Details)
+### Error Responses
 
-All errors return RFC 9457 Problem Details format:
+Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html) and honor content negotiation:
 
 ```json
 {
@@ -54,7 +48,7 @@ All errors return RFC 9457 Problem Details format:
 }
 ```
 
-Validation errors (422) include detailed error locations:
+Validation errors (422) include detailed field locations:
 
 ```json
 {
@@ -68,206 +62,23 @@ Validation errors (422) include detailed error locations:
 }
 ```
 
-### Request Tracking (X-Request-ID)
+### Content Negotiation
 
-Every request includes an `X-Request-ID` header for distributed tracing:
-- If the client provides `X-Request-ID`, the server echoes it back
-- If not provided, the server generates a UUID v4
-- The header appears in all responses, including errors
-
-### Content Negotiation (JSON/CBOR)
-
-The API supports both JSON and CBOR (RFC 8949) serialization:
-
-| Accept Header | Response Content-Type |
-|---------------|----------------------|
-| `application/json` (default) | `application/json` |
-| `application/cbor` | `application/cbor` |
-
-For requests, use `Content-Type: application/cbor` to send CBOR-encoded bodies.
-
-### Timestamps
-
-All timestamps use ISO 8601 format with UTC timezone and explicit milliseconds:
-```
-2025-01-15T10:30:00.000Z
-```
+- Default: `application/json`
+- Alternate: `application/cbor`
+- Format selected via `Accept` header
 
 ### Pagination
 
-List endpoints use cursor-based pagination with RFC 8288 Link headers:
+- Cursor-based tokens for stability
+- Links provided via HTTP `Link` header per [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html)
 
-```http
-GET /items/?limit=10
+## Requirements
 
-HTTP/1.1 200 OK
-Link: </items/?limit=10&cursor=aWR4OjEw>; rel="next"
-```
-
-| Parameter | Type | Default | Range | Description |
-|-----------|------|---------|-------|-------------|
-| `cursor` | string | - | - | Opaque pagination cursor |
-| `limit` | int | 10 | 1-100 | Items per page |
-
-Cursors are opaque base64-encoded strings; clients should not parse them.
-
-## Project Structure
-
-```
-├── app/
-│   ├── main.py                    # FastAPI app factory + lifespan manager
-│   ├── dependencies.py            # Dependency injection (CurrentUser, ProfileServiceDep)
-│   ├── auth/
-│   │   └── firebase.py            # Token verification + FirebaseUser dataclass
-│   ├── core/
-│   │   ├── config.py              # Settings class (pydantic-settings)
-│   │   ├── firebase.py            # Firebase Admin SDK & async Firestore client
-│   │   ├── exception_handler.py   # RFC 9457 Problem Details exception handling
-│   │   ├── cbor.py                # CBOR content negotiation support
-│   │   └── validation.py          # Request validation utilities
-│   ├── exceptions/
-│   │   ├── __init__.py            # Exports all exceptions
-│   │   ├── base.py                # Re-exports fastapi-problem base classes
-│   │   └── profile.py             # ProfileNotFoundError, ProfileAlreadyExistsError
-│   ├── middleware/
-│   │   ├── __init__.py            # Exports middleware and logging utilities
-│   │   ├── body_limit.py          # Request size guard (413 on oversized)
-│   │   ├── logging.py             # JSON logging + audit events + trace context
-│   │   └── security.py            # Security headers (HSTS, X-Frame-Options, etc.)
-│   ├── models/
-│   │   ├── error.py               # ErrorResponse schema
-│   │   ├── health.py              # HealthResponse schema
-│   │   ├── profile.py             # Profile domain models + PROFILE_COLLECTION
-│   │   └── types.py               # Shared type aliases (NormalizedEmail, Phone, etc.)
-│   ├── routers/
-│   │   ├── health.py              # Health check endpoint
-│   │   └── profile.py             # Profile CRUD (Firebase Auth protected)
-│   └── services/
-│       └── profile.py             # ProfileService with async Firestore transactions
-├── tests/
-│   ├── conftest.py                # Root fixtures (client, fake_user, with_fake_user)
-│   ├── helpers/                   # Test utilities (auth helpers, factories)
-│   ├── mocks/                     # Firebase / HTTP mocks
-│   ├── unit/                      # Unit tests (mirrors app/ structure)
-│   ├── integration/               # API route tests (mirrors app/routers/)
-│   └── e2e/                       # Firebase emulator tests (local only)
-├── functions/                     # Firebase Cloud Functions (Python 3.14)
-│   ├── main.py                    # Example HTTPS callable
-│   └── pyproject.toml             # Functions-specific dependencies
-├── .github/
-│   ├── workflows/                 # CI (lint, typing, tests, coverage)
-│   ├── agents/                    # Copilot agent configurations
-│   └── skills/                    # Copilot skill definitions
-├── pyproject.toml                 # Dependencies & tool config (Ruff, ty, pytest)
-├── uv.lock                        # Locked dependency versions
-├── Justfile                       # Task automation
-├── Dockerfile                     # Multi-stage container build
-└── README.md
-```
-
-## API Endpoints
-
-### Root & Health
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/` | Root endpoint (returns hello + docs link) |
-| `GET` | `/health/` | Liveness probe (`{"status": "healthy"}`) |
-| `GET` | `/api-docs` | Swagger UI |
-| `GET` | `/api-redoc` | ReDoc |
-
-### Profile (Protected: `Authorization: Bearer <Firebase ID token>`)
-
-| Method | Path | Description | Success | Errors |
-|--------|------|-------------|---------|--------|
-| `POST` | `/profile/` | Create profile | 201 + Location | 401, 403, 409, 422, 500 |
-| `GET` | `/profile/` | Get profile | 200 | 401, 404, 500 |
-| `PATCH` | `/profile/` | Partial update profile | 200 | 401, 404, 422, 500 |
-| `DELETE` | `/profile/` | Delete profile | 204 | 401, 404, 500 |
-
-### Profile Model (Response Shape)
-
-Profile endpoints return the resource directly (no wrapper envelope):
-
-```jsonc
-{
-  "id": "<user uid>",           // Firebase UID (document ID)
-  "firstname": "John",          // Required, 1-100 chars
-  "lastname": "Doe",            // Required, 1-100 chars
-  "email": "user@example.com",  // Required, auto-lowercased
-  "phone_number": "+358401234567", // E.164 format
-  "marketing": false,           // Boolean opt-in
-  "terms": true,                // Must be true when creating
-  "created_at": "2025-01-15T10:30:00.000Z",
-  "updated_at": "2025-01-15T10:30:00.000Z"
-}
-```
-
-## Prerequisites
-
-- **Python 3.14+**
-- **uv** (dependency & venv manager) — `brew install uv` or `pip install uv`
-- **just** (task runner) — `brew install just`
-- **libmagic** (for python-magic file type detection) — `brew install libmagic`
-- **Firebase project** (Authentication + Firestore enabled)
-- **Google Cloud project** (optional, for Cloud Run & trace correlation)
-
-## Tech Stack
-
-### Runtime Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `fastapi[standard]` | Web framework with Swagger/ReDoc |
-| `uvicorn[standard]` | ASGI server (used via `fastapi dev` for hot reload) |
-| `firebase-admin` | Auth token verification + async Firestore client |
-| `pydantic` | Data validation and serialization |
-| `pydantic-settings` | Environment-based configuration |
-| `httpx` | HTTP client (used in tests with pytest-httpx) |
-| `python-magic` | File type detection |
-
-### Dev Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `pytest` | Test framework |
-| `pytest-asyncio` | Async test support (`asyncio_mode = "auto"`) |
-| `pytest-cov` | Coverage reporting |
-| `pytest-httpx` | HTTP mocking for outbound requests |
-| `pytest-mock` | Mocking via `mocker` fixture |
-| `ruff` | Linting + formatting (line-length 120) |
-| `ty` | Static type checking |
-
-## Environment Configuration
-
-Loaded from `.env` via `pydantic-settings` (see [app/core/config.py](app/core/config.py)).
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ENVIRONMENT` | No | `production` | Environment label (affects logging, HSTS) |
-| `DEBUG` | No | `False` | Debug mode (verbosity, reload) |
-| `HOST` | No | `0.0.0.0` | Server bind address |
-| `PORT` | No | `8080` | Listen port (Cloud Run uses this) |
-| `FIREBASE_PROJECT_ID` | Yes* | `test-project` | Firebase/GCP project ID |
-| `FIREBASE_PROJECT_NUMBER` | No | `None` | Numeric project number (logging metadata) |
-| `FIRESTORE_DATABASE` | No | `None` | Firestore database ID (defaults to `(default)`) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | No | `None` | Path to service account JSON (local dev only) |
-| `APP_ENVIRONMENT` | No | `None` | Optional environment label for logs |
-| `APP_URL` | No | `None` | Public application URL (informational) |
-| `SECRET_MANAGER_ENABLED` | No | `True` | Placeholder for Secret Manager integration |
-| `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Request body size limit (bytes) |
-| `CORS_ORIGINS` | No | (empty) | Comma-separated allowed origins |
-
-*Provide real values outside tests. The Firestore collection name is fixed to `profiles` (see [app/models/profile.py](app/models/profile.py)).
-
-**Example `.env`:**
-```env
-ENVIRONMENT=development
-DEBUG=true
-FIREBASE_PROJECT_ID=my-firebase-project
-MAX_REQUEST_SIZE_BYTES=1000000
-CORS_ORIGINS=https://example.com,https://app.example.com
-```
+- Python 3.14+
+- [uv](https://docs.astral.sh/uv/) package manager
+- [just](https://github.com/casey/just) command runner
+- Firebase project with Authentication and Firestore enabled
 
 ## Quick Start
 
@@ -278,448 +89,205 @@ just install        # Install dependencies via uv
 just serve          # Start dev server at http://127.0.0.1:8080
 ```
 
-Open http://127.0.0.1:8080/api-docs for Swagger UI.
+Then visit:
+- `http://localhost:8080/health` - service health probe
+- `http://localhost:8080/api-docs` - interactive API explorer (Swagger UI)
+- `http://localhost:8080/api-redoc` - API documentation (ReDoc)
 
-## Commands (Justfile)
+Sample request:
+```bash
+curl -s localhost:8080/health | jq
+```
 
-### Development
+## Environment Variables
+
+Copy `.env.example` to `.env` and customize:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PORT` | Server listen port | `8080` |
+| `HOST` | Host address to bind to | `0.0.0.0` |
+| `ENVIRONMENT` | Environment label | `production` |
+| `DEBUG` | Enable debug mode | `false` |
+| `FIREBASE_PROJECT_ID` | Firebase/GCP project ID | - |
+| `FIREBASE_PROJECT_NUMBER` | Numeric project number (optional) | - |
+| `FIRESTORE_DATABASE` | Firestore database ID | `(default)` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Service account JSON path (local dev) | - |
+| `CORS_ORIGINS` | Comma-separated allowed origins | - |
+| `MAX_REQUEST_SIZE_BYTES` | Request body size limit | `1000000` |
+
+## Project Layout
+
+```
+app/
+  main.py              # FastAPI app factory and lifespan manager
+  dependencies.py      # Dependency injection (CurrentUser, ProfileServiceDep)
+  api/                 # API route handlers
+    health.py          # Health check endpoint
+    hello.py           # Hello greeting endpoints
+    items.py           # Items with pagination
+    profile.py         # Profile CRUD (Firebase Auth protected)
+  auth/                # Firebase authentication
+    firebase.py        # Token verification, FirebaseUser
+  core/                # Configuration and infrastructure
+    config.py          # Settings class (pydantic-settings)
+    firebase.py        # Firebase Admin SDK and async Firestore client
+    exception_handler.py  # RFC 9457 Problem Details
+    cbor.py            # CBOR content negotiation
+  exceptions/          # Domain exceptions using fastapi-problem
+    base.py            # Base exception classes
+    profile.py         # ProfileNotFoundError, ProfileAlreadyExistsError
+  middleware/          # ASGI middleware stack
+    body_limit.py      # Request size guard (413 on oversized)
+    logging.py         # JSON logging with trace correlation
+    security.py        # Security headers (HSTS, X-Frame-Options)
+  models/              # Pydantic schemas
+    error.py           # ProblemResponse schema
+    types.py           # Shared types (NormalizedEmail, Phone, UtcDatetime)
+    health/            # Health response models
+    hello/             # Hello response models
+    items/             # Items response models
+    profile/           # Profile domain models
+  pagination/          # Cursor-based pagination
+    cursor.py          # Cursor encoding/decoding
+    link.py            # RFC 8288 Link header builder
+    paginator.py       # Pagination helper
+  services/            # Business logic layer
+    profile/           # ProfileService with Firestore operations
+tests/
+  unit/                # Unit tests (mocked dependencies)
+  integration/         # API route tests (TestClient)
+  e2e/                 # Firebase emulator tests (local only)
+  helpers/             # Shared test utilities
+functions/             # Firebase Cloud Functions (Python 3.14)
+  main.py              # HTTPS callable example
+  pyproject.toml       # Functions-specific dependencies
+```
+
+## Routes
+
+All routes use paths without trailing slashes (`redirect_slashes=False`).
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/health` | No | Health check probe |
+| GET | `/v1/hello` | No | Default greeting |
+| POST | `/v1/hello` | No | Personalized greeting |
+| GET | `/v1/items` | No | List items with pagination |
+| POST | `/v1/profile` | Yes | Create user profile |
+| GET | `/v1/profile` | Yes | Get user profile |
+| PATCH | `/v1/profile` | Yes | Update user profile |
+| DELETE | `/v1/profile` | Yes | Delete user profile |
+
+Protected routes require `Authorization: Bearer <Firebase ID token>` header.
+
+## Development
+
+### Build and Test
+
+```bash
+just lint            # Run Ruff check + format
+just typing          # Run ty type checker
+just test            # Run unit + integration tests
+just test-unit       # Unit tests only
+just test-integration  # Integration tests only
+just cov             # Run tests with coverage report
+```
+
+### Justfile Commands
 
 | Command | Description |
 |---------|-------------|
-| `just serve` | Start dev server (`fastapi dev` with hot reload) |
+| `just serve` | Start dev server with hot reload |
 | `just browser` | Open dev server in browser |
-| `just req <path>` | HTTP request via httpie (`just req health/`) |
-| `just emulators` | Start Firebase emulators (auth + firestore) for E2E tests |
-
-### Quality Assurance
-
-| Command | Description |
-|---------|-------------|
 | `just lint` | Run Ruff check + format |
 | `just typing` | Type checking via ty |
-| `just test` | Unit + integration tests (CI-compatible) |
-| `just test-unit` | Unit tests only |
-| `just test-integration` | Integration tests only |
-| `just test-e2e` | E2E tests (requires `just emulators`) |
-| `just test-all` | All tests including E2E |
-| `just cov` | Run tests with coverage (html/json reports) |
-| `just check-all` | lint + typing + test |
-| `just modernize` | Apply Ruff pyupgrade rules |
+| `just test` | Unit + integration tests |
+| `just cov` | Coverage report (html/json) |
+| `just check` | lint + typing + test |
+| `just emulators` | Start Firebase emulators for E2E |
 
-### Lifecycle
+Run `just` to see all available commands.
 
-| Command | Description |
-|---------|-------------|
-| `just install` | Sync dependencies (`uv sync`) |
-| `just update` | Upgrade dependencies (`uv sync --upgrade`) |
-| `just clean` | Remove caches, venv, coverage artifacts |
-| `just fresh` | Clean + install |
-
-### Containers
-
-| Command | Description |
-|---------|-------------|
-| `just docker-build` | Build container image |
-| `just docker-run` | Run container with env-file |
-| `just docker-logs` | Tail container logs |
-
-## Development Workflow
-
-1. **Implement feature** — Keep routers thin; business logic in `services/`
-2. **Add/adjust models** — Define schemas in `app/models/`
-3. **Write tests** — Unit tests for services/models; integration tests for API routes
-4. **Run checks** — `just lint && just typing`
-5. **Run targeted tests** — `just test tests/integration/routers/test_profile.py::TestCreateProfile`
-6. **Run coverage** — `just cov` before PR
-7. **Commit** — Use Conventional Commit style
-
-## Middleware Stack
-
-Middleware order (outermost to innermost):
-1. **RequestContextLogMiddleware** — JSON logging with trace correlation
-2. **SecurityHeadersMiddleware** — Adds security headers (HSTS, X-Frame-Options, etc.)
-3. **BodySizeLimitMiddleware** — Rejects oversized requests with 413
-4. **CORSMiddleware** — Handles preflight and CORS headers
-
-### CORS
-
-CORS is deny-by-default. Set `CORS_ORIGINS` to explicit origins for browser clients.
-
-### Security Headers
-
-Adds: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`. HSTS enabled when HTTPS and not in debug mode.
-
-### Request Size Limits
-
-`BodySizeLimitMiddleware` aborts with 413 if body exceeds `MAX_REQUEST_SIZE_BYTES`. Uses streaming check (pre-checks `Content-Length`, then counts chunks incrementally).
-
-## Logging & Trace Correlation
-
-JSON logs with keys: `severity`, `message`, `time`, `logger`, source location, optional `trace`/`spanId` from W3C `traceparent` header.
-
-The `traceparent` header uses format: `{version}-{trace-id}-{parent-id}-{trace-flags}` (e.g., `00-a0892f3577b34da6a3ce929d0e0e4736-f03067aa0ba902b7-01`).
-
-```python
-logger.info("profile created", extra={"user_id": uid, "profile_id": uid})
-```
-
-Audit events via `log_audit_event()`:
-```python
-from app.middleware import log_audit_event
-log_audit_event("create", user_id, "profile", user_id, "success")
-```
-
-## Authentication Flow
-
-1. Client obtains Firebase ID token (via Firebase Auth SDK)
-2. Client sends header: `Authorization: Bearer <id_token>`
-3. Server verifies token with revocation check via `verify_firebase_token`
-4. Returns `FirebaseUser(uid, email, email_verified)`
-
-**Failure cases:**
-- Missing header: 403 (HTTPBearer security scheme)
-- Invalid/expired/revoked token: 401 `{"detail": "Unauthorized"}`
-
-## Exceptions
-
-Exceptions use `fastapi-problem` base classes for RFC 9457 Problem Details responses.
-
-**Base classes** (from `app/exceptions/base.py`):
-
-| Base Class | Status | Use Case |
-|------------|--------|----------|
-| `NotFoundProblem` | 404 | Resource not found |
-| `ConflictProblem` | 409 | Duplicate resource, state conflict |
-| `BadRequestProblem` | 400 | Invalid request (cursor, parameter) |
-| `ForbiddenProblem` | 403 | Access denied |
-| `UnauthorisedProblem` | 401 | Authentication required |
-| `UnprocessableProblem` | 422 | Validation failure |
-| `ServerProblem` | 500 | Internal server error |
-
-**Profile-specific exceptions** (from `app/exceptions/profile.py`):
-
-| Exception | Inherits | Use Case |
-|-----------|----------|----------|
-| `ProfileNotFoundError` | `NotFoundProblem` | Profile not found |
-| `ProfileAlreadyExistsError` | `ConflictProblem` | Profile already exists |
-
-Exception handler in `app/core/exception_handler.py` automatically converts exceptions to HTTP responses.
-
-## Firestore Service
-
-`ProfileService` uses async Firestore operations with `@firestore.async_transactional` for atomic operations. Firebase token verification runs in thread pool via `asyncio.to_thread()` to avoid blocking.
-
-## Testing
-
-| Category | Path | Focus |
-|----------|------|-------|
-| Unit | `tests/unit/**` | Models, config, services, middleware |
-| Integration | `tests/integration/**` | API routes, request/response flows |
-| E2E | `tests/e2e/**` | Real Firebase emulator tests |
-
-**Commands:**
-```bash
-just test               # Unit + integration (CI-compatible)
-just test-unit          # Unit tests only
-just test-integration   # Integration tests only
-just test-e2e           # E2E tests (requires: just emulators)
-just test-all           # All tests including E2E
-just cov                # Coverage report (html/json)
-```
-
-**Examples:**
-```bash
-just test-unit tests/unit/models/test_profile_model.py
-just test-integration tests/integration/routers/test_profile.py::TestCreateProfile
-```
-
-**Notes:**
-- Unit/integration tests mock Firebase/Firestore; no real network calls
-- E2E tests require Firebase emulators: run `just emulators` first
-
-## Error Responses
-
-All errors use RFC 9457 Problem Details format via `fastapi-problem`:
-
-```json
-{
-  "type": "about:blank",
-  "title": "Not Found",
-  "status": 404,
-  "detail": "Profile not found"
-}
-```
-
-Validation errors (422) include detailed error locations:
-
-```json
-{
-  "type": "about:blank",
-  "title": "Validation Error",
-  "status": 422,
-  "detail": "Request validation failed",
-  "errors": [
-    {"location": "body.email", "message": "value is not a valid email address", "value": "invalid"}
-  ]
-}
-```
-
-Sensitive fields (password, token, etc.) have their values redacted from error responses.
-
-## Example Requests
-
-**Create a profile:**
-```bash
-curl -X POST http://localhost:8080/profile/ \
-  -H "Authorization: Bearer <firebase_id_token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstname": "John",
-    "lastname": "Doe",
-    "email": "john@example.com",
-    "phone_number": "+358401234567",
-    "terms": true
-  }'
-```
-
-**Get profile:**
-```bash
-curl http://localhost:8080/profile/ \
-  -H "Authorization: Bearer <firebase_id_token>"
-```
-
-**Update profile (partial):**
-```bash
-curl -X PATCH http://localhost:8080/profile/ \
-  -H "Authorization: Bearer <firebase_id_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"firstname": "Jane", "marketing": true}'
-```
-
-**Delete profile:**
-```bash
-curl -X DELETE http://localhost:8080/profile/ \
-  -H "Authorization: Bearer <firebase_id_token>"
-```
-
-## Container Usage (Local)
+### Dependencies
 
 ```bash
-just docker-build
-just docker-run
-
-# Or manual
-docker build -t fastapi-playground:local .
-docker run --rm -p 8080:8080 --env-file .env fastapi-playground:local
-```
-Override base image:
-```bash
-just docker-build pyimg=python:3.14-slim-bookworm
+just install         # Install/sync dependencies
+just update          # Upgrade dependencies
+just fresh           # Clean + reinstall
 ```
 
-## Deployment (Cloud Run)
+## Adding Routes
+
+1. Create models in `app/models/<resource>/` with request/response schemas
+2. Add domain exceptions in `app/exceptions/` if needed
+3. Implement service logic in `app/services/<resource>/`
+4. Create handler in `app/api/<resource>.py` using `APIRouter`
+5. Register router in `app/main.py`
+6. Add unit tests for service, integration tests for routes
+
+## Docker
 
 ```bash
+just docker-build    # Build image
+just docker-up       # Run container
+just docker-logs     # View container logs
+just docker-down     # Stop container
+```
+
+Or with Docker CLI:
+```bash
+docker build -t fastapi-playground:latest .
+docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
+```
+
+## Deployment
+
+### Google Cloud Run
+
+```bash
+# Build and push
 docker build -t gcr.io/PROJECT_ID/fastapi-playground .
 docker push gcr.io/PROJECT_ID/fastapi-playground
+
+# Deploy with automatic base image updates
 gcloud run deploy fastapi-playground \
   --image gcr.io/PROJECT_ID/fastapi-playground \
   --platform managed \
   --region us-central1 \
-  --allow-unauthenticated
-```
-For a detailed, end-to-end infrastructure and IAM setup (APIs, roles, environment variables, Cloud Build integration, Functions vs Cloud Run guidance) see: [`GCP.md`](GCP.md).
-
-Automatic base updates:
-```bash
-gcloud run deploy fastapi-playground \
-  --image gcr.io/PROJECT_ID/fastapi-playground:TAG \
   --base-image python:3.14-slim \
   --automatic-updates
 ```
-Production env vars:
-```text
-ENVIRONMENT=production
-DEBUG=false
-FIREBASE_PROJECT_ID=<real>
-```
 
-## Firebase Cloud Functions (Python)
+Set `FIREBASE_PROJECT_ID` environment variable to enable trace correlation in Cloud Logging.
 
-This repo also includes a minimal Firebase Cloud Functions (2nd gen) Python codebase under `functions/`, showcasing how to deploy auxiliary HTTP endpoints alongside (or instead of) the FastAPI service.
+For detailed infrastructure setup, see [GCP.md](GCP.md).
 
-Key points:
-
-- Runtime: Python 3.14 (`"runtime": "python314"` in `firebase.json`).
-- Region: `europe-west4` (set globally via `options.set_global_options`).
-- Memory: 128 MB (`memory=options.MemoryOption.MB_128`).
-- Scaling limits (env-configurable):
-  - `MIN_INSTANCES` (default 0)
-  - `MAX_INSTANCES` (default 2)
-- Example function: `on_request_example` returns a simple "Hello world!" response.
-- Dependencies managed via `functions/pyproject.toml` (uses uv by default on Python 3.14+; keep lean to reduce cold starts).
-
-### Project Config (firebase.json excerpt)
-
-```jsonc
-{
-  "functions": [
-    {
-      "source": "functions",
-      "location": "europe-west4",
-      "codebase": "default",
-      "runtime": "python314"
-    }
-  ],
-  "emulators": {
-    "auth": { "port": 7010 },
-    "functions": { "port": 7020 },
-    "firestore": { "port": 7030 },
-    "storage": { "port": 7040 },
-    "ui": { "enabled": true },
-    "singleProjectMode": true
-  }
-}
-```
-
-### Deployment
-
-From repository root (or `cd functions` first):
+### Firebase Cloud Functions
 
 ```bash
 cd functions
-uv sync                                # Install dependencies
-export FUNCTIONS_DISCOVERY_TIMEOUT=30  # Helps CLI module scan (avoid premature timeout)
+uv sync
 firebase deploy --only functions
 ```
 
-Common one-liner:
-```bash
-cd functions && uv sync && firebase deploy --only functions
-```
+See [functions/README.md](functions/README.md) for Cloud Functions documentation.
 
-Set scaling overrides per deployment (bash examples):
-```bash
-export MIN_INSTANCES=0
-export MAX_INSTANCES=3
-firebase deploy --only functions
-```
+## CI/CD
 
-### Emulator Suite
+GitHub Actions workflows in `.github/workflows/`:
 
-Run local emulators (functions + auth + firestore + storage) with ports defined in `firebase.json`:
-```bash
-firebase emulators:start
-```
-Or just functions:
-```bash
-firebase emulators:start --only functions
-```
-Access the Emulator UI (auto-listed in terminal) to inspect requests, Firestore docs, and Auth users.
+- **app-ci.yml**: Build, lint, type check, tests, coverage report
+- **labeler.yml**: Automatic PR labeling
 
-Environment parity tips:
-- Provide service account credentials if your function code escalates privileges beyond emulator defaults (`GOOGLE_APPLICATION_CREDENTIALS`).
-- Ensure any additional env vars (e.g., `MIN_INSTANCES`, `MAX_INSTANCES`) are exported before starting the emulator for realistic behavior.
+## Contributing
 
-### When to Use Functions vs FastAPI
-
-| Use Case | Prefer FastAPI App | Prefer Cloud Function |
-| -------- | ------------------ | --------------------- |
-| Many cohesive REST endpoints | Yes | No |
-| Single lightweight webhook / trigger | No | Yes |
-| Needs custom middleware stack, complex routing | Yes | No |
-| Sporadic traffic, pay-per-invoke desirable | Maybe (cold starts if Cloud Run min=0) | Yes |
-| Long-lived connections / streaming | Yes | No (not ideal) |
-
-You can mix both: keep core API in FastAPI (Cloud Run) and deploy isolated experimental or region-specific endpoints as Functions.
-
-### Adding More Functions
-
-1. Create a new function in `functions/main.py` using `@https_fn.on_request()` or other trigger decorators.
-2. (Optional) Add per-function `max_instances` or `timeout_sec` in the decorator parameters.
-3. Update tests (if you add business logic—consider factoring non-trigger code into reusable modules for unit testing outside the Firebase runtime).
-4. Redeploy: `firebase deploy --only functions`.
-
-### Vertex AI / Generative AI (Optional)
-
-The scaffold includes commented guidance for Vertex AI via `google-genai`. To enable:
-1. Uncomment and initialize a `genai.Client` with `project` & `location`.
-2. Add required permissions (service account) for Vertex AI endpoints.
-3. Keep memory/timeout sizing in mind for model invocation latency.
-
----
-## Infrastructure Docs
-
-Extended Google Cloud & Firebase provisioning guide lives in [`GCP.md`](GCP.md). Keep README high-level; update `GCP.md` for infra changes (regions, IAM roles, API enablement, CI/CD specifics).
-
----
-## CI & Automation
-
-**CI Workflow** (`.github/workflows/ci.yml`):
-1. Checkout + Python 3.14 setup
-2. Install dependencies (`just install`)
-3. Lint (`just lint`)
-4. Type checking (`just typing`)
-5. Coverage tests (`just cov` + htmlcov artifact upload)
-6. Coverage comment on PRs
-
-**Label Automation:**
-- Auto-labeling: `.github/workflows/labeler.yml`
-- Manual backfill: `.github/workflows/labeler-manual.yml`
-
-## Development Conventions
-
-- **Routers thin** — Put business logic in `services/`
-- **Async endpoints** — Use `async def` for I/O-bound operations
-- **Type hints everywhere** — Ruff `ANN` rules enforce annotations
-- **Import grouping** — stdlib / third-party / local with blank lines
-- **Config access** — Use `get_settings()`, never read env directly
-- **No secrets in logs** — Redact sensitive fields
-- **Isolated tests** — Mock external services, no network calls
-- **Dependency injection** — Use typed aliases from [app/dependencies.py](app/dependencies.py) (`CurrentUser`, `ProfileServiceDep`)
-
-## Gotchas & Tips
-
-| Area | Issue | Solution |
-|------|-------|----------|
-| CORS | Empty `CORS_ORIGINS` denies all | Set explicit origins for browser clients |
-| Body size | Hard 413 at limit | Communicate limit to clients uploading large payloads |
-| Firebase Auth | Blocking SDK call | Token verification runs via `asyncio.to_thread()` |
-| Firestore | Async client required | Use `get_async_firestore_client()` for async ops |
-| Pydantic v2 | API changes from v1 | Use `model_dump()` not `.dict()`, `model_validate()` not `.parse_obj()` |
-| Pydantic aliases | `model_dump()` ignores aliases by default | Use `serialize_by_alias=True` in `ConfigDict` for models with `alias=` fields |
-| Trailing slashes | `redirect_slashes=False` | Always use paths without trailing slash (e.g., `/profile`) |
-
-## For AI Assistants
-
-**Adding an endpoint:**
-1. Define request/response models in `app/models/` (use `Field(examples=[...])` for all fields)
-2. Add domain exceptions in `app/exceptions/` if needed
-3. Implement service logic in `app/services/`
-4. Create router in `app/routers/` using `APIRouter` with tags and `operation_id`
-5. Register router in [app/main.py](app/main.py)
-6. Add unit tests for service, integration tests for route
-
-**Adding configuration:**
-1. Add field in `Settings` class ([app/core/config.py](app/core/config.py))
-2. Access via `get_settings()` in application code
-3. Update this README if user-facing
-
-**Adding exceptions:**
-1. Create exception class in `app/exceptions/` inheriting from `fastapi-problem` base classes (e.g., `NotFoundProblem`, `ConflictProblem`)
-2. Set `title` class attribute for the error title
-3. Export from [app/exceptions/__init__.py](app/exceptions/__init__.py)
-4. Exception handler auto-converts to RFC 9457 Problem Details responses
-
-**Key patterns:**
-- Use `CurrentUser` and `ProfileServiceDep` type aliases for dependency injection
-- Profile router uses `PATCH` for partial updates (not `PUT`)
-- All routes have `operation_id` for stable SDK generation (pattern: `<resource>_<action>`)
-- Response models return resources directly (no wrapper envelopes)
-- POST endpoints return 201 with `Location` header
-- DELETE endpoints return 204 No Content
-- All errors use RFC 9457 Problem Details via `fastapi-problem`
+See [AGENTS.md](AGENTS.md) for coding guidelines and conventions.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

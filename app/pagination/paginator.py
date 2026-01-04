@@ -1,4 +1,6 @@
-"""Generic cursor-based pagination helper."""
+"""
+Generic cursor-based pagination helper.
+"""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -12,7 +14,9 @@ T = TypeVar("T")
 
 @dataclass
 class PaginationResult[T]:
-    """Result of pagination operation."""
+    """
+    Result of pagination operation.
+    """
 
     items: list[T]
     total: int

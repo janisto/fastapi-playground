@@ -117,7 +117,9 @@ def cbor_decode_error_handler(
     request: Request,
     exc: CBORDecodeError,
 ) -> CBORDecodeProblem:
-    """Handle CBOR decode errors with RFC 9457 Problem Details."""
+    """
+    Handle CBOR decode errors with RFC 9457 Problem Details.
+    """
     return CBORDecodeProblem(detail=exc.detail)
 
 
@@ -126,7 +128,9 @@ def cbor_decode_http_exception_handler(
     request: Request,
     exc: CBORDecodeHTTPException,
 ) -> CBORDecodeProblem:
-    """Handle CBOR decode HTTPException with RFC 9457 Problem Details."""
+    """
+    Handle CBOR decode HTTPException with RFC 9457 Problem Details.
+    """
     return CBORDecodeProblem(detail=str(exc.detail))
 
 
@@ -135,7 +139,9 @@ def unsupported_media_type_handler(
     request: Request,
     exc: UnsupportedMediaTypeHTTPException,
 ) -> UnsupportedMediaTypeProblem:
-    """Handle unsupported media type with RFC 9457 Problem Details."""
+    """
+    Handle unsupported media type with RFC 9457 Problem Details.
+    """
     return UnsupportedMediaTypeProblem(detail=str(exc.detail))
 
 

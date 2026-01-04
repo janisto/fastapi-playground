@@ -5,7 +5,7 @@ These tests verify the complete flow including real Firestore operations.
 Requires Firebase emulators to be running.
 """
 
-BASE_URL = "/profile"
+BASE_URL = "/v1/profile"
 
 
 class TestProfileE2EFlow:
