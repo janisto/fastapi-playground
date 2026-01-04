@@ -26,6 +26,9 @@ from app.core.firebase import get_async_firestore_client
 from app.exceptions import ResourceAlreadyExistsError, ResourceNotFoundError
 from app.middleware import log_audit_event
 from app.models.resource import RESOURCE_COLLECTION, Resource, ResourceCreate, ResourceUpdate
+# Note: Models are organized in subdirectories:
+# - app/models/resource/requests.py (ResourceCreate, ResourceUpdate)
+# - app/models/resource/responses.py (Resource, RESOURCE_COLLECTION)
 
 if TYPE_CHECKING:
     from google.cloud.firestore import AsyncClient, AsyncDocumentReference, AsyncTransaction
@@ -237,10 +240,10 @@ ResourceServiceDep = Annotated[ResourceService, Depends(get_resource_service)]
 
 ## Collection Constants
 
-Define collection names in the model file:
+Define collection names in the response model file:
 
 ```python
-# app/models/resource.py
+# app/models/resource/responses.py
 RESOURCE_COLLECTION = "resources"
 ```
 

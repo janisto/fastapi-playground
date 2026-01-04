@@ -10,22 +10,43 @@ For comprehensive coding guidelines, see `AGENTS.md` in the repository root.
 
 ## Model File Structure
 
-Create models in `app/models/` with a docstring explaining the module and any constants:
+Create models in `app/models/<domain>/` (e.g., `app/models/profile/`) with separate files:
+- `requests.py` - Request models (`ResourceBase`, `ResourceCreate`, `ResourceUpdate`)
+- `responses.py` - Response models (`Resource`) and collection constants
+- `__init__.py` - Re-exports for convenient imports
 
+Example structure:
+```
+app/models/resource/
+├── __init__.py       # Re-exports all models and constants
+├── requests.py       # ResourceBase, ResourceCreate, ResourceUpdate
+└── responses.py      # Resource, RESOURCE_COLLECTION
+```
+
+**Request models** (`app/models/resource/requests.py`):
 ```python
 """
-Resource data models.
+Resource request models.
+"""
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.types import NormalizedEmail, Phone
+```
+
+**Response models** (`app/models/resource/responses.py`):
+```python
+"""
+Resource response models.
 
 Constants
 ---------
 `RESOURCE_COLLECTION` is the canonical Firestore collection name for resource documents.
 """
 
-from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.types import NormalizedEmail, Phone, UtcDatetime
+from app.models.types import UtcDatetime
 
 # Firestore collection name
 RESOURCE_COLLECTION = "resources"
@@ -152,12 +173,12 @@ class Resource(BaseModel):
 
 ```python
 # Correct - return resource directly
-@router.get("/")
+@router.get("")
 async def get_resource(...) -> Resource:
     return await service.get_resource(user_id)
 
 # Wrong - do not use wrapper responses
-@router.get("/")
+@router.get("")
 async def get_resource(...) -> ResourceResponse:
     return ResourceResponse(success=True, resource=resource)
 ```

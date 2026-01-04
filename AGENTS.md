@@ -84,19 +84,19 @@ This project follows modern REST API best practices:
 
 ```python
 # Correct - return resource directly
-@router.get("/")
+@router.get("")
 async def get_profile(current_user: CurrentUser) -> Profile:
     return await service.get_profile(current_user.uid)
 
 # Correct - POST with 201 and Location header
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_profile(..., response: Response) -> Profile:
     profile = await service.create_profile(...)
-    response.headers["Location"] = "/profile/"
+    response.headers["Location"] = "/profile"
     return profile
 
 # Correct - DELETE with 204 No Content
-@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_profile(...) -> None:
     await service.delete_profile(...)
     return None
@@ -184,7 +184,7 @@ Use cursor-based pagination with RFC 8288 Link headers. The `paginate()` helper 
 ```python
 from app.pagination import paginate
 
-@router.get("/")
+@router.get("")
 async def list_items(
     request: Request,
     response: Response,
@@ -214,7 +214,7 @@ For manual cursor handling (simpler cases):
 ```python
 from app.pagination import Cursor, CursorParam, LimitParam, build_link_header, decode_cursor
 
-@router.get("/")
+@router.get("")
 async def list_items(
     request: Request,
     response: Response,
@@ -263,7 +263,7 @@ class ItemList(BaseModel):
 **Important**: Per JSON Schema spec, the `$schema` value MUST be an absolute URI with a scheme. Use `request.base_url` to build the full URL at runtime:
 
 ```python
-@router.get("/")
+@router.get("")
 async def list_items(request: Request, response: Response) -> ItemList:
     # Add describedBy Link header
     response.headers["Link"] = '</schemas/ItemsData.json>; rel="describedBy"'
@@ -401,12 +401,15 @@ async def list_items(request: Request, response: Response) -> ItemList:
   - Use Pydantic v2 `.model_dump()` for serialization instead of deprecated `.dict()`. Use `exclude_unset=True` for partial updates.
   - Add docstrings to models describing their purpose.
   - Use `Field(...)` with `description` for OpenAPI documentation.
-  - **Firestore collection constants**: Define collection names as module-level constants in the relevant model file:
+  - **Firestore collection constants**: Define collection names as module-level constants in the relevant model file (typically the response model file within the domain subdirectory):
     ```python
-    # app/models/profile.py
+    # app/models/profile/responses.py
     PROFILE_COLLECTION = "profiles"
     ```
-    Import and use in services to ensure consistency.
+    Re-export from `__init__.py` and import in services to ensure consistency:
+    ```python
+    from app.models.profile import PROFILE_COLLECTION
+    ```
   - **Field-level examples**: Scalar fields MUST have `Field(examples=[...])` for OpenAPI documentation. Array/list fields of nested models should **omit** examples since the nested schema provides documentation automatically:
     ```python
     from pydantic import BaseModel, EmailStr, Field
@@ -637,7 +640,7 @@ async def list_items(request: Request, response: Response) -> ItemList:
 
 2) Structure & style
    - Unit tests: `tests/unit/**` (mirror `app/` folder structure)
-   - Integration tests: `tests/integration/**` (mirror `app/routers/` structure)
+   - Integration tests: `tests/integration/**` (mirror `app/api/` structure)
    - E2E tests: `tests/e2e/**` (local only, requires Firebase emulators)
    - Use `pytest` with `pytest-asyncio` for async tests (`asyncio_mode = "auto"` in pyproject.toml; no decorator needed).
    - Unit tests must not use real network/Firestore; mock Firebase Admin/clients.
@@ -678,12 +681,12 @@ async def list_items(request: Request, response: Response) -> ItemList:
 FastAPI uses return type annotations as implicit `response_model`. You can omit the explicit `response_model=` parameter when the return type annotation is a Pydantic model:
 ```python
 # Preferred - return type serves as response_model
-@router.get("/")
+@router.get("")
 async def get_profile(current_user: CurrentUser) -> ProfileResponse:
     ...
 
 # Also valid - explicit response_model (useful for response_model_exclude_unset)
-@router.patch("/", response_model=ProfileResponse, response_model_exclude_unset=True)
+@router.patch("", response_model=ProfileResponse, response_model_exclude_unset=True)
 async def update_profile(...) -> ProfileResponse:
     ...
 ```
@@ -694,10 +697,10 @@ Use explicit `response_model=` when you need additional options like `response_m
 
 Use stable `operation_id` values with the pattern `<area>_<resource>_<action>` for consistent client SDK generation:
 ```python
-@router.post("/", operation_id="profile_create", ...)
-@router.get("/", operation_id="profile_get", ...)
-@router.patch("/", operation_id="profile_update", ...)
-@router.delete("/", operation_id="profile_delete", ...)
+@router.post("", operation_id="profile_create", ...)
+@router.get("", operation_id="profile_get", ...)
+@router.patch("", operation_id="profile_update", ...)
+@router.delete("", operation_id="profile_delete", ...)
 ```
 
 This ensures generated client methods have predictable names (e.g., `client.profile_create()`).
@@ -735,7 +738,7 @@ All API routes must use Pydantic response models for type safety and OpenAPI doc
 **Example with 2XX success response:**
 ```python
 @router.post(
-    "/",
+    "",
     status_code=status.HTTP_201_CREATED,
     operation_id="profile_create",
     responses={
@@ -750,7 +753,7 @@ async def create_profile(...) -> ProfileResponse:
 **For partial updates** (PATCH endpoints), use `response_model_exclude_unset=True` to omit fields not explicitly set:
 ```python
 @router.patch(
-    "/",
+    "",
     response_model=ProfileResponse,
     response_model_exclude_unset=True,
     operation_id="profile_update",
@@ -763,7 +766,7 @@ async def update_profile(...) -> ProfileResponse:
 **For DELETE endpoints with 204 No Content:**
 ```python
 @router.delete(
-    "/",
+    "",
     status_code=status.HTTP_204_NO_CONTENT,
     operation_id="profile_delete",
     responses={
@@ -789,15 +792,23 @@ async def delete_profile(...) -> None:
 ## Project Structure
 
 - `app/` — FastAPI app:
+  - `api/` — API route definitions with versioning:
+    - `__init__.py` — Exports `v1_router` (versioned prefix `/v1`) containing `profile`, `hello`, `items` routers
+    - `health.py`, `schemas.py` — Unversioned routes at `/health`, `/schemas`
+    - `profile.py`, `hello.py`, `items.py` — Business endpoint routers (mounted under `/v1/`)
   - `auth/` — Firebase authentication (`verify_firebase_token`, `FirebaseUser`, `security` HTTPBearer scheme)
-  - `core/` — Configuration (`config.py`), Firebase initialization (`firebase.py`), exception handler (`exception_handler.py`), CBOR support (`cbor.py`), validation (`validation.py`)
+  - `core/` — Configuration (`config.py`), Firebase initialization (`firebase.py`), exception handler (`exception_handler.py`), CBOR support (`cbor.py`), validation (`validation.py`), shared constants (`constants.py`)
   - `dependencies.py` — Dependency injection aliases (`CurrentUser`, `ProfileServiceDep`, service providers)
-  - `exceptions/` — Domain exceptions using `fastapi-problem` (`base.py` re-exports, resource-specific in e.g., `profile.py`)
+  - `exceptions/` — Domain exceptions using `fastapi-problem` (`base.py` re-exports, resource-specific in `profile.py`, `schema.py`)
   - `middleware/` — ASGI middleware (body limit, logging with W3C traceparent correlation, security headers); exports `log_audit_event`, `setup_logging`, `get_logger`
-  - `models/` — Pydantic schemas (`profile.py`, `error.py` with ProblemResponse, `health.py`), shared type aliases (`types.py`: `NormalizedEmail`, `Phone`, `LanguageCode`, `CountryCode`)
+  - `models/` — Pydantic schemas organized by domain subdirectories:
+    - `profile/` — `requests.py` (ProfileCreate, ProfileUpdate), `responses.py` (Profile, PROFILE_COLLECTION)
+    - `health/`, `hello/`, `items/` — Similar structure with domain-specific models
+    - `types.py` — Shared type aliases (UtcDatetime, NormalizedEmail, Phone, etc.)
+    - `error.py` — Error response models (ProblemResponse, ValidationProblemResponse)
   - `pagination/` — Cursor-based pagination utilities (`cursor.py`, `link.py`, `paginator.py`, `params.py`)
-  - `routers/` — API route definitions (`profile.py`, `health.py`, `hello.py`, `items.py`)
-  - `services/` — Business logic and async Firestore operations with transactions
+  - `services/` — Business logic organized by domain subdirectories:
+    - `profile/` — `service.py` containing ProfileService with async Firestore operations
 - `tests/` — unit and integration tests
 - `functions/` — Firebase Cloud Functions (Python 3.14) codebase (`main.py`, its own `pyproject.toml`)
 - `Justfile` — dev/test/build tasks
@@ -839,28 +850,59 @@ CI note: Currently CI focuses on the FastAPI app; if functions gain complex logi
 
 ## Useful CLI Commands (via just)
 
-| Command           | Purpose                                               |
-| ----------------- | ----------------------------------------------------- |
-| `just serve`      | Run dev server on http://127.0.0.1:8080               |
-| `just test`       | Run unit + integration tests (CI-compatible)          |
-| `just test-unit`  | Run unit tests only                                   |
-| `just test-integration` | Run integration tests only                      |
-| `just test-e2e`   | Run E2E tests (requires Firebase emulators)           |
-| `just test-all`   | Run all tests including E2E                           |
-| `just cov`        | Run tests with coverage (html report to `htmlcov/`)   |
-| `just lint`       | Ruff check + format                                   |
-| `just typing`     | Type checking via ty                                  |
-| `just check-all`  | Run lint, test, and typing                            |
-| `just modernize`  | Apply safe modernization via Ruff's pyupgrade rules   |
-| `just install`    | Sync dependencies with uv                             |
-| `just update`     | Upgrade dependencies with uv                          |
-| `just clean`      | Remove caches and temporary files                     |
-| `just fresh`      | Clean and reinstall                                   |
-| `just emulators`  | Start Firebase emulators for E2E tests                |
+### Test Commands
 
-Notes
-- You can override dev server port via `PORT` env (default 8080).
-- For ad-hoc HTTP against the dev server: `just req <path> [args...]`.
+| Command                 | Purpose                                             |
+| ----------------------- | --------------------------------------------------- |
+| `just test`             | Run unit + integration tests (CI-compatible)        |
+| `just test-unit`        | Run unit tests only                                 |
+| `just test-integration` | Run integration tests only                          |
+| `just test-e2e`         | Run E2E tests (requires Firebase emulators)         |
+| `just test-all`         | Run all tests including E2E                         |
+| `just cov`              | Run tests with coverage (html report to `htmlcov/`) |
+| `just emulators`        | Start Firebase emulators for E2E tests              |
+
+### Quality Assurance Commands
+
+| Command                 | Purpose                                             |
+| ----------------------- | --------------------------------------------------- |
+| `just lint`             | Ruff check + format check                           |
+| `just fix`              | Ruff check --fix + format (auto-fix issues)         |
+| `just typing`           | Type checking via ty                                |
+| `just modernize`        | Apply safe modernization via Ruff's pyupgrade rules |
+| `just qa`               | Run fix, typing, and test                           |
+| `just check`            | Run lint, typing, and test                          |
+
+### Run Commands
+
+| Command                 | Purpose                                             |
+| ----------------------- | --------------------------------------------------- |
+| `just serve`            | Run dev server on http://127.0.0.1:8080             |
+| `just req <path>`       | Send HTTP request to dev server via httpie          |
+| `just browser`          | Open dev server in web browser                      |
+
+### Container Commands
+
+| Command                 | Purpose                                             |
+| ----------------------- | --------------------------------------------------- |
+| `just docker-build`     | Build Docker image (`fastapi-playground:local`)     |
+| `just docker-up`        | Start container in detached mode on port 8080       |
+| `just docker-down`      | Stop the running container                          |
+| `just docker-logs`      | Stream container logs (Ctrl+C to exit)              |
+
+### Lifecycle Commands
+
+| Command                 | Purpose                                             |
+| ----------------------- | --------------------------------------------------- |
+| `just install`          | Sync dependencies with uv                           |
+| `just update`           | Upgrade dependencies with uv                        |
+| `just clean`            | Remove caches and temporary files                   |
+| `just fresh`            | Clean and reinstall                                 |
+
+### Notes
+
+- Override dev server port via `PORT` env (default 8080).
+- Docker workflow: `just docker-build` → `just docker-up` → `just docker-down`.
 
 ---
 
@@ -872,7 +914,7 @@ Notes
 - Keep diffs focused; avoid unrelated refactors in the same PR.
 
 Checklist for PRs
-- [ ] Tests added/updated and passing locally (`just check-all`)
+- [ ] Tests added/updated and passing locally (`just check`)
 - [ ] Coverage meets target (aim ≥90%)
 - [ ] Lint/type checks clean (Ruff/ty)
 - [ ] API responses/docs accurate (response models, codes, examples)

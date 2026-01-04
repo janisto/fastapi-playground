@@ -53,7 +53,7 @@ async def create_profile(
     """
     try:
         profile = await service.create_profile(current_user.uid, profile_data)
-        response.headers["Location"] = "/profile"
+        response.headers["Location"] = str(request.url.path)
         response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
         return Profile(
             schema_url=str(request.base_url) + "schemas/ProfileData.json",

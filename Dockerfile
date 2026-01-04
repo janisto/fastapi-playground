@@ -6,26 +6,22 @@
 # Example: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
 #
 # Cloud Run automatic base image updates:
-# - Build your app image as usual.
-# - Deploy with: gcloud run deploy SERVICE \
-#     --image YOUR_IMAGE \
-#     --base-image BASE_IMAGE \
+# Deploy with automatic base image updates so Google can patch the base without a rebuild:
+#   gcloud run deploy fastapi-playground \
+#     --image REGION-docker.pkg.dev/PROJECT/REPO/fastapi-playground:latest \
+#     --platform managed \
+#     --region REGION \
+#     --base-image python314 \
 #     --automatic-updates
-#   This links your app image to a managed base so Google can patch it without a new revision.
 
 # Builder image: includes uv for dependency management
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:python3.14-trixie-slim
 # Runtime image: minimal Python image without uv (not needed at runtime)
-ARG PYTHON_IMAGE=python:3.14-slim-trixie
+ARG RUNTIME_IMAGE=python:3.14-slim-trixie
+# Version for OCI labels (injected at build time)
+ARG VERSION=dev
 
 FROM ${UV_IMAGE} AS builder
-
-# Install runtime dependencies
-# libmagic1: required by python-magic for file type detection
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libmagic1 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
 
 # Enable bytecode compilation to improve cold-start performance
 ENV UV_COMPILE_BYTECODE=1
@@ -61,21 +57,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-editable
 
 # Runtime stage: uses minimal Python image (no uv needed at runtime)
-FROM ${PYTHON_IMAGE} AS runtime
-
-# Install runtime dependencies
-# libmagic1: required by python-magic for file type detection
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libmagic1 \
-    && rm -rf /var/lib/apt/lists/*
+FROM ${RUNTIME_IMAGE} AS runtime
 
 # Create non-root user for security
+# UID 1001 chosen for Kubernetes runAsNonRoot policy compatibility
 RUN groupadd --system --gid 1001 app \
-    && useradd --system --gid 1001 --uid 1001 --create-home app
+    && useradd --system --gid 1001 --uid 1001 --no-create-home --shell /usr/sbin/nologin app
 
-# OCI provenance label for base image (useful for tooling/visibility)
-ARG PYTHON_IMAGE
-LABEL org.opencontainers.image.base.name="${PYTHON_IMAGE}"
+# OCI provenance labels (useful for tooling/visibility)
+ARG RUNTIME_IMAGE
+ARG VERSION
+LABEL org.opencontainers.image.base.name="${RUNTIME_IMAGE}" \
+      org.opencontainers.image.version="${VERSION}"
 
 # Ensure we use the project virtualenv at runtime
 ENV VIRTUAL_ENV=/app/.venv \
@@ -85,11 +78,11 @@ ENV VIRTUAL_ENV=/app/.venv \
 
 # Copy only what is needed to run
 WORKDIR /app
-COPY --from=builder --chown=app:app /app/.venv /app/.venv
-COPY --from=builder --chown=app:app /app/app /app/app
+COPY --from=builder --chown=1001:1001 /app/.venv /app/.venv
+COPY --from=builder --chown=1001:1001 /app/app /app/app
 
-# Switch to non-root user
-USER app
+# Switch to non-root user (numeric UID for Kubernetes runAsNonRoot policy compatibility)
+USER 1001:1001
 
 # Cloud Run expects the server to listen on $PORT (default 8080)
 ENV PORT=8080

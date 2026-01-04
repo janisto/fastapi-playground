@@ -88,7 +88,7 @@ def fake_db(mocker: MockerFixture) -> FakeAsyncClient:
     Patch Firestore client with fake.
     """
     db = FakeAsyncClient()
-    mocker.patch("app.services.profile.get_async_firestore_client", return_value=db)
+    mocker.patch("app.services.profile.service.get_async_firestore_client", return_value=db)
     return db
 
 
@@ -148,7 +148,7 @@ def mock_audit_log(mocker: MockerFixture) -> None:
     """
     Mock audit logging to avoid side effects.
     """
-    mocker.patch("app.services.profile.log_audit_event")
+    mocker.patch("app.services.profile.service.log_audit_event")
 
 
 class TestProfileServiceGetProfile:

@@ -1,6 +1,4 @@
-"""
-Health-related response models.
-"""
+"""Health response models."""
 
 from typing import Literal
 

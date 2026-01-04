@@ -10,7 +10,7 @@ For comprehensive coding guidelines, see `AGENTS.md` in the repository root.
 
 ## Router Setup
 
-Create routers in `app/routers/` with proper configuration:
+Create routers in `app/api/` with proper configuration:
 
 ```python
 """
@@ -56,7 +56,7 @@ Return resources directly with `Location` header:
 
 ```python
 @router.post(
-    "/",
+    "",
     status_code=status.HTTP_201_CREATED,
     summary="Create resource",
     description="Create a new resource for the authenticated user.",
@@ -82,7 +82,7 @@ async def create_resource(
     """
     try:
         resource = await service.create_resource(current_user.uid, resource_data)
-        response.headers["Location"] = "/resource/"
+        response.headers["Location"] = str(request.url.path)
         response.headers["Link"] = '</schemas/ResourceData.json>; rel="describedBy"'
         return Resource(
             schema_url=str(request.base_url) + "schemas/ResourceData.json",
@@ -104,7 +104,7 @@ async def create_resource(
 
 ```python
 @router.get(
-    "/",
+    "",
     summary="Get resource",
     description="Get the resource of the authenticated user.",
     operation_id="resource_get",
@@ -147,7 +147,7 @@ async def get_resource(
 
 ```python
 @router.delete(
-    "/",
+    "",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete resource",
     description="Delete the resource of the authenticated user.",
@@ -215,7 +215,7 @@ For partial updates, use `response_model_exclude_unset=True`:
 
 ```python
 @router.patch(
-    "/",
+    "",
     response_model=Resource,
     response_model_exclude_unset=True,
     summary="Update resource",
@@ -238,17 +238,23 @@ async def update_resource(
 
 ## Router Registration
 
-Register new routers in `app/main.py`:
+Register new routers in `app/api/__init__.py` and include in `app/main.py`:
 
 ```python
-from app.routers import resource
+# In app/api/__init__.py - add to v1_router for versioned endpoints
+from app.api import resource
+
+v1_router.include_router(resource.router)
+
+# In app/main.py - for unversioned endpoints
+from app.api import resource
 
 app.include_router(resource.router)
 ```
 
 ## URL Conventions
 
-- Always use paths without trailing slashes (e.g., `/resource` not `/resource/`)
+- Always use empty string `""` for root resource paths (e.g., `@router.post("")`)
 - Use plural nouns for collection endpoints
 - Keep routes RESTful: POST for create, GET for read, PATCH for update, DELETE for delete
 

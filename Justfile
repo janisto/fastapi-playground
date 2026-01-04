@@ -8,43 +8,53 @@ ARGS_SERVE := env("_UV_RUN_ARGS_SERVE", "")
 @_:
     just --list
 
+# Start Firebase emulators for E2E tests
+[group('test')]
+emulators:
+    firebase emulators:start --only auth,firestore
 
 # Run all CI-compatible tests (unit + integration)
-[group('qa')]
+[group('test')]
 test *args:
     uv run {{ ARGS_TEST }} -m pytest tests/unit/ tests/integration/ -v --cov=app {{ args }}
 
 # Run unit tests only
-[group('qa')]
+[group('test')]
 test-unit *args:
     uv run {{ ARGS_TEST }} -m pytest tests/unit/ -v {{ args }}
 
 # Run integration tests only
-[group('qa')]
+[group('test')]
 test-integration *args:
     uv run {{ ARGS_TEST }} -m pytest tests/integration/ -v {{ args }}
 
 # Run E2E tests (requires Firebase emulators)
-[group('qa')]
+[group('test')]
 test-e2e *args:
     uv run {{ ARGS_TEST }} -m pytest tests/e2e/ -v -s {{ args }}
 
 # Run all tests including E2E
-[group('qa')]
+[group('test')]
 test-all *args:
     uv run {{ ARGS_TEST }} -m pytest tests/ -v --cov=app {{ args }}
 
 # Run tests and measure coverage
-[group('qa')]
+[group('test')]
 @cov:
     uv run -m coverage erase
     uv run -m pytest tests/unit tests/integration --cov=app --cov-branch --cov-report=term-missing --cov-report=html --cov-report=json:coverage.json
+
+# Run linters and auto-fix issues
+[group('qa')]
+fix:
+    uvx ruff check --fix
+    uvx ruff format
 
 # Run linters
 [group('qa')]
 lint:
     uvx ruff check
-    uvx ruff format
+    uvx ruff format --check
 
 # Modernize code (PEP 585/604, etc.) via Ruff's pyupgrade
 [group('qa')]
@@ -55,11 +65,15 @@ modernize:
 # Check types
 [group('qa')]
 typing:
-    uvx ty check --python .venv app
+    uvx ty check
+
+# Quality assurance: fix, format, type check, and test
+[group('qa')]
+qa: fix typing test
 
 # Perform all checks
 [group('qa')]
-check-all: lint typing test
+check: lint typing test
 
 # Run development server
 # --no-server-header: Hide server fingerprinting (OWASP recommendation)
@@ -83,16 +97,15 @@ browser:
 
 # Container tasks
 [group('container')]
-docker-build image="fastapi-playground:local" pyimg="":
-        if [ -n "{{ pyimg }}" ]; then \
-            docker build --build-arg PYTHON_IMAGE={{ pyimg }} -t {{ image }} . ;\
-        else \
-            docker build -t {{ image }} . ;\
-        fi
+docker-build image="fastapi-playground:local" version="dev" runtime_img="":
+    docker build \
+        --build-arg VERSION={{ version }} \
+        {{ if runtime_img != "" { "--build-arg RUNTIME_IMAGE=" + runtime_img } else { "" } }} \
+        -t {{ image }} .
 
 [group('container')]
-docker-run image="fastapi-playground:local" env_file=".env" name="fastapi-playground" creds="service_account.json":
-    docker run --rm --name {{ name }} -p {{ PORT }}:8080 \
+docker-up image="fastapi-playground:local" env_file=".env" name="fastapi-playground" creds="service_account.json":
+    docker run -d --rm --name {{ name }} -p {{ PORT }}:8080 \
         --env-file {{ env_file }} \
         -v "$(pwd)/{{ creds }}:/app/credentials.json:ro" \
         -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
@@ -102,6 +115,9 @@ docker-run image="fastapi-playground:local" env_file=".env" name="fastapi-playgr
 docker-logs name="fastapi-playground":
     docker logs -f {{ name }}
 
+[group('container')]
+docker-down name="fastapi-playground":
+    -docker stop {{ name }}
 
 # Update dependencies
 [group('lifecycle')]
@@ -117,14 +133,9 @@ install:
 [group('lifecycle')]
 clean:
     rm -rf .venv .pytest_cache .ruff_cache .coverage htmlcov
+    rm -f coverage.json firebase-debug.log
     find . -type d -name "__pycache__" -exec rm -r {} +
 
 # Recreate project virtualenv from nothing
 [group('lifecycle')]
 fresh: clean install
-
-
-# Start Firebase emulators for E2E tests
-[group('run')]
-emulators:
-    firebase emulators:start --only auth,firestore

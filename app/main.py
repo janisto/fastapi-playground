@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_problem.handler import add_exception_handler
 
+from app.api import health, schemas, v1_router
+from app.api.schemas import populate_schema_cache
 from app.core.config import get_settings
 from app.core.exception_handler import eh
 from app.core.firebase import close_async_firestore_client, initialize_firebase
@@ -18,8 +20,6 @@ from app.middleware import (
     SecurityHeadersMiddleware,
     setup_logging,
 )
-from app.routers import health, hello, items, profile, schemas
-from app.routers.schemas import populate_schema_cache
 
 
 @asynccontextmanager
@@ -49,11 +49,9 @@ app = FastAPI(
 )
 
 # Include routers
-app.include_router(profile.router)
-app.include_router(health.router)
-app.include_router(hello.router)
-app.include_router(items.router)
-app.include_router(schemas.router)
+app.include_router(v1_router)  # /v1/profile, /v1/hello, /v1/items
+app.include_router(health.router)  # /health (unversioned)
+app.include_router(schemas.router)  # /schemas (unversioned)
 
 # Populate schema cache from OpenAPI spec (must be after all routers are registered)
 populate_schema_cache(app.openapi())
@@ -92,11 +90,3 @@ app.add_middleware(
 
 # Logging (outermost) - capture full request lifecycle including all middleware
 app.add_middleware(RequestContextLogMiddleware)
-
-
-@app.get("/", tags=["root"], include_in_schema=False)
-async def root() -> dict[str, str]:
-    """
-    Root endpoint.
-    """
-    return {"message": "Hello", "docs": "/api-docs"}
