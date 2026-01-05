@@ -1,3 +1,6 @@
+# Justfile for FastAPI Playground
+# https://github.com/casey/just
+
 set dotenv-load
 
 PORT := env("PORT", "8080")
