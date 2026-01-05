@@ -8,7 +8,7 @@
 # Cloud Run automatic base image updates:
 # Deploy with automatic base image updates so Google can patch the base without a rebuild:
 #   gcloud run deploy fastapi-playground \
-#     --image REGION-docker.pkg.dev/PROJECT/REPO/fastapi-playground:latest \
+#     --image REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest \
 #     --platform managed \
 #     --region REGION \
 #     --base-image python314 \

@@ -897,10 +897,10 @@ CI note: Currently CI focuses on the FastAPI app; if functions gain complex logi
 
 | Command                 | Purpose                                             |
 | ----------------------- | --------------------------------------------------- |
-| `just docker-build`     | Build Docker image (`fastapi-playground:local`)     |
-| `just docker-up`        | Start container in detached mode on port 8080       |
-| `just docker-down`      | Stop the running container                          |
-| `just docker-logs`      | Stream container logs (Ctrl+C to exit)              |
+| `just container-build`  | Build container image (`fastapi-playground:latest`) |
+| `just container-up`     | Start container in detached mode on port 8080       |
+| `just container-down`   | Stop the running container                          |
+| `just container-logs`   | Stream container logs (Ctrl+C to exit)              |
 
 ### Lifecycle Commands
 
@@ -914,7 +914,7 @@ CI note: Currently CI focuses on the FastAPI app; if functions gain complex logi
 ### Notes
 
 - Override dev server port via `PORT` env (default 8080).
-- Docker workflow: `just docker-build` → `just docker-up` → `just docker-down`.
+- Container workflow: `just container-build` → `just container-up` → `just container-down`.
 
 ---
 

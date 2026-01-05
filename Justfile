@@ -4,6 +4,9 @@ PORT := env("PORT", "8080")
 ARGS_TEST := env("_UV_RUN_ARGS_TEST", "")
 ARGS_SERVE := env("_UV_RUN_ARGS_SERVE", "")
 
+# Container runtime: prefer podman, fallback to docker
+CONTAINER_RUNTIME := if `command -v podman 2>/dev/null || true` != "" { "podman" } else { "docker" }
+
 
 @_:
     just --list
@@ -97,27 +100,28 @@ browser:
 
 # Container tasks
 [group('container')]
-docker-build image="fastapi-playground:local" version="dev" runtime_img="":
-    docker build \
+container-build image="fastapi-playground:latest" version="dev" runtime_img="":
+    {{ CONTAINER_RUNTIME }} build \
         --build-arg VERSION={{ version }} \
         {{ if runtime_img != "" { "--build-arg RUNTIME_IMAGE=" + runtime_img } else { "" } }} \
         -t {{ image }} .
 
 [group('container')]
-docker-up image="fastapi-playground:local" env_file=".env" name="fastapi-playground" creds="service_account.json":
-    docker run -d --rm --name {{ name }} -p {{ PORT }}:8080 \
-        --env-file {{ env_file }} \
+container-up image="fastapi-playground:latest" name="fastapi-playground" creds="service_account.json":
+    {{ CONTAINER_RUNTIME }} run -d --rm --name {{ name }} \
+        {{ if path_exists(".env") == "true" { "--env-file .env" } else { "" } }} \
+        -p {{ PORT }}:8080 \
         -v "$(pwd)/{{ creds }}:/app/credentials.json:ro" \
         -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
         {{ image }}
 
 [group('container')]
-docker-logs name="fastapi-playground":
-    docker logs -f {{ name }}
+container-logs name="fastapi-playground":
+    {{ CONTAINER_RUNTIME }} logs -f {{ name }}
 
 [group('container')]
-docker-down name="fastapi-playground":
-    -docker stop {{ name }}
+container-down name="fastapi-playground":
+    -{{ CONTAINER_RUNTIME }} stop {{ name }}
 
 # Update dependencies
 [group('lifecycle')]
