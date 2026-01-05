@@ -230,16 +230,16 @@ just fresh           # Clean + reinstall
 5. Register router in `app/main.py`
 6. Add unit tests for service, integration tests for routes
 
-## Docker
+## Container
 
 ```bash
-just docker-build    # Build image
-just docker-up       # Run container
-just docker-logs     # View container logs
-just docker-down     # Stop container
+just container-build    # Build image
+just container-up       # Run container
+just container-logs     # View container logs
+just container-down     # Stop container
 ```
 
-Or with Docker CLI:
+Or with Docker/Podman CLI:
 ```bash
 docker build -t fastapi-playground:latest .
 docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
@@ -250,18 +250,27 @@ docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
 ### Google Cloud Run
 
 ```bash
-# Build and push
-docker build -t gcr.io/PROJECT_ID/fastapi-playground .
-docker push gcr.io/PROJECT_ID/fastapi-playground
+# Build and push to Artifact Registry
+gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest
 
 # Deploy with automatic base image updates
 gcloud run deploy fastapi-playground \
-  --image gcr.io/PROJECT_ID/fastapi-playground \
+  --image REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest \
   --platform managed \
-  --region us-central1 \
-  --base-image python:3.14-slim \
+  --region REGION \
+  --base-image python314 \
+  --automatic-updates
+
+# Deploy from source with automatic base image updates
+gcloud run deploy fastapi-playground \
+  --source . \
+  --platform managed \
+  --region REGION \
+  --base-image python314 \
   --automatic-updates
 ```
+
+The `--base-image` and `--automatic-updates` flags enable [automatic base image updates](https://cloud.google.com/run/docs/configuring/services/automatic-base-image-updates), allowing Google to apply security patches to the OS and runtime without rebuilding or redeploying.
 
 Set `FIREBASE_PROJECT_ID` environment variable to enable trace correlation in Cloud Logging.
 
