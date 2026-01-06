@@ -1,4 +1,4 @@
-name: Check linting, typing, run app unit tests and upload coverage report
+name: App linting, typing, tests and coverage
 
 on:
   push:
@@ -9,13 +9,14 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check-all:
+  ci:
     runs-on: ubuntu-latest
 
     steps:

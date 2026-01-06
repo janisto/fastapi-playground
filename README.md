@@ -290,8 +290,15 @@ See [functions/README.md](functions/README.md) for Cloud Functions documentation
 
 GitHub Actions workflows in `.github/workflows/`:
 
-- **app-ci.yml**: Build, lint, type check, tests, coverage report
-- **labeler.yml**: Automatic PR labeling
+| Workflow | Description |
+|----------|-------------|
+| `app-ci.yml` | Build, tests, and coverage report |
+| `app-lint.yml` | Code quality (Ruff linting and formatting) |
+| `labeler.yml` | Automatic PR labeling |
+| `labeler-manual.yml` | Manual labeling for historical PRs |
+| `dependabot-auto-merge.yml` | Auto-merge Dependabot minor/patch updates |
+
+Dependabot is configured in `.github/dependabot.yml` for automated dependency updates.
 
 ## Contributing
 

@@ -4,16 +4,16 @@ on:
 - pull_request_target
 
 permissions:
-    contents: read
-    pull-requests: write
-    issues: write
+  contents: read
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  labeler:
+  label-pr:
     runs-on: ubuntu-latest
 
     steps:

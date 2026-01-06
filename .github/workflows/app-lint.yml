@@ -1,0 +1,33 @@
+name: App code quality (linting and formatting)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Ruff
+        uses: astral-sh/ruff-action@v3
+
+      - name: Run Ruff linter
+        run: ruff check .
+
+      - name: Run Ruff formatter
+        run: ruff format --check .
