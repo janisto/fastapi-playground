@@ -22,7 +22,7 @@ permissions:
   issues: write
 
 jobs:
-  collect_prs:
+  collect-prs:
     runs-on: ubuntu-latest
 
     outputs:
@@ -60,16 +60,16 @@ jobs:
           INPUT_MAX_COUNT: ${{ github.event.inputs.maxCount }}
           INPUT_SCOPE: ${{ github.event.inputs.scope }}
 
-  label_prs_matrix:
-    if: needs.collect_prs.outputs.pr_count != '0'
-    needs: collect_prs
+  label-prs-matrix:
+    if: needs.collect-prs.outputs.pr_count != '0'
+    needs: collect-prs
 
     runs-on: ubuntu-latest
 
     strategy:
       max-parallel: 10
       matrix:
-        pr: ${{ fromJson(needs.collect_prs.outputs.pr_numbers) }}
+        pr: ${{ fromJson(needs.collect-prs.outputs.pr_numbers) }}
 
     steps:
       - uses: actions/labeler@v6

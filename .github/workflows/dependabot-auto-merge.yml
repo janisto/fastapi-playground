@@ -6,9 +6,10 @@ on: pull_request
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
-  dependabot:
+  auto-merge:
     runs-on: ubuntu-latest
 
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'janisto/fastapi-playground'
@@ -20,15 +21,12 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Approve Dependabot PR
-        run: gh pr review --approve "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Enable auto-merge for minor and patch updates
+      - name: Approve and auto-merge minor and patch updates
         if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: |
+          gh pr edit "$PR_URL" --add-label "automerge"
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
