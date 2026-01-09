@@ -108,7 +108,7 @@ class TestRouterConfiguration:
         """
         from app.main import app
 
-        routes = [route.path for route in app.routes]
+        routes = [route.path for route in app.routes if hasattr(route, "path")]
         assert "/v1/profile" in routes
 
     def test_health_router_included(self) -> None:
@@ -117,7 +117,7 @@ class TestRouterConfiguration:
         """
         from app.main import app
 
-        routes = [route.path for route in app.routes]
+        routes = [route.path for route in app.routes if hasattr(route, "path")]
         assert "/health" in routes
 
 
@@ -147,7 +147,7 @@ class TestCorsMiddleware:
         ):
             from app.main import app
 
-            middleware_classes = [m.cls.__name__ for m in app.user_middleware]
+            middleware_classes = [m.cls.__name__ for m in app.user_middleware if hasattr(m.cls, "__name__")]
             assert "CORSMiddleware" in middleware_classes
 
     def test_cors_preflight_handled_when_configured(

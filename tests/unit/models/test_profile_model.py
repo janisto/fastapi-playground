@@ -87,7 +87,7 @@ class TestProfileCreate:
         del data[missing_field]
 
         with pytest.raises(ValidationError) as exc_info:
-            ProfileCreate(**data)
+            ProfileCreate(**data)  # type: ignore[arg-type]
 
         errors = exc_info.value.errors()
         assert any(missing_field in str(err["loc"]) for err in errors)
@@ -103,7 +103,7 @@ class TestProfileCreate:
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=True,
-                extra_field="not allowed",
+                extra_field="not allowed",  # type: ignore[call-arg]
             )
 
         errors = exc_info.value.errors()
@@ -257,7 +257,7 @@ class TestProfileUpdate:
         Verify extra fields are rejected.
         """
         with pytest.raises(ValidationError):
-            ProfileUpdate(extra_field="not allowed")
+            ProfileUpdate(extra_field="not allowed")  # type: ignore[call-arg]
 
     def test_model_dump_exclude_unset(self) -> None:
         """

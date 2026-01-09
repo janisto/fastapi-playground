@@ -48,19 +48,29 @@ class ProfileService:
         doc_ref = client.collection(self.collection_name).document(user_id)
 
         now = datetime.now(UTC)
+
+        transaction = client.transaction()
         profile_dict = {
             "id": user_id,
             **profile_data.model_dump(),
             "created_at": now,
             "updated_at": now,
         }
-
-        transaction = client.transaction()
         await self._create_in_transaction(transaction, doc_ref, profile_dict)
 
         log_audit_event("create", user_id, "profile", user_id, "success")
 
-        return Profile(**profile_dict)
+        return Profile(
+            id=user_id,
+            firstname=profile_data.firstname,
+            lastname=profile_data.lastname,
+            email=profile_data.email,
+            phone_number=profile_data.phone_number,
+            marketing=profile_data.marketing,
+            terms=profile_data.terms,
+            created_at=now,
+            updated_at=now,
+        )
 
     async def get_profile(self, user_id: str) -> Profile:
         """

@@ -183,7 +183,7 @@ eh = new_exception_handler(
     logger=logger,
     strict_rfc9457=True,
     documentation_uri_template="about:blank",
-    request_validation_handler=validation_error_handler,
+    request_validation_handler=cast("Handler", validation_error_handler),
     cors=cors_config,
     handlers={
         CBORDecodeError: cast("Handler", cbor_decode_error_handler),

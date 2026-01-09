@@ -78,15 +78,15 @@ if settings.cors_origins:  # pragma: no cover
     )
 
 # Body size limit - reject oversized requests before further processing
-app.add_middleware(BodySizeLimitMiddleware)
+app.add_middleware(BodySizeLimitMiddleware)  # type: ignore[arg-type]
 
 # Security headers - add security headers to all responses
 app.add_middleware(
-    SecurityHeadersMiddleware,
+    SecurityHeadersMiddleware,  # type: ignore[arg-type]
     hsts=True,
     hsts_include_subdomains=True,
     hsts_preload=False,
 )
 
 # Logging (outermost) - capture full request lifecycle including all middleware
-app.add_middleware(RequestContextLogMiddleware)
+app.add_middleware(RequestContextLogMiddleware)  # type: ignore[arg-type]

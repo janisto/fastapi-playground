@@ -47,7 +47,7 @@ class TestHealthResponse:
         Verify only 'healthy' literal is accepted.
         """
         with pytest.raises(ValidationError):
-            HealthResponse(status="unhealthy")
+            HealthResponse(status="unhealthy")  # type: ignore[arg-type]
 
     def test_json_serialization(self) -> None:
         """

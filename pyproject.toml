@@ -138,13 +138,16 @@ max-complexity = 12
 [tool.ruff.lint.pep8-naming]
 classmethod-decorators = ["pydantic.validator", "pydantic.field_validator"]
 
+[tool.ty.src]
+exclude = ["functions/"]
+
 [tool.ty.environment]
 # Multiple directories (priority order)
-root = ["./app", "./tests"]
+root = ["."]
 
 [tool.ty.rules]
-unresolved-attribute = "ignore"
-unresolved-import = "ignore"
+#unresolved-attribute = "ignore"
+#unresolved-import = "ignore"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

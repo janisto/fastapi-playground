@@ -30,30 +30,57 @@ def make_profile_create(
 
 def make_profile(
     user_id: str = "test-user-123",
-    **kwargs: object,
+    firstname: str = "John",
+    lastname: str = "Doe",
+    email: str = "john@example.com",
+    phone_number: str = "+1234567890",
+    marketing: bool = True,
+    terms: bool = True,
+    created_at: datetime | None = None,
+    updated_at: datetime | None = None,
 ) -> Profile:
     """
     Create a Profile instance for testing.
     """
     now = datetime.now(UTC)
-    base = {
-        "firstname": "John",
-        "lastname": "Doe",
-        "email": "john@example.com",
-        "phone_number": "+1234567890",
-        "marketing": True,
-        "terms": True,
-        "created_at": now,
-        "updated_at": now,
-    }
-    return Profile(id=user_id, **{**base, **kwargs})
+    return Profile(
+        id=user_id,
+        firstname=firstname,
+        lastname=lastname,
+        email=email,
+        phone_number=phone_number,
+        marketing=marketing,
+        terms=terms,
+        created_at=created_at or now,
+        updated_at=updated_at or now,
+    )
 
 
-def make_profile_update(**kwargs: object) -> ProfileUpdate:
+def make_profile_update(
+    firstname: str | None = None,
+    lastname: str | None = None,
+    email: str | None = None,
+    phone_number: str | None = None,
+    marketing: bool | None = None,
+    terms: bool | None = None,
+) -> ProfileUpdate:
     """
     Factory for ProfileUpdate with only the provided fields.
     """
-    return ProfileUpdate(**kwargs)
+    kwargs: dict[str, str | bool] = {}
+    if firstname is not None:
+        kwargs["firstname"] = firstname
+    if lastname is not None:
+        kwargs["lastname"] = lastname
+    if email is not None:
+        kwargs["email"] = email
+    if phone_number is not None:
+        kwargs["phone_number"] = phone_number
+    if marketing is not None:
+        kwargs["marketing"] = marketing
+    if terms is not None:
+        kwargs["terms"] = terms
+    return ProfileUpdate(**kwargs)  # type: ignore[arg-type]
 
 
 def make_profile_payload_dict(
