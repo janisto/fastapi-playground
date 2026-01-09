@@ -115,7 +115,7 @@ class TestHSTSDefaultSettings:
 
         monkeypatch.delenv("DEBUG", raising=False)
 
-        settings = Settings(_env_file=None)
+        settings = Settings(_env_file=None)  # type: ignore[call-arg]
         assert settings.debug is False, "debug must default to False for production safety"
 
         async def ping(request: Request) -> PlainTextResponse:

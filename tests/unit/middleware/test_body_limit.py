@@ -2,6 +2,7 @@
 Unit tests for body size limit middleware.
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import cbor2
@@ -9,6 +10,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.testclient import TestClient
+from starlette.types import Receive, Scope, Send
 
 from app.middleware.body_limit import BodySizeLimitMiddleware
 from tests.helpers.starlette_utils import build_starlette_app
@@ -36,7 +38,7 @@ def _create_app(max_size: int = 1024) -> Starlette:
     # Patch settings before adding middleware
     with patch("app.middleware.body_limit.get_settings") as mock_settings:
         mock_settings.return_value.max_request_size_bytes = max_size
-        app.add_middleware(BodySizeLimitMiddleware)
+        app.add_middleware(BodySizeLimitMiddleware)  # type: ignore[arg-type]
 
     return app
 
@@ -224,16 +226,12 @@ class TestBodySizeLimitEdgeCases:
 
             downstream_called = False
 
-            async def mock_app(
-                scope: dict[str, object],
-                receive: AsyncMock,
-                send: AsyncMock,
-            ) -> None:
+            async def mock_app(scope: Scope, receive: Receive, send: Send) -> None:
                 nonlocal downstream_called
                 downstream_called = True
 
             middleware = BodySizeLimitMiddleware(mock_app)
-            scope = {"type": "websocket"}
+            scope: dict[str, Any] = {"type": "websocket"}
             receive = AsyncMock()
             send = AsyncMock()
 
@@ -250,11 +248,7 @@ class TestBodySizeLimitEdgeCases:
 
             response_started = False
 
-            async def mock_app(
-                scope: dict[str, object],
-                receive: AsyncMock,
-                send: AsyncMock,
-            ) -> None:
+            async def mock_app(scope: Scope, receive: Receive, send: Send) -> None:
                 nonlocal response_started
                 await receive()
                 await send({"type": "http.response.start", "status": 200, "headers": []})
@@ -262,7 +256,7 @@ class TestBodySizeLimitEdgeCases:
                 response_started = True
 
             middleware = BodySizeLimitMiddleware(mock_app)
-            scope = {
+            scope: dict[str, Any] = {
                 "type": "http",
                 "headers": [(b"content-length", b"not-a-number")],
             }
@@ -285,11 +279,7 @@ class TestBodySizeLimitEdgeCases:
 
             received_body = b""
 
-            async def mock_app(
-                scope: dict[str, object],
-                receive: AsyncMock,
-                send: AsyncMock,
-            ) -> None:
+            async def mock_app(scope: Scope, receive: Receive, send: Send) -> None:
                 nonlocal received_body
                 msg = await receive()
                 received_body = msg.get("body", b"")
@@ -297,7 +287,7 @@ class TestBodySizeLimitEdgeCases:
                 await send({"type": "http.response.body", "body": b"ok"})
 
             middleware = BodySizeLimitMiddleware(mock_app)
-            scope = {"type": "http", "headers": []}
+            scope: dict[str, Any] = {"type": "http", "headers": []}
 
             receive_messages = [
                 {"type": "http.request", "body": b"x" * 50, "more_body": False},
@@ -338,13 +328,9 @@ class TestBodySizeLimitEdgeCases:
         with patch("app.middleware.body_limit.get_settings") as mock_settings:
             mock_settings.return_value.max_request_size_bytes = 100
 
-            receive_calls: list[dict[str, object]] = []
+            receive_calls: list[Any] = []
 
-            async def mock_app(
-                scope: dict[str, object],
-                receive: AsyncMock,
-                send: AsyncMock,
-            ) -> None:
+            async def mock_app(scope: Scope, receive: Receive, send: Send) -> None:
                 msg1 = await receive()
                 receive_calls.append(msg1)
                 msg2 = await receive()
@@ -353,7 +339,7 @@ class TestBodySizeLimitEdgeCases:
                 await send({"type": "http.response.body", "body": b"ok"})
 
             middleware = BodySizeLimitMiddleware(mock_app)
-            scope = {"type": "http", "headers": []}
+            scope: dict[str, Any] = {"type": "http", "headers": []}
 
             receive_messages = [
                 {"type": "http.request", "body": b"test", "more_body": False},
@@ -384,11 +370,7 @@ class TestBodySizeLimitWithChunkedTransfer:
 
             received_body = b""
 
-            async def mock_app(
-                scope: dict[str, object],
-                receive: AsyncMock,
-                send: AsyncMock,
-            ) -> None:
+            async def mock_app(scope: Scope, receive: Receive, send: Send) -> None:
                 nonlocal received_body
                 msg = await receive()
                 received_body = msg.get("body", b"")
@@ -396,7 +378,7 @@ class TestBodySizeLimitWithChunkedTransfer:
                 await send({"type": "http.response.body", "body": b"ok"})
 
             middleware = BodySizeLimitMiddleware(mock_app)
-            scope = {"type": "http", "headers": []}
+            scope: dict[str, Any] = {"type": "http", "headers": []}
 
             receive_messages = [
                 {"type": "http.request", "body": b"a" * 30, "more_body": True},

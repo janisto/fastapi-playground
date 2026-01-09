@@ -2,9 +2,21 @@
 Unit tests for configuration settings.
 """
 
+from typing import Any
+
 import pytest
 
 from app.core.config import Settings, get_settings, parse_cors_origins
+
+
+def _create_settings(**kwargs: Any) -> Settings:  # noqa: ANN401
+    """
+    Create Settings instance without reading .env file.
+
+    The _env_file parameter is supported by pydantic-settings at runtime
+    but not exposed in the type hints, hence the type ignore.
+    """
+    return Settings(_env_file=None, **kwargs)  # type: ignore[call-arg]
 
 
 @pytest.fixture(autouse=True)
@@ -136,7 +148,7 @@ class TestSettings:
         """
         Verify default environment is production.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.environment == "production"
 
@@ -149,7 +161,7 @@ class TestSettings:
         - Log levels are appropriate (INFO, not DEBUG)
         - No stack traces are exposed to clients
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.debug is False
 
@@ -157,7 +169,7 @@ class TestSettings:
         """
         Verify default host.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.host == "0.0.0.0"
 
@@ -165,7 +177,7 @@ class TestSettings:
         """
         Verify default port.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.port == 8080
 
@@ -173,7 +185,7 @@ class TestSettings:
         """
         Verify default Firebase project ID.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.firebase_project_id == "test-project"
 
@@ -181,7 +193,7 @@ class TestSettings:
         """
         Verify default max request size.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.max_request_size_bytes == 1_000_000
 
@@ -189,7 +201,7 @@ class TestSettings:
         """
         Verify CORS origins defaults to empty list.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.cors_origins == []
 
@@ -197,7 +209,7 @@ class TestSettings:
         """
         Verify Secret Manager is enabled by default.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.secret_manager_enabled is True
 
@@ -213,7 +225,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("ENVIRONMENT", "development")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.environment == "development"
 
@@ -223,7 +235,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("DEBUG", "false")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.debug is False
 
@@ -233,7 +245,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("PORT", "9000")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.port == 9000
 
@@ -243,7 +255,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("FIREBASE_PROJECT_ID", "my-project")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.firebase_project_id == "my-project"
 
@@ -253,7 +265,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("MAX_REQUEST_SIZE_BYTES", "2000000")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.max_request_size_bytes == 2_000_000
 
@@ -263,7 +275,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3000", "https://example.com"]')
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.cors_origins == ["http://localhost:3000", "https://example.com"]
 
@@ -273,7 +285,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000,https://example.com")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.cors_origins == ["http://localhost:3000", "https://example.com"]
 
@@ -283,7 +295,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000, https://example.com , http://app.test")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.cors_origins == ["http://localhost:3000", "https://example.com", "http://app.test"]
 
@@ -293,7 +305,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.cors_origins == ["http://localhost:3000"]
 
@@ -303,7 +315,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("CORS_ORIGINS", "")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.cors_origins == []
 
@@ -313,7 +325,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/path/to/creds.json")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.google_application_credentials == "/path/to/creds.json"
 
@@ -323,7 +335,7 @@ class TestSettingsFromEnv:
         """
         monkeypatch.setenv("environment", "staging")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.environment == "staging"
 
@@ -339,7 +351,7 @@ class TestSettingsIgnoreExtra:
         """
         monkeypatch.setenv("UNKNOWN_SETTING", "value")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert not hasattr(settings, "unknown_setting")
 
@@ -392,7 +404,7 @@ class TestSettingsOptionalFields:
         """
         Verify Google credentials defaults to None.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.google_application_credentials is None
 
@@ -400,7 +412,7 @@ class TestSettingsOptionalFields:
         """
         Verify Firebase project number defaults to None.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.firebase_project_number is None
 
@@ -408,7 +420,7 @@ class TestSettingsOptionalFields:
         """
         Verify Firestore database defaults to None (uses default database).
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.firestore_database is None
 
@@ -416,7 +428,7 @@ class TestSettingsOptionalFields:
         """
         Verify app environment defaults to None.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.app_environment is None
 
@@ -424,7 +436,7 @@ class TestSettingsOptionalFields:
         """
         Verify app URL defaults to None.
         """
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.app_url is None
 
@@ -436,7 +448,7 @@ class TestSettingsOptionalFields:
         monkeypatch.setenv("APP_URL", "https://api.example.com")
         monkeypatch.setenv("FIREBASE_PROJECT_NUMBER", "123456789")
 
-        settings = Settings(_env_file=None)
+        settings = _create_settings()
 
         assert settings.app_environment == "production"
         assert settings.app_url == "https://api.example.com"
