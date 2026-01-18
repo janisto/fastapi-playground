@@ -34,7 +34,6 @@ router = APIRouter(
     operation_id="profile_create",
     responses={
         201: {"model": Profile, "description": "Profile created successfully"},
-        403: {"model": ProblemResponse, "description": "Forbidden"},
         409: {"model": ProblemResponse, "description": "Profile already exists"},
     },
 )

@@ -168,7 +168,6 @@ async def delete_resource(
     """
     try:
         await service.delete_resource(current_user.uid)
-        return None
     except (HTTPException, ResourceNotFoundError):
         raise
     except Exception:

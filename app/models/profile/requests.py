@@ -102,10 +102,5 @@ class ProfileUpdate(BaseModel):
         description="Marketing opt-in",
         examples=[False],
     )
-    terms: bool | None = Field(
-        None,
-        description="Terms acceptance",
-        examples=[True],
-    )
 
     model_config = ConfigDict(extra="forbid")

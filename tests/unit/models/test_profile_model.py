@@ -235,7 +235,6 @@ class TestProfileUpdate:
         assert profile.email is None
         assert profile.phone_number is None
         assert profile.marketing is None
-        assert profile.terms is None
 
     def test_partial_update(self) -> None:
         """
