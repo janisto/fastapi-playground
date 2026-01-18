@@ -25,7 +25,7 @@ def create_mock_profile_service(profile: Profile | None = None) -> AsyncMock:
     mock.get_profile.return_value = default_profile
     mock.create_profile.return_value = default_profile
     mock.update_profile.return_value = default_profile
-    mock.delete_profile.return_value = default_profile
+    mock.delete_profile.return_value = None
     return mock
 
 
