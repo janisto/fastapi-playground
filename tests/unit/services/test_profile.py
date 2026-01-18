@@ -393,24 +393,10 @@ class TestProfileServiceDeleteProfile:
         fake_db._store["user-123"] = _make_profile_data(user_id="user-123")
 
         service = ProfileService()
-        await service.delete_profile("user-123")
+        result = await service.delete_profile("user-123")
 
         assert "user-123" not in fake_db._store
-
-    async def test_returns_deleted_profile(self, fake_db: FakeAsyncClient) -> None:
-        """
-        Verify delete_profile returns the deleted Profile.
-        """
-        fake_db._store["user-123"] = _make_profile_data(
-            user_id="user-123",
-            firstname="ToDelete",
-        )
-
-        service = ProfileService()
-        profile = await service.delete_profile("user-123")
-
-        assert profile.id == "user-123"
-        assert profile.firstname == "ToDelete"
+        assert result is None
 
     async def test_raises_not_found_when_missing(self, fake_db: FakeAsyncClient) -> None:
         """

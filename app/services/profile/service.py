@@ -140,16 +140,21 @@ class ProfileService:
     async def _delete_in_transaction(  # pragma: no cover
         transaction: AsyncTransaction,
         doc_ref: AsyncDocumentReference,
-    ) -> dict | None:
+    ) -> bool:
+        """
+        Delete document in transaction.
+
+        Returns:
+            True if document existed and was deleted, False if not found.
+        """
         # Tested via E2E tests with Firebase emulators; unit tests mock this method
         snapshot = await doc_ref.get(transaction=transaction)
         if not snapshot.exists:
-            return None
-        data = snapshot.to_dict()
+            return False
         transaction.delete(doc_ref)
-        return data
+        return True
 
-    async def delete_profile(self, user_id: str) -> Profile:
+    async def delete_profile(self, user_id: str) -> None:
         """
         Delete a profile by user ID.
 
@@ -160,11 +165,9 @@ class ProfileService:
         doc_ref = client.collection(self.collection_name).document(user_id)
 
         transaction = client.transaction()
-        deleted_data = await self._delete_in_transaction(transaction, doc_ref)
+        deleted = await self._delete_in_transaction(transaction, doc_ref)
 
-        if deleted_data is None:
+        if not deleted:
             raise ProfileNotFoundError("Profile not found")
 
         log_audit_event("delete", user_id, "profile", user_id, "success")
-
-        return Profile(**deleted_data)
