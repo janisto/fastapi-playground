@@ -67,7 +67,6 @@ def _make_profile_update(
     email: str | None = None,
     phone_number: str | None = None,
     marketing: bool | None = None,
-    terms: bool | None = None,
 ) -> ProfileUpdate:
     """
     Create ProfileUpdate model for tests.
@@ -78,7 +77,6 @@ def _make_profile_update(
         email=email,
         phone_number=phone_number,
         marketing=marketing,
-        terms=terms,
     )
 
 

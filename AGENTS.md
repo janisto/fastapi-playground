@@ -111,7 +111,6 @@ async def create_profile(..., response: Response) -> Profile:
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_profile(...) -> None:
     await service.delete_profile(...)
-    return None
 ```
 
 #### Error Handling with fastapi-problem
@@ -788,7 +787,6 @@ async def update_profile(...) -> ProfileResponse:
 )
 async def delete_profile(...) -> None:
     ...
-    return None
 ```
 
 **Common issues to fix:**
