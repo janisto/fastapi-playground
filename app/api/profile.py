@@ -66,7 +66,7 @@ async def create_profile(
             created_at=profile.created_at,
             updated_at=profile.updated_at,
         )
-    except (HTTPException, ProfileAlreadyExistsError):
+    except HTTPException, ProfileAlreadyExistsError:
         raise
     except Exception:
         logger.exception("Error creating profile", extra={"user_id": current_user.uid})
@@ -111,7 +111,7 @@ async def get_profile(
             created_at=profile.created_at,
             updated_at=profile.updated_at,
         )
-    except (HTTPException, ProfileNotFoundError):
+    except HTTPException, ProfileNotFoundError:
         raise
     except Exception:
         logger.exception("Error getting profile", extra={"user_id": current_user.uid})
@@ -161,7 +161,7 @@ async def update_profile(
             created_at=profile.created_at,
             updated_at=profile.updated_at,
         )
-    except (HTTPException, ProfileNotFoundError):
+    except HTTPException, ProfileNotFoundError:
         raise
     except Exception:
         logger.exception("Error updating profile", extra={"user_id": current_user.uid})
@@ -193,7 +193,7 @@ async def delete_profile(
     """
     try:
         await service.delete_profile(current_user.uid)
-    except (HTTPException, ProfileNotFoundError):
+    except HTTPException, ProfileNotFoundError:
         raise
     except Exception:
         logger.exception("Error deleting profile", extra={"user_id": current_user.uid})
