@@ -11,10 +11,13 @@ firebase deploy --only functions
 
 For a detailed, end-to-end infrastructure and IAM setup (APIs, roles, environment variables, Cloud Build integration, Functions vs Cloud Run guidance) see: [`GCP.md`](../GCP.md).
 
-# Enable Vertex AI API
+# Vertex AI usage and required setup
 
-https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview
+This project uses Google Cloud Vertex AI (via the VertexAI plugin for Genkit) from Cloud Functions. To allow this:
 
+1. **Enable the Vertex AI API** (`aiplatform.googleapis.com`) in your project:  
+   https://console.developers.google.com/apis/api/aiplatform.googleapis.com/overview
+2. **Grant the Cloud Functions service account** the `roles/aiplatform.user` role (via IAM in the Cloud Console or `gcloud iam roles`), so that deployed functions can call Vertex AI.
 ## Run checks from root
 
 ```bash
