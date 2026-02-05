@@ -2,12 +2,13 @@
 name = "fastapi-playground-functions"
 version = "0.1.0"
 description = "Firebase Cloud Functions for fastapi-playground"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
-    "functions-framework>=3.10.0",
     "firebase-admin>=7.1.0",
     "firebase-functions>=0.5.0",
-    "google-genai>=1.56.0",
+    "genkit>=0.5.0",
+    "genkit-plugin-google-cloud>=0.5.0",
+    "genkit-plugin-google-genai>=0.5.0",
 ]
 
 [build-system]

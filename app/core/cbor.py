@@ -35,7 +35,7 @@ def normalize_media_type(media_type: str) -> str:
     strips parameters (like charset), and converts to lowercase.
     """
     # Split off parameters (e.g., "application/json; charset=utf-8" -> "application/json")
-    base_type = media_type.split(";")[0].strip()
+    base_type = media_type.split(";", maxsplit=1)[0].strip()
     return base_type.lower()
 
 

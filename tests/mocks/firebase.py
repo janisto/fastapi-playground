@@ -51,7 +51,7 @@ def patch_get_firebase_app(monkeypatch: MonkeyPatch) -> None:
     """
     import app.auth.firebase as auth_mod
 
-    monkeypatch.setattr(auth_mod, "get_firebase_app", lambda: MagicMock())
+    monkeypatch.setattr(auth_mod, "get_firebase_app", MagicMock)
 
 
 def patch_router_verify_to_raise(monkeypatch: MonkeyPatch, exc: Exception) -> None:
