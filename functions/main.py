@@ -1,16 +1,27 @@
 import json
-import logging
+import os
 import random
 from enum import StrEnum
 
+import structlog
 from firebase_admin import initialize_app
-from firebase_functions import https_fn, options, params
+from firebase_functions import https_fn, logger, options, params
 from genkit.ai import Genkit, Output
 from genkit.aio.loop import create_loop, run_async
 from genkit.plugins.google_cloud import add_gcp_telemetry
 from genkit.plugins.google_genai import VertexAI
 from genkit.types import GenkitError
 from pydantic import BaseModel, Field
+
+# Configure structlog for JSON output in Cloud Run/Functions (Genkit uses structlog internally)
+# This ensures Genkit's logs appear as structured jsonPayload in Cloud Logging
+if os.getenv("K_SERVICE"):  # Running in Cloud Run/Functions
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.JSONRenderer(),
+        ],
+    )
 
 options.set_global_options(
     region=options.SupportedRegion.EUROPE_WEST4,
@@ -34,8 +45,6 @@ ai = Genkit(
 # Create a persistent event loop for async operations
 # This avoids the "Event loop is closed" error on warm starts
 _loop = create_loop()
-
-logger = logging.getLogger(__name__)
 
 
 class JokeTopic(StrEnum):
@@ -153,16 +162,14 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
         topic_param = req.args.get("topic")
         topic = JokeTopic(topic_param.lower()) if topic_param else None
 
-        joke = run_async(_loop, lambda: generate_dad_joke(topic))
+        joke: DadJoke = run_async(_loop, lambda: generate_dad_joke(topic))  # type: ignore[assignment]
 
         logger.info(
             "Generated dad joke",
-            extra={
-                "topic": topic,
-                "style": joke.style,
-                "setup": joke.setup,
-                "punchline": joke.punchline,
-            },
+            topic=topic.value if topic else None,
+            style=joke.style.value,
+            setup=joke.setup,
+            punchline=joke.punchline,
         )
 
         return https_fn.Response(
@@ -172,6 +179,7 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
 
     except ValueError:
         valid_topics = [t.value for t in JokeTopic]
+        logger.warn("Invalid topic requested", topic=topic_param, valid_topics=valid_topics)
         return https_fn.Response(
             json.dumps(
                 {
@@ -184,9 +192,11 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
         )
 
     except GenkitError as e:
-        logger.exception(
+        logger.error(
             "Genkit error generating joke",
-            extra={"genkit_status": e.status, "genkit_message": str(e)},
+            error=e,
+            genkit_status=e.status,
+            genkit_message=str(e),
         )
         return https_fn.Response(
             json.dumps({"error": e.status, "message": "Failed to generate joke"}),
@@ -194,8 +204,8 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
             content_type="application/json",
         )
 
-    except Exception:
-        logger.exception("Unexpected error generating joke")
+    except Exception as e:  # noqa: BLE001
+        logger.error("Unexpected error generating joke", error=e)
         return https_fn.Response(
             json.dumps({"error": "INTERNAL", "message": "An unexpected error occurred"}),
             status=500,
