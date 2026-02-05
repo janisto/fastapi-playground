@@ -1,7 +1,6 @@
 import json
 import os
 import random
-import sys
 from enum import StrEnum
 
 import structlog
@@ -205,8 +204,8 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
             content_type="application/json",
         )
 
-    except Exception:  # noqa: BLE001
-        logger.error("Unexpected error generating joke", error=sys.exc_info()[1])
+    except Exception as e:  # noqa: BLE001
+        logger.error("Unexpected error generating joke", error=e)
         return https_fn.Response(
             json.dumps({"error": "INTERNAL", "message": "An unexpected error occurred"}),
             status=500,
