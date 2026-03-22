@@ -196,17 +196,18 @@ eh = new_exception_handler(
     ],
     post_hooks=[
         cast("PostHook", request_id_post_hook),
-        cast("PostHook", strip_about_blank_type_post_hook),
         cast("PostHook", schema_link_post_hook),
         cast(
             "PostHook",
             StripExtrasPostHook(
                 mandatory_fields=["$schema", "title", "status", "detail", "errors"],
-                include_status_codes=[500, 502, 503, 504],
+                include=[500, 502, 503, 504],
                 enabled=settings.environment == "production",
                 logger=logger,
             ),
         ),
+        # Must run AFTER StripExtrasPostHook since it accesses content['type']
+        cast("PostHook", strip_about_blank_type_post_hook),
         cast("PostHook", CBORProblemPostHook()),
     ],
 )
