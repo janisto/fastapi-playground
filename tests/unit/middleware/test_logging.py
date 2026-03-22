@@ -247,7 +247,7 @@ class TestCloudRunJSONFormatter:
             args=(),
             exc_info=None,
         )
-        ctx = {"trace": "projects/test-proj/traces/abc123"}
+        ctx: dict[str, str | bool] = {"trace": "projects/test-proj/traces/abc123"}
         token = _request_context.set(ctx)
         try:
             output = formatter.format(record)
@@ -273,7 +273,7 @@ class TestCloudRunJSONFormatter:
             args=(),
             exc_info=None,
         )
-        ctx = {"span_id": "def456"}
+        ctx: dict[str, str | bool] = {"span_id": "def456"}
         token = _request_context.set(ctx)
         try:
             output = formatter.format(record)
@@ -443,7 +443,7 @@ class TestCloudRunJSONFormatter:
             args=(),
             exc_info=None,
         )
-        ctx = {"request_id": "req-abc-123"}
+        ctx: dict[str, str | bool] = {"request_id": "req-abc-123"}
         token = _request_context.set(ctx)
         try:
             output = formatter.format(record)
@@ -495,7 +495,7 @@ class TestCloudRunJSONFormatter:
             args=(),
             exc_info=None,
         )
-        ctx = {
+        ctx: dict[str, str | bool] = {
             "trace": "projects/my-proj/traces/trace-123",
             "span_id": "span-456",
             "request_id": "req-789",

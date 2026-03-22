@@ -4,12 +4,9 @@ Generic cursor-based pagination helper.
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TypeVar
 
 from app.pagination.cursor import Cursor, InvalidCursorError, decode_cursor
 from app.pagination.link import build_link_header
-
-T = TypeVar("T")
 
 
 @dataclass
@@ -25,7 +22,7 @@ class PaginationResult[T]:
     prev_cursor: str | None
 
 
-def paginate(
+def paginate[T](
     items: Sequence[T],
     cursor: str | None,
     limit: int,
