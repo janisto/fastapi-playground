@@ -2,6 +2,7 @@
 Unit tests for security headers middleware.
 """
 
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
@@ -115,7 +116,7 @@ class TestHSTSDefaultSettings:
 
         monkeypatch.delenv("DEBUG", raising=False)
 
-        settings = Settings(_env_file=None)  # type: ignore[call-arg]
+        settings = cast("Any", Settings)(_env_file=None)
         assert settings.debug is False, "debug must default to False for production safety"
 
         async def ping(request: Request) -> PlainTextResponse:

@@ -7,6 +7,7 @@ Pytest requires unique basenames across the test tree.
 """
 
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -87,7 +88,7 @@ class TestProfileCreate:
         del data[missing_field]
 
         with pytest.raises(ValidationError) as exc_info:
-            ProfileCreate(**data)  # type: ignore[arg-type]
+            ProfileCreate(**cast("Any", data))
 
         errors = exc_info.value.errors()
         assert any(missing_field in str(err["loc"]) for err in errors)
@@ -97,13 +98,13 @@ class TestProfileCreate:
         Verify extra fields are rejected.
         """
         with pytest.raises(ValidationError) as exc_info:
-            ProfileCreate(
+            cast("Any", ProfileCreate)(
                 firstname="John",
                 lastname="Doe",
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=True,
-                extra_field="not allowed",  # type: ignore[call-arg]
+                extra_field="not allowed",
             )
 
         errors = exc_info.value.errors()
@@ -256,7 +257,7 @@ class TestProfileUpdate:
         Verify extra fields are rejected.
         """
         with pytest.raises(ValidationError):
-            ProfileUpdate(extra_field="not allowed")  # type: ignore[call-arg]
+            cast("Any", ProfileUpdate)(extra_field="not allowed")
 
     def test_model_dump_exclude_unset(self) -> None:
         """

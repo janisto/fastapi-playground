@@ -2,6 +2,8 @@
 Unit tests for Firebase authentication.
 """
 
+from typing import Any, cast
+
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
@@ -58,7 +60,7 @@ class TestFirebaseUser:
         """
         user = FirebaseUser(uid="user-123")
         with pytest.raises(AttributeError):
-            user.uid = "modified"  # type: ignore[misc]
+            cast("Any", user).uid = "modified"
 
 
 class TestVerifyFirebaseToken:
