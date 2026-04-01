@@ -481,7 +481,7 @@ wheels = [
 
 [[package]]
 name = "genkit"
-version = "0.5.1"
+version = "0.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -505,14 +505,14 @@ dependencies = [
     { name = "uvicorn" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/99/e5/1c3d88b097010d423d7f055bff83ac46a2db65c1ae573c33f8a420491d8f/genkit-0.5.1.tar.gz", hash = "sha256:7c54bc20f5cf76a7db3e375c61c1fa6d6a84ea10e96e06358c81e0392a1e06a0", size = 250869, upload-time = "2026-02-23T17:40:46.741Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/c7/0f17aeb820738bf1cb9de15cf4464c8605fb1160a74794b3feeb94c025f6/genkit-0.5.2.tar.gz", hash = "sha256:ba5a75888cf6c8a02a7f77121443417d5416f113c12e1fc977aed2d2c635feea", size = 152131, upload-time = "2026-03-30T16:40:19.089Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/54/275070d1aaaaa8a060ae5578776b276859baa87afa2e9c0c0fc55e74f200/genkit-0.5.1-py3-none-any.whl", hash = "sha256:2da1ded25694aea42e46358b16cdbb0120e9ec845cf7ed8a8163d5f106c494d4", size = 249339, upload-time = "2026-02-23T17:09:58.926Z" },
+    { url = "https://files.pythonhosted.org/packages/c9/17/c7bb924715dbd873cd777f08f0a569de105021bb0b4cb717617c090c6f7a/genkit-0.5.2-py3-none-any.whl", hash = "sha256:02abf39be33d3ade9f5a675647ef8ab4791e82ba6470b1f6fa07d9ad7b1f9eb9", size = 138155, upload-time = "2026-03-27T23:23:18.334Z" },
 ]
 
 [[package]]
 name = "genkit-plugin-google-cloud"
-version = "0.5.1"
+version = "0.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "genkit" },
@@ -520,14 +520,14 @@ dependencies = [
     { name = "opentelemetry-exporter-gcp-monitoring" },
     { name = "opentelemetry-exporter-gcp-trace" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fb/ce/a3b1ae3432fc900befede786c7f2033fac2dea823cff972612274c49997e/genkit_plugin_google_cloud-0.5.1.tar.gz", hash = "sha256:a4d96d4f469cdab8bfbcc6860bdd5479d443d7ba77fb88774270d57e44f7eb3c", size = 38780, upload-time = "2026-02-23T17:40:54.252Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/58/40812fb0deb532de18b36d76a422fa8608469c814b578f29152dd2b1c84a/genkit_plugin_google_cloud-0.5.2.tar.gz", hash = "sha256:2a4facb23db3731dea9c7885693f47541f5ef6dbc0fd75d462268f7250fb8516", size = 38605, upload-time = "2026-03-30T16:40:23.193Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4a/19/b996950a2d2d31c6509d336ed3160b05af6b4c557cc71bfc4420de05bf94/genkit_plugin_google_cloud-0.5.1-py3-none-any.whl", hash = "sha256:5796823837d15d832f183f9f95058f975ea0bf6311ac608e386a61fc26801445", size = 47603, upload-time = "2026-02-23T17:40:40.675Z" },
+    { url = "https://files.pythonhosted.org/packages/18/9d/5faf24e8bd8f282c43f57ad58261c02d02eb2b3f10399d76d98762e8bf8b/genkit_plugin_google_cloud-0.5.2-py3-none-any.whl", hash = "sha256:2c5839c911422f3fd464b0428fed0c08905b20f6f949b3b8343ec2a1f45e9463", size = 47410, upload-time = "2026-03-30T16:40:13.538Z" },
 ]
 
 [[package]]
 name = "genkit-plugin-google-genai"
-version = "0.5.1"
+version = "0.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "genkit" },
@@ -535,9 +535,9 @@ dependencies = [
     { name = "google-genai" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/3a/e30a83d7022964fb88c54e77b201593821404a54908dcd77750cf7237171/genkit_plugin_google_genai-0.5.1.tar.gz", hash = "sha256:61cc19c7aa111171358934fde866306eb6a3c86357372898a05777ae7184308a", size = 69872, upload-time = "2026-02-23T17:40:55.176Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/16/90/9a9a3ec19abb0b60cdabdc11669dc29e6a2922df8fcbaf294378e0f97e6d/genkit_plugin_google_genai-0.5.2.tar.gz", hash = "sha256:745ecafce67f386a5dcc619c9d8a4c46695f8c5d3b64e11a4ca9f54c582e140c", size = 64581, upload-time = "2026-03-30T16:40:24.034Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/80/0dff88103bd6f31f42514a1c7b0140db8c79e174c80794f13d136c1beb10/genkit_plugin_google_genai-0.5.1-py3-none-any.whl", hash = "sha256:7ad31da28d9ab86f512d0869ddb92ac340b04cb681795ccea4a9b063422572a7", size = 69386, upload-time = "2026-02-23T17:40:42.448Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/f2/774995a8cfc2e3ab49066912d97c46be9f814b38f73123555418b7e43376/genkit_plugin_google_genai-0.5.2-py3-none-any.whl", hash = "sha256:05191fd7c7d3973f34a240e2c7f1e4885e088a577a00e968937bb04d1f4b5b2f", size = 64235, upload-time = "2026-03-30T16:40:15.021Z" },
 ]
 
 [[package]]
