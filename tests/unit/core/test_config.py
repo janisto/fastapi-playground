@@ -2,7 +2,7 @@
 Unit tests for configuration settings.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -14,9 +14,9 @@ def _create_settings(**kwargs: Any) -> Settings:  # noqa: ANN401
     Create Settings instance without reading .env file.
 
     The _env_file parameter is supported by pydantic-settings at runtime
-    but not exposed in the type hints, hence the type ignore.
+    but not exposed in the type hints, hence the cast.
     """
-    return Settings(_env_file=None, **kwargs)  # type: ignore[call-arg]
+    return cast("Any", Settings)(_env_file=None, **kwargs)
 
 
 @pytest.fixture(autouse=True)

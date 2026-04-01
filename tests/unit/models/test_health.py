@@ -2,6 +2,8 @@
 Unit tests for health response models.
 """
 
+from typing import Any, cast
+
 import pytest
 from pydantic import ValidationError
 
@@ -47,7 +49,7 @@ class TestHealthResponse:
         Verify only 'healthy' literal is accepted.
         """
         with pytest.raises(ValidationError):
-            HealthResponse(status="unhealthy")  # type: ignore[arg-type]
+            HealthResponse(status=cast("Any", "unhealthy"))
 
     def test_json_serialization(self) -> None:
         """

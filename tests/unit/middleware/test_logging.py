@@ -5,6 +5,7 @@ Unit tests for logging middleware and utilities.
 import json
 import logging
 import sys
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -858,6 +859,13 @@ class TestLogAuditEvent:
     Tests for log_audit_event utility.
     """
 
+    @staticmethod
+    def _get_audit(record: logging.LogRecord) -> dict[str, object]:
+        """
+        Safely extract the audit dict from a log record.
+        """
+        return cast("dict[str, object]", getattr(record, "audit", cast("Any", {})))
+
     def test_logs_audit_event(self, caplog: pytest.LogCaptureFixture) -> None:
         """
         Verify audit event is logged with correct structure.
@@ -875,7 +883,7 @@ class TestLogAuditEvent:
         record = caplog.records[-1]
         assert record.message == "Audit event"
         assert hasattr(record, "audit")
-        audit: dict[str, object] = record.audit  # type: ignore[attr-defined]
+        audit = self._get_audit(record)
         assert audit["action"] == "create"
 
     def test_logs_audit_with_details(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -911,7 +919,7 @@ class TestLogAuditEvent:
         assert len(caplog.records) > 0
         record = caplog.records[-1]
         assert hasattr(record, "audit")
-        audit: dict[str, object] = record.audit  # type: ignore[attr-defined]
+        audit = self._get_audit(record)
         assert audit["action"] == "update"
         assert audit["user_id"] == "user-abc"
         assert audit["resource_type"] == "profile"
@@ -934,7 +942,7 @@ class TestLogAuditEvent:
         assert len(caplog.records) > 0
         record = caplog.records[-1]
         assert hasattr(record, "audit")
-        audit: dict[str, object] = record.audit  # type: ignore[attr-defined]
+        audit = self._get_audit(record)
         assert audit["result"] == "success"
 
     def test_audit_event_empty_details_default(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -952,7 +960,7 @@ class TestLogAuditEvent:
         assert len(caplog.records) > 0
         record = caplog.records[-1]
         assert hasattr(record, "audit")
-        audit: dict[str, object] = record.audit  # type: ignore[attr-defined]
+        audit = self._get_audit(record)
         assert audit["details"] == {}
 
     def test_audit_event_failure_result(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -972,9 +980,9 @@ class TestLogAuditEvent:
         assert len(caplog.records) > 0
         record = caplog.records[-1]
         assert hasattr(record, "audit")
-        audit: dict[str, object] = record.audit  # type: ignore[attr-defined]
+        audit = self._get_audit(record)
         assert audit["result"] == "failure"
-        details: dict[str, object] = audit["details"]  # type: ignore[assignment]
+        details = cast("dict[str, Any]", audit["details"])
         assert details["error"] == "Duplicate profile"
 
 

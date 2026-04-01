@@ -62,25 +62,17 @@ def make_profile_update(
     email: str | None = None,
     phone_number: str | None = None,
     marketing: bool | None = None,
-    terms: bool | None = None,
 ) -> ProfileUpdate:
     """
     Factory for ProfileUpdate with only the provided fields.
     """
-    kwargs: dict[str, str | bool] = {}
-    if firstname is not None:
-        kwargs["firstname"] = firstname
-    if lastname is not None:
-        kwargs["lastname"] = lastname
-    if email is not None:
-        kwargs["email"] = email
-    if phone_number is not None:
-        kwargs["phone_number"] = phone_number
-    if marketing is not None:
-        kwargs["marketing"] = marketing
-    if terms is not None:
-        kwargs["terms"] = terms
-    return ProfileUpdate(**kwargs)  # type: ignore[arg-type]
+    return ProfileUpdate(
+        firstname=firstname,
+        lastname=lastname,
+        email=email,
+        phone_number=phone_number,
+        marketing=marketing,
+    )
 
 
 def make_profile_payload_dict(
