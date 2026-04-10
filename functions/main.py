@@ -39,7 +39,7 @@ add_gcp_telemetry(force_dev_export=False)
 
 ai = Genkit(
     plugins=[VertexAI(location="europe-west4")],
-    model="vertexai/gemini-2.5-flash",
+    model="vertexai/gemini-3-pro-preview",
 )
 
 # Create a persistent event loop for async operations
@@ -132,9 +132,8 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
         prompt=user_prompt,
         output=Output(schema=GeneratedJoke),
         config={
-            "temperature": 0.8,
             "thinking_config": {
-                "thinking_budget": 4096,
+                "thinking_level": "MEDIUM",
             },
         },
     )
