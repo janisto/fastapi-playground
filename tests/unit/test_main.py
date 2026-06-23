@@ -108,8 +108,7 @@ class TestRouterConfiguration:
         """
         from app.main import app
 
-        routes = [route.path for route in app.routes if hasattr(route, "path")]
-        assert "/v1/profile" in routes
+        assert "/v1/profile" in app.openapi()["paths"]
 
     def test_health_router_included(self) -> None:
         """
@@ -117,8 +116,7 @@ class TestRouterConfiguration:
         """
         from app.main import app
 
-        routes = [route.path for route in app.routes if hasattr(route, "path")]
-        assert "/health" in routes
+        assert "/health" in app.openapi()["paths"]
 
 
 class TestCorsMiddleware:

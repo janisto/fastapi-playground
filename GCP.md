@@ -194,7 +194,9 @@ Contained in `functions/` with regional + scaling config:
 
 Deploy:
 ```bash
-cd functions && uv sync
+cd functions
+uv venv --python 3.14 venv
+uv pip install --python venv/bin/python -r requirements.txt
 firebase deploy --only functions
 ```
 
@@ -250,5 +252,5 @@ gcloud run deploy fastapi-playground --image gcr.io/PROJECT_ID/fastapi-playgroun
     --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,DEBUG=false
 
 # Functions deploy
-cd functions && uv sync && firebase deploy --only functions
+cd functions && uv venv --python 3.14 venv && uv pip install --python venv/bin/python -r requirements.txt && firebase deploy --only functions
 ```

@@ -4,10 +4,13 @@ Run these commands to deploy:
 
 ```bash
 cd functions
-uv sync
+uv venv --python 3.14 venv
+uv pip install --python venv/bin/python -r requirements.txt
 export FUNCTIONS_DISCOVERY_TIMEOUT=30
 firebase deploy --only functions
 ```
+
+`requirements.txt` is kept for Firebase CLI compatibility. Manage dependencies in `pyproject.toml` and `uv.lock`, and keep the direct runtime dependencies mirrored in `requirements.txt`.
 
 For a detailed, end-to-end infrastructure and IAM setup (APIs, roles, environment variables, Cloud Build integration, Functions vs Cloud Run guidance) see: [`GCP.md`](../GCP.md).
 
@@ -27,9 +30,9 @@ uv run ty check --python functions/.venv functions/main.py
 
 ## Run emulators from root
 
-> **Note**: Firebase emulator doesn't support `python314` runtime yet. Change `runtime` in `firebase.json` to `python313` for local testing, or deploy directly.
-
 ```bash
+uv venv --python 3.14 functions/venv
+uv pip install --python functions/venv/bin/python -r functions/requirements.txt
 firebase emulators:start --only functions
 
 # Default (no topic)
@@ -42,6 +45,8 @@ curl "http://127.0.0.1:5001/<PROJECT_ID>/europe-west4/dad_joke?topic=tech"
 ## Deploy from root
 
 ```bash
+uv venv --python 3.14 functions/venv
+uv pip install --python functions/venv/bin/python -r functions/requirements.txt
 firebase deploy --only functions
 
 # Default (no topic)

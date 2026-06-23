@@ -759,7 +759,7 @@ class TestRequestIdHeader:
 
         from app.middleware.logging import _request_context
 
-        captured_context: dict[str, str] | None = None
+        captured_context: dict[str, str | bool] | None = None
 
         async def capture_context(request: Request) -> PlainTextResponse:
             nonlocal captured_context

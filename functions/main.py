@@ -1,16 +1,18 @@
+import asyncio
 import json
 import os
 import random
+import threading
+from collections.abc import Callable, Coroutine
 from enum import StrEnum
+from typing import cast
 
 import structlog
 from firebase_admin import initialize_app
 from firebase_functions import https_fn, logger, options, params
-from genkit.ai import Genkit, Output
-from genkit.aio.loop import create_loop, run_async
+from genkit import Genkit, GenkitError
 from genkit.plugins.google_cloud import add_gcp_telemetry
 from genkit.plugins.google_genai import VertexAI
-from genkit.types import GenkitError
 from pydantic import BaseModel, Field
 
 # Configure structlog for JSON output in Cloud Run/Functions (Genkit uses structlog internally)
@@ -42,9 +44,27 @@ ai = Genkit(
     model="vertexai/gemini-3-pro-preview",
 )
 
-# Create a persistent event loop for async operations
-# This avoids the "Event loop is closed" error on warm starts
-_loop = create_loop()
+_loop = asyncio.new_event_loop()
+
+
+def _run_event_loop() -> None:
+    """
+    Run the shared async event loop for warm function instances.
+    """
+    asyncio.set_event_loop(_loop)
+    _loop.run_forever()
+
+
+_loop_thread = threading.Thread(target=_run_event_loop, daemon=True)
+_loop_thread.start()
+
+
+def run_async[T](coro: Coroutine[object, object, T]) -> T:
+    """
+    Run a coroutine on the shared event loop from a sync Firebase handler.
+    """
+    future = asyncio.run_coroutine_threadsafe(coro, _loop)
+    return future.result()
 
 
 class JokeTopic(StrEnum):
@@ -130,7 +150,7 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     result = await ai.generate(
         system=build_system_prompt(style),
         prompt=user_prompt,
-        output=Output(schema=GeneratedJoke),
+        output_schema=GeneratedJoke,
         config={
             "thinking_config": {
                 "thinking_level": "MEDIUM",
@@ -161,7 +181,8 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
         topic_param = req.args.get("topic")
         topic = JokeTopic(topic_param.lower()) if topic_param else None
 
-        joke: DadJoke = run_async(_loop, lambda: generate_dad_joke(topic))  # type: ignore[assignment]
+        joke_flow = cast("Callable[[JokeTopic | None], Coroutine[object, object, DadJoke]]", generate_dad_joke)
+        joke = run_async(joke_flow(topic))
 
         logger.info(
             "Generated dad joke",
