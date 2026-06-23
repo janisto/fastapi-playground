@@ -1,8 +1,8 @@
 ---
-description: Testing guidelines for this FastAPI/Python repository. Covers pytest conventions, fixtures, mocks, and test structure (Python 3.14, pytest, pytest-asyncio, httpx, pytest-httpx).
+description: Testing guidelines for this FastAPI/Python repository. Covers pytest conventions, fixtures, mocks, and test structure (Python 3.14, pytest, pytest-asyncio, httpx2, pytest-httpx2).
 ---
 
-Use these rules for tests under `tests/**` (Python 3.14, FastAPI, pytest, pytest-asyncio). The project uses `httpx` for HTTP clients and `pytest-httpx` for mocking outbound HTTP in tests.
+Use these rules for tests under `tests/**` (Python 3.14, FastAPI, pytest, pytest-asyncio). The project uses `httpx2` for HTTP clients and `pytest-httpx2` for mocking outbound HTTP in tests.
 
 > **Ruff Linter Coverage**: Test patterns are enforced via Ruff (see `pyproject.toml`):
 > - **PT**: Pytest style (fixture parentheses, assertion patterns, parametrize syntax, marks)
@@ -132,8 +132,8 @@ Test File Mapping:
 
 Conventions
 - No real network, files, or Firebase/Google Cloud in unit/integration tests; mock `firebase_admin` and any external I/O.
-- Prefer FastAPI patterns from the docs: use `TestClient` for sync-style API tests; use `httpx.AsyncClient` for true async cases (no `@pytest.mark.asyncio` needed with `asyncio_mode = "auto"`).
-- HTTP client and mocking: use `httpx` in code; stub outbound HTTP with `pytest-httpx` via the `httpx_mock` fixture. Do not hit the real network.
+- Prefer FastAPI patterns from the docs: use `TestClient` for sync-style API tests; use `httpx2.AsyncClient` for true async cases (no `@pytest.mark.asyncio` needed with `asyncio_mode = "auto"`).
+- HTTP client and mocking: use `httpx2` in code; stub outbound HTTP with `pytest-httpx2` via the `httpx2_mock` fixture. Do not hit the real network.
 - **Prefer `pytest-mock` (`mocker` fixture) over `monkeypatch`** when mocking. Use `mocker.patch()` for patching with `MagicMock`/`AsyncMock` features (call assertions, return values, side effects). Reserve `monkeypatch` for simpler cases: environment variables (`setenv`), `sys.path` manipulation, or `chdir`. Choose the right tool for the task.
 - Override dependencies via `app.dependency_overrides` (e.g., auth/user, database/session). Reset overrides after each test to avoid leakage.
 - **URL formatting**: Always use paths without trailing slashes (e.g., `"/v1/profile"` not `"/v1/profile/"`). The app has `redirect_slashes=False`, so requests must match the exact path. Business endpoints are under `/v1/` prefix (e.g., `/v1/profile`, `/v1/hello`, `/v1/items`).
@@ -309,7 +309,7 @@ import contextlib
 import os
 from collections.abc import Generator
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -325,9 +325,9 @@ def _emulator_running(host: str) -> bool:
     Check if an emulator is running at the given host.
     """
     try:
-        httpx.get(f"http://{host}/", timeout=1.0)
+        httpx2.get(f"http://{host}/", timeout=1.0)
         return True
-    except httpx.RequestError:
+    except httpx2.RequestError:
         return False
 
 
@@ -349,8 +349,8 @@ def clear_emulator_data() -> Generator[None]:
     Clear Firestore emulator data after each test.
     """
     yield
-    with contextlib.suppress(httpx.RequestError):
-        httpx.delete(
+    with contextlib.suppress(httpx2.RequestError):
+        httpx2.delete(
             f"http://{FIRESTORE_HOST}/emulator/v1/projects/{PROJECT_ID}/databases/(default)/documents",
             timeout=5.0,
         )
@@ -562,7 +562,7 @@ def make_profile_payload_dict(
 
 Assertion helpers (`tests/helpers/assertions.py`):
 ```python
-from httpx import Response
+from httpx2 import Response
 
 
 def assert_error_response(response: Response, expected_status: int) -> dict:
@@ -669,7 +669,7 @@ Organize mock objects and stub factories in `tests/mocks/`. Use Protocol types f
 |--------|---------|
 | `firebase.py` | Firebase auth mocks, token verification patches |
 | `firestore.py` | Fake Firestore client, collections, documents, transactions for unit tests |
-| `http.py` | HTTP client mock helpers (pytest-httpx wrappers) |
+| `http.py` | HTTP client mock helpers (pytest-httpx2 wrappers) |
 | `services.py` | Service layer stubs and mock factories |
 
 Mock patterns:
@@ -711,20 +711,17 @@ def create_mock_profile_service_not_found() -> AsyncMock:
     return mock
 ```
 
-Protocol pattern for type-safe mocks:
+HTTP mock helper pattern:
 ```python
 # tests/mocks/http.py
-from typing import Protocol
+from respx import Router
+from respx.models import Route
 
-class HTTPXMock(Protocol):
+def add_ok_response(httpx2_mock: Router, url: str, json: dict | None = None) -> Route:
     """
-    Minimal protocol for pytest-httpx fixture type hints.
+    Add a successful GET response to the mock.
     """
-
-    def add_response(self, *, method: str, url: str, json: dict | None = None, status_code: int = 200) -> None: ...
-
-def add_ok_response(httpx_mock: HTTPXMock, url: str, json: dict | None = None) -> None:
-    httpx_mock.add_response(method="GET", url=url, json=json or {"ok": True}, status_code=200)
+    return httpx2_mock.get(url).respond(status_code=200, json=json or {"ok": True})
 
 # Usage in tests:
 mock_service = AsyncMock(spec=ProfileService)
@@ -1103,7 +1100,7 @@ Run commands (repo root)
 5) `just test-all` (all tests including E2E)
 6) `just cov` (coverage report to `htmlcov/`)
 7) Optional: `uv run -m pytest` if not using `just`
-8) The `pytest-httpx` plugin is auto-discovered by pytest; import is not required for activation.
+8) The `pytest-httpx2` plugin is auto-discovered by pytest; import is not required for activation.
 9) pytest-asyncio is configured in `pyproject.toml` with:
    - `asyncio_mode = "auto"` - async tests/fixtures auto-detected
    - `asyncio_default_fixture_loop_scope = "function"` - async fixtures run in function-scoped loop
@@ -1127,17 +1124,17 @@ def test_health_ok() -> None:
 		assert body["message"] == "healthy"
 ```
 
-2) Async test (true async using httpx AsyncClient)
+2) Async test (true async using httpx2 AsyncClient)
 - Useful for `async` flows or when you need `await` behavior. Use `ASGITransport` for ASGI apps.
 - No `@pytest.mark.asyncio` needed with `asyncio_mode = "auto"`.
 
 ```python
-import httpx
+import httpx2
 from app.main import app
 
 async def test_health_async() -> None:
-	transport = httpx.ASGITransport(app=app)
-	async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as ac:
+	transport = httpx2.ASGITransport(app=app)
+	async with httpx2.AsyncClient(transport=transport, base_url="http://testserver") as ac:
 		r = await ac.get("/health")
 		assert r.status_code == 200
 		assert r.json() == {"status": "healthy"}
@@ -1229,85 +1226,51 @@ def test_security_headers() -> None:
 		assert r.headers.get("referrer-policy") == "same-origin"
 ```
 
-7) Mocking outbound HTTP with pytest-httpx
-- Use the `httpx_mock` fixture (provided by pytest-httpx) to intercept external requests made with `httpx`. Provide deterministic responses and avoid network.
-- The fixture is auto-injected; no import needed. Type hint with `pytest_httpx.HTTPXMock` if desired.
+7) Mocking outbound HTTP with pytest-httpx2
+- Use the `httpx2_mock` fixture (provided by pytest-httpx2) to intercept external requests made with `httpx2`. Provide deterministic responses and avoid network.
+- The fixture is auto-injected; no import needed. It yields a `respx.Router`.
 
 ```python
-import httpx
-from pytest_httpx import HTTPXMock
+import httpx2
+from respx import Router
 
-def test_outbound_call(httpx_mock: HTTPXMock) -> None:
+def test_outbound_call(httpx2_mock: Router) -> None:
 	# Arrange a mocked HTTP response
-	httpx_mock.add_response(
-		method="GET",
-		url="https://example.com/api/status",
-		json={"ok": True},
-		status_code=200,
-	)
+	httpx2_mock.get("https://example.com/api/status").respond(status_code=200, json={"ok": True})
 
-	# Exercise code under test that internally calls httpx.get(...)
-	resp = httpx.get("https://example.com/api/status")
+	# Exercise code under test that internally calls httpx2.get(...)
+	resp = httpx2.get("https://example.com/api/status")
 
 	# Assert
 	assert resp.status_code == 200
 	assert resp.json() == {"ok": True}
 ```
 
-pytest-httpx advanced patterns:
+pytest-httpx2 request assertions:
 ```python
-# Dynamic callback response
-async def test_dynamic_response(httpx_mock: HTTPXMock) -> None:
-    async def simulate_latency(request: httpx.Request) -> httpx.Response:
-        await asyncio.sleep(0.1)
-        return httpx.Response(status_code=200, json={"url": str(request.url)})
+def test_request_assertions(httpx2_mock: Router) -> None:
+    route = httpx2_mock.get("https://api.example.com/data").respond(status_code=200, json={})
 
-    httpx_mock.add_callback(simulate_latency)
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://api.example.com/data")
-        assert response.json()["url"] == "https://api.example.com/data"
-```
-
-Asserting all mocked responses were used:
-```python
-# By default, pytest-httpx asserts all registered responses are used
-# Disable per-test with the httpx_mock marker:
-@pytest.mark.httpx_mock(assert_all_responses_were_requested=False)
-def test_optional_call(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url="https://optional.example.com")
-    # Test passes even if the mocked URL is never called
-```
-
-pytest-httpx assertion methods:
-```python
-def test_request_assertions(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url="https://api.example.com/data")
-    
-    with httpx.Client() as client:
+    with httpx2.Client() as client:
         client.get("https://api.example.com/data")
-    
-    # Assert request was made
-    httpx_mock.assert_called()
-    httpx_mock.assert_called_once()
-    
-    # Get request for detailed inspection
-    request = httpx_mock.get_request()
-    assert request.url == "https://api.example.com/data"
-    assert request.method == "GET"
+
+    assert route.called
+    assert len(httpx2_mock.calls) == 1
+    assert str(httpx2_mock.calls[0].request.url) == "https://api.example.com/data"
 ```
 
-8) Simulating HTTP exceptions with pytest-httpx
-- Use `add_exception` to test error handling for timeouts, connection errors, etc.
+8) Simulating HTTP exceptions with pytest-httpx2
+- Use `mock(side_effect=...)` to test error handling for timeouts, connection errors, etc.
 
 ```python
-import httpx
+import httpx2
 import pytest
-from pytest_httpx import HTTPXMock
+from respx import Router
 
-def test_timeout_handling(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_exception(httpx.ReadTimeout("Connection timed out"))
-    with pytest.raises(httpx.ReadTimeout):
-        with httpx.Client() as client:
+def test_timeout_handling(httpx2_mock: Router) -> None:
+    httpx2_mock.get("https://api.example.com/data").mock(side_effect=httpx2.ReadTimeout("Connection timed out"))
+    with pytest.raises(httpx2.ReadTimeout):
+        with httpx2.Client() as client:
             client.get("https://api.example.com/data")
 ```
 
@@ -1493,11 +1456,11 @@ finally:
 
 Common pitfalls (and fixes)
 - Not clearing `app.dependency_overrides`: tests influence each other. Use `try/finally` or context manager.
-- Mixing sync TestClient inside async tests: use `httpx.AsyncClient` or keep tests sync.
+- Mixing sync TestClient inside async tests: use `httpx2.AsyncClient` or keep tests sync.
 - Creating `TestClient(app)` without context manager: lifespan may not run; use fixture with `with`.
 - Real Firebase/GCP calls in tests: must be mocked.
 - Weak assertions: assert status, body shape, and headers.
-- Real outbound HTTP not mocked: use `pytest-httpx`.
+- Real outbound HTTP not mocked: use `pytest-httpx2`.
 - Using `@pytest.mark.asyncio` when not needed: with `asyncio_mode="auto"`, remove the decorator.
 - Forgetting to clear cached settings: call `get_settings.cache_clear()` after `monkeypatch.setenv()`.
 - Applying marks to fixtures: deprecated in pytest 8+; use fixture dependencies instead.
@@ -1523,11 +1486,11 @@ def test_something(client: TestClient) -> None: ...
 Avoid: Real network calls
 ```python
 # BAD
-response = httpx.get("https://api.external.com/data")
+response = httpx2.get("https://api.external.com/data")
 
 # GOOD
-def test_call(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url="https://api.external.com/data", json={})
+def test_call(httpx2_mock: Router) -> None:
+    httpx2_mock.get("https://api.external.com/data").respond(status_code=200, json={})
 ```
 
 Avoid: Hardcoded secrets

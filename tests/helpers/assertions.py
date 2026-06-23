@@ -2,7 +2,7 @@
 Assertion helpers for tests.
 """
 
-from httpx import Response
+from httpx2 import Response
 
 
 def assert_error_response(response: Response, expected_status: int) -> dict:

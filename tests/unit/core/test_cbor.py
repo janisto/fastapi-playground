@@ -472,7 +472,7 @@ class TestCBORRoute:
 
         Tests the branch where the for loop exits without finding b"accept" key.
         """
-        import httpx
+        import httpx2
         from fastapi import APIRouter, FastAPI
         from fastapi.testclient import TestClient
 
@@ -489,7 +489,7 @@ class TestCBORRoute:
 
         with TestClient(app) as client:
             # Send request with explicit headers that don't include Accept
-            req = httpx.Request(
+            req = httpx2.Request(
                 "GET",
                 "http://testserver/test",
                 headers=[("Host", "testserver"), ("User-Agent", "test")],

@@ -219,7 +219,7 @@ No direct Cloud Logging API usage (stdout ingestion). Ensure log-based metrics /
 
 ---
 ### 12. Security Notes & Hardening Checklist
-- Remove unused deps (`python-jose`, `httpx`) if not planned.
+- Remove unused direct deps (`python-jose`, `httpx2`) if not planned.
 - Enforce HTTPS (Cloud Run provides TLS terminator; HSTS enabled by middleware when configured).
 - Set `DEBUG=false` in production.
 - Restrict CORS explicitly (`CORS_ORIGINS`).
