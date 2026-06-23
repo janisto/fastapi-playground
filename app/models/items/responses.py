@@ -25,7 +25,6 @@ class Item(BaseModel):
 
     schema_url: str | None = Field(
         default=None,
-        alias="$schema",
         serialization_alias="$schema",
         description="JSON Schema URL for this response",
         examples=["/schemas/Item.json"],
@@ -51,7 +50,7 @@ class ItemList(BaseModel):
 
     schema_url: str | None = Field(
         default=None,
-        alias="$schema",
+        serialization_alias="$schema",
         description="JSON Schema URL for this response",
         examples=["/schemas/ItemList.json"],
     )

@@ -35,7 +35,7 @@ class ProblemResponse(BaseModel):
 
     schema_url: str | None = Field(
         default=None,
-        alias="$schema",
+        serialization_alias="$schema",
         description="JSON Schema URL for this response",
         examples=["http://api.example.com/schemas/ErrorModel.json"],
     )
@@ -56,7 +56,7 @@ class ValidationProblemResponse(BaseModel):
 
     schema_url: str | None = Field(
         default=None,
-        alias="$schema",
+        serialization_alias="$schema",
         description="JSON Schema URL for this response",
         examples=["http://api.example.com/schemas/ErrorModel.json"],
     )

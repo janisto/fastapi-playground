@@ -3,8 +3,9 @@ import json
 import os
 import random
 import threading
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 from enum import StrEnum
+from typing import cast
 
 import structlog
 from firebase_admin import initialize_app
@@ -180,7 +181,8 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
         topic_param = req.args.get("topic")
         topic = JokeTopic(topic_param.lower()) if topic_param else None
 
-        joke = run_async(generate_dad_joke(topic))
+        joke_flow = cast("Callable[[JokeTopic | None], Coroutine[object, object, DadJoke]]", generate_dad_joke)
+        joke = run_async(joke_flow(topic))
 
         logger.info(
             "Generated dad joke",
