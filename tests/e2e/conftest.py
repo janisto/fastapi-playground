@@ -12,7 +12,7 @@ import contextlib
 import os
 from collections.abc import Generator
 
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -28,9 +28,9 @@ def _emulator_running(host: str) -> bool:
     Check if an emulator is running at the given host.
     """
     try:
-        httpx.get(f"http://{host}/", timeout=1.0)
+        httpx2.get(f"http://{host}/", timeout=1.0)
         return True
-    except httpx.RequestError:
+    except httpx2.RequestError:
         return False
 
 
@@ -56,8 +56,8 @@ def clear_emulator_data() -> Generator[None]:
     Ensures test isolation by removing all documents.
     """
     yield
-    with contextlib.suppress(httpx.RequestError):
-        httpx.delete(
+    with contextlib.suppress(httpx2.RequestError):
+        httpx2.delete(
             f"http://{FIRESTORE_HOST}/emulator/v1/projects/{PROJECT_ID}/databases/(default)/documents",
             timeout=5.0,
         )
