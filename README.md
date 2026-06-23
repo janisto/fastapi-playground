@@ -280,7 +280,8 @@ For detailed infrastructure setup, see [GCP.md](GCP.md).
 
 ```bash
 cd functions
-uv sync
+uv venv --python 3.14 venv
+uv pip install --python venv/bin/python -r requirements.txt
 firebase deploy --only functions
 ```
 
