@@ -12,7 +12,7 @@ dependencies = [
     "uvicorn[standard]>=0.44.0",
     "fastapi-problem>=0.12.1",
     "cbor2>=5.7.1",
-    "httpx2>=2.4.0",
+    "httpx2>=2.5.0",
 ]
 
 [dependency-groups]
@@ -22,8 +22,8 @@ dev = [
     "pytest-cov>=7.0.0",
     "pytest-httpx2>=1.0.0",
     "pytest-mock>=3.15.1",
-    "ruff>=0.15.10",
-    "ty>=0.0.24",
+    "ruff>=0.15.20",
+    "ty>=0.0.55",
 ]
 
 [tool.ruff]
