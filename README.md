@@ -252,7 +252,7 @@ just cov                # Generate HTML and JSON coverage reports
 | `just test-e2e` | Firebase emulator E2E tests |
 | `just test-all` | All test tiers |
 | `just cov` | Coverage report (html/json) |
-| `just check` | Full app and Functions lint, type, test, and lock/export checks |
+| `just check` | Full app and Functions lint, type, test, and dependency-manifest checks |
 | `just emulators` | Start Firebase emulators for E2E |
 
 Run `just` to see all available commands.

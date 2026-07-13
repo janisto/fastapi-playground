@@ -140,7 +140,7 @@ container-down name="fastapi-playground":
 update:
     uv sync --upgrade
     uv sync --project functions --upgrade
-    uv export --project functions --locked --no-dev --no-hashes --no-header --no-emit-project -o functions/requirements.txt >/dev/null
+    just sync-functions-requirements
 
 # Ensure project virtualenv is up to date
 [group('lifecycle')]
@@ -152,14 +152,30 @@ install:
 install-functions:
     uv sync --project functions --locked
 
-# Verify Firebase deployment requirements match the Functions lockfile
+# Export only the direct runtime dependencies required by the Firebase CLI
+[private]
+_export-functions-requirements output:
+    uv export --project functions --locked --no-dev --no-hashes --no-header --no-annotate --no-emit-project \
+        --only-emit-package firebase-admin \
+        --only-emit-package firebase-functions \
+        --only-emit-package genkit \
+        --only-emit-package genkit-plugin-google-cloud \
+        --only-emit-package genkit-plugin-google-genai \
+        -o {{ output }} >/dev/null
+
+# Regenerate the lean Firebase deployment requirements
+[group('lifecycle')]
+sync-functions-requirements:
+    just _export-functions-requirements functions/requirements.txt
+
+# Verify Firebase deployment requirements contain only direct runtime dependencies
 [group('lifecycle')]
 check-functions-requirements:
     #!/usr/bin/env bash
     set -euo pipefail
     temporary_file="$(mktemp)"
     trap 'rm -f "$temporary_file"' EXIT
-    uv export --project functions --locked --no-dev --no-hashes --no-header --no-emit-project -o "$temporary_file" >/dev/null
+    just _export-functions-requirements "$temporary_file"
     diff -u functions/requirements.txt "$temporary_file"
 
 # Remove temporary files

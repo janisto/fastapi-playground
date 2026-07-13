@@ -49,8 +49,11 @@ just lint
 ```
 
 `functions/pyproject.toml` and `functions/uv.lock` define the local environment. Firebase's Python deployment discovers
-dependencies through `functions/requirements.txt`, which is an exact runtime-only export from `functions/uv.lock`.
-`just update` refreshes both lockfiles and regenerates the export; `just check-functions-requirements` verifies drift.
+dependencies through the intentionally lean `functions/requirements.txt`. It pins only the direct runtime packages to
+versions from `functions/uv.lock`; Firebase resolves transitive dependencies during deployment. `just update` refreshes
+both lockfiles and regenerates the file through a restricted `uv export`. When adding or removing a direct dependency,
+update the exporter package list in `Justfile`, then run `just sync-functions-requirements`.
+`just check-functions-requirements` verifies the file has not drifted or expanded into an unrestricted export.
 
 ## Run with the Functions emulator
 

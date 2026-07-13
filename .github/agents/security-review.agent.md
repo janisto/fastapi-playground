@@ -110,7 +110,7 @@ forwarded headers and that a deployed HTTPS `/health` response includes HSTS; do
 - [ ] Root and Functions dependencies are current (`just update`) and both lockfiles resolve
 - [ ] Vulnerability-scanning evidence is reported when available; freshness alone is not treated as proof
 - [ ] Runtime dependencies exclude test-only packages
-- [ ] `functions/requirements.txt` exactly matches the runtime-only export from `functions/uv.lock`
+- [ ] `functions/requirements.txt` pins only direct runtime packages from `functions/uv.lock`
 
 ## Output Format
 

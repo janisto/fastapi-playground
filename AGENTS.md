@@ -36,11 +36,13 @@ just test-functions
 just check
 ```
 
-`just check` verifies both projects, including the exact Functions requirements export. `just update` upgrades the root
-and Functions lockfiles and regenerates `functions/requirements.txt`. Both project manifests enforce the minimum
-supported uv version while allowing newer releases. The Docker builder stays exactly versioned for reproducible image
-builds. When a newer uv release changes the export, regenerate it and review the diff; update the minimum version only
-when the repository starts relying on that release.
+`just check` verifies both projects, including the lean Functions deployment requirements. `just update` upgrades the
+root and Functions lockfiles and regenerates `functions/requirements.txt` with `uv export`, restricted by
+`--only-emit-package` to the direct runtime packages. Never use an unrestricted export: Firebase resolves transitive
+dependencies during deployment, and listing them would create a noisy duplicate lockfile. When adding or removing a
+direct Functions dependency, update both `functions/pyproject.toml` and the exporter package list in `Justfile`, then run
+`just sync-functions-requirements`. Both project manifests enforce the minimum supported uv version while allowing newer
+releases. The Docker builder stays exactly versioned for reproducible image builds.
 
 ## Project structure and boundaries
 
@@ -175,7 +177,9 @@ or 500 responses. Logs may include stable status or exception type, never prompt
 credentials, or user data.
 
 Unit tests in `functions/tests/` must isolate Genkit reflection and GCP telemetry and must not call Vertex AI. Firebase
-deploys from the exact runtime-only `functions/requirements.txt` export; do not hand-edit it.
+deploys from the intentionally lean `functions/requirements.txt`, which pins only direct runtime packages to versions
+from `functions/uv.lock`. Do not hand-edit it or include transitive dependencies; use the restricted exporter through
+`just sync-functions-requirements`.
 
 ## Testing
 

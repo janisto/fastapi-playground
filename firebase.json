@@ -13,6 +13,7 @@
         ".git",
         "venv",
         ".venv",
+        ".genkit",
         "__pycache__",
         "firebase-debug.log",
         "firebase-debug.*.log",

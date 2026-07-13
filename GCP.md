@@ -154,10 +154,11 @@ The `dad_joke` HTTP function uses:
 - GCP trace and metric export outside local development.
 - private IAM invocation; unauthenticated internet requests cannot consume model quota.
 
-Firebase deployment uses `functions/requirements.txt`, which is an exact export of the runtime dependency graph in
-`functions/uv.lock`. Both project manifests enforce the minimum supported uv version while allowing newer releases.
-The Docker builder stays exactly versioned for reproducible image builds. Run `just update` to refresh the lockfiles and
-export, and `just check-functions-requirements` to detect drift caused by dependency or uv export changes.
+Firebase deployment uses the intentionally lean `functions/requirements.txt`, which pins only the direct runtime
+packages to versions from `functions/uv.lock`; the deployment installer resolves their transitive dependencies. Run
+`just update` to refresh both lockfiles and regenerate the lean file, or `just sync-functions-requirements` after changing
+direct Functions dependencies. The restricted `uv export` command uses `--only-emit-package` for every direct package;
+`just check-functions-requirements` rejects drift and accidental unrestricted exports.
 
 ```bash
 cd functions
