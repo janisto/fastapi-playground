@@ -4,6 +4,14 @@
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "firebase-tools@latest", "mcp", "--only", "auth,firestore,functions,storage"]
+    },
+    "google_cloud_logging": {
+      "type": "http",
+      "url": "https://logging.googleapis.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:GOOGLE_CLOUD_ACCESS_TOKEN}",
+        "x-goog-user-project": "${env:GOOGLE_CLOUD_PROJECT}"
+      }
     }
   }
 }
