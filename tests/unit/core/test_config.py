@@ -348,20 +348,22 @@ class TestGetSettings:
     Tests for get_settings function.
     """
 
-    def test_returns_settings_instance(self) -> None:
+    def test_returns_settings_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Verify get_settings returns Settings instance.
         """
+        monkeypatch.setenv("FIREBASE_PROJECT_ID", "cache-test-project")
         get_settings.cache_clear()
 
         settings = get_settings()
 
         assert isinstance(settings, Settings)
 
-    def test_returns_cached_instance(self) -> None:
+    def test_returns_cached_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Verify get_settings returns the same cached instance.
         """
+        monkeypatch.setenv("FIREBASE_PROJECT_ID", "cache-test-project")
         get_settings.cache_clear()
 
         settings1 = get_settings()
@@ -369,10 +371,11 @@ class TestGetSettings:
 
         assert settings1 is settings2
 
-    def test_cache_clear_creates_new_instance(self) -> None:
+    def test_cache_clear_creates_new_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Verify cache_clear creates a new settings instance.
         """
+        monkeypatch.setenv("FIREBASE_PROJECT_ID", "cache-test-project")
         get_settings.cache_clear()
         settings1 = get_settings()
 
