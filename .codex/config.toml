@@ -2,3 +2,7 @@
 url = "https://logging.googleapis.com/mcp"
 bearer_token_env_var = "GOOGLE_CLOUD_ACCESS_TOKEN"
 env_http_headers = { "x-goog-user-project" = "GOOGLE_CLOUD_PROJECT" }
+
+[mcp_servers.firebase]
+command = "npx"
+args = ["-y", "firebase-tools@latest", "mcp", "--only", "auth,firestore,functions,storage"]
