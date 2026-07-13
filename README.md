@@ -119,6 +119,32 @@ cp .env.example .env
 | `CORS_ORIGINS` | JSON array or comma-separated allowed origins | - |
 | `MAX_REQUEST_SIZE_BYTES` | Request body size limit | `1000000` |
 
+### Firebase and Cloud Logging MCP clients
+
+The workspace MCP configurations in `.vscode/mcp.json` and `.codex/config.toml` use the Firebase CLI server and the
+managed Cloud Logging server. Firebase uses the credentials available to the Firebase CLI. Cloud Logging reads the
+quota project and a short-lived Application Default Credentials access token from the shell environment.
+
+First align the gcloud default project and the Application Default Credentials quota project:
+
+```bash
+gcloud config set project PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project PROJECT_ID
+```
+
+For zsh, add these public, secret-free definitions to `~/.zshrc`:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="PROJECT_ID"
+export GOOGLE_CLOUD_ACCESS_TOKEN="$(gcloud auth application-default print-access-token)"
+```
+
+Run `source ~/.zshrc`, then restart VS Code or Codex so the client inherits the variables. The access token is
+short-lived; opening a new shell regenerates it, while a long-running client must be restarted after a refresh. Never
+commit the expanded token. Keep this convenience setup to a trusted workstation because child processes inherit the
+token. See [GCP.md](GCP.md) for IAM and troubleshooting details.
+
 ## Project Layout
 
 ```

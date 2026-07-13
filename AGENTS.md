@@ -999,6 +999,31 @@ Checklist for PRs
   - `FIRESTORE_DATABASE` (optional, Firestore database ID; defaults to `(default)`)
   - `MAX_REQUEST_SIZE_BYTES` (default 1,000,000; maximum request body size)
   - `CORS_ORIGINS` (JSON array or comma-separated list of allowed origins)
+
+### Local MCP credentials
+
+- Keep `.vscode/mcp.json` and `.codex/config.toml` aligned for the Firebase and Cloud Logging MCP servers.
+- Firebase MCP uses Firebase CLI credentials. Cloud Logging MCP reads `GOOGLE_CLOUD_PROJECT` and the short-lived
+  `GOOGLE_CLOUD_ACCESS_TOKEN` from the client environment.
+- Keep the gcloud default project and ADC quota project aligned before generating a token:
+
+  ```bash
+  gcloud config set project PROJECT_ID
+  gcloud auth application-default login
+  gcloud auth application-default set-quota-project PROJECT_ID
+  ```
+
+- Developers using zsh may keep the following public definitions in `~/.zshrc`:
+
+  ```bash
+  export GOOGLE_CLOUD_PROJECT="PROJECT_ID"
+  export GOOGLE_CLOUD_ACCESS_TOKEN="$(gcloud auth application-default print-access-token)"
+  ```
+
+- Run `source ~/.zshrc` and restart VS Code or Codex after changing the project or refreshing an expired token.
+- Use this convenience setup only on a trusted workstation; child processes inherit the short-lived access token.
+- Never commit an expanded access token, a real project ID, or developer-specific shell configuration.
+
 ---
 
 ## CI Required Checks (recommended)

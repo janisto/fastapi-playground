@@ -45,6 +45,36 @@ Do not grant project-wide `Editor`. Prefer the Cloud Run or Functions runtime se
 Credentials. For local development, prefer `gcloud auth application-default login`; use a downloaded service-account
 key only when necessary, keep it outside the repository, and point `GOOGLE_APPLICATION_CREDENTIALS` to it.
 
+## Local MCP authentication
+
+The repository configures the Firebase MCP server and the managed Cloud Logging MCP server for both VS Code and
+Codex. Firebase uses the credentials available to the Firebase CLI. Cloud Logging uses
+`GOOGLE_CLOUD_ACCESS_TOKEN` for OAuth and `GOOGLE_CLOUD_PROJECT` as the `x-goog-user-project` quota project; neither
+value belongs in repository configuration.
+
+Keep the gcloud default project and the Application Default Credentials quota project aligned:
+
+```bash
+gcloud config set project PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project PROJECT_ID
+```
+
+For zsh, add the following to `~/.zshrc`:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="PROJECT_ID"
+export GOOGLE_CLOUD_ACCESS_TOKEN="$(gcloud auth application-default print-access-token)"
+```
+
+Run `source ~/.zshrc` and restart VS Code or Codex after changing these values. The access token is short-lived and is
+regenerated when a new shell sources `~/.zshrc`; refresh and restart a long-running client when authentication expires.
+Never commit the expanded token, and use this convenience setup only on a trusted workstation because child processes
+inherit it. If setting the ADC quota project fails, the local identity needs
+`serviceusage.services.use`, commonly granted through `roles/serviceusage.serviceUsageConsumer`. See
+[Google Cloud MCP authentication](https://docs.cloud.google.com/mcp/authenticate-mcp) for authentication options and
+token-refresh limitations.
+
 ## FastAPI configuration
 
 These settings are defined in `app/core/config.py`:
