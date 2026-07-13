@@ -20,9 +20,12 @@ FIRESTORE_HOST = "127.0.0.1:7030"
 AUTH_HOST = "127.0.0.1:7010"
 PROJECT_ID = "demo-test"
 
-os.environ.setdefault("FIRESTORE_EMULATOR_HOST", FIRESTORE_HOST)
-os.environ.setdefault("FIREBASE_AUTH_EMULATOR_HOST", AUTH_HOST)
-os.environ.setdefault("FIREBASE_PROJECT_ID", PROJECT_ID)
+os.environ["ENVIRONMENT"] = "test"
+os.environ["DEBUG"] = "false"
+os.environ["FIRESTORE_EMULATOR_HOST"] = FIRESTORE_HOST
+os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = AUTH_HOST
+os.environ["FIREBASE_PROJECT_ID"] = PROJECT_ID
+os.environ["CORS_ORIGINS"] = ""
 
 # App imports must follow emulator configuration because settings are resolved during import.
 from app.auth.firebase import FirebaseUser, verify_firebase_token  # noqa: E402

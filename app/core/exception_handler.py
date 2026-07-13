@@ -20,12 +20,14 @@ from app.core.cbor import (
     CBORDecodeHTTPException,
     CBORDecodeProblem,
     CBORProblemPostHook,
+    NotAcceptableHTTPException,
+    NotAcceptableProblem,
     UnsupportedMediaTypeHTTPException,
     UnsupportedMediaTypeProblem,
 )
 from app.core.config import get_settings
 from app.core.constants import PROBLEM_SCHEMA_PATH, VALIDATION_PROBLEM_SCHEMA_PATH
-from app.core.schema_links import build_described_by_link, build_schema_url
+from app.core.schema_links import build_described_by_link
 from app.core.validation import validation_error_handler
 from app.pagination import InvalidCursorError
 
@@ -59,25 +61,10 @@ def schema_link_post_hook(
     response: Response,
 ) -> tuple[dict[str, Any], Response]:
     """
-    Add $schema field and Link header to all RFC 9457 error responses.
-
-    Per JSON Schema spec, $schema declares which schema the document conforms to.
-    This enables client-side validation and tooling support (e.g., IDE completion).
-    The Link header with rel="describedBy" provides discoverability per RFC 8288.
-
-    Note: $schema must be an absolute URI per JSON Schema specification.
-    The $schema field is prepended to maintain consistent field ordering.
+    Add a schema-discovery Link header to all RFC 9457 error responses.
     """
     schema_path = VALIDATION_PROBLEM_SCHEMA_PATH if "errors" in content else PROBLEM_SCHEMA_PATH
 
-    # Only add $schema if not already present (custom handlers may set their own)
-    if "$schema" not in content:
-        schema_url = build_schema_url(request, schema_path)
-        content = {"$schema": schema_url, **content}
-        response.body = response.render(content)
-        response.headers["content-length"] = str(len(response.body))
-
-    # Add Link header for discoverability (RFC 8288)
     response.headers["Link"] = build_described_by_link(schema_path)
 
     return content, response
@@ -116,6 +103,17 @@ def unsupported_media_type_handler(
     return UnsupportedMediaTypeProblem(detail=str(exc.detail))
 
 
+def not_acceptable_handler(
+    eh: ExceptionHandler,
+    request: Request,
+    exc: NotAcceptableHTTPException,
+) -> NotAcceptableProblem:
+    """
+    Handle unsupported response media types with RFC 9457 Problem Details.
+    """
+    return NotAcceptableProblem(detail=str(exc.detail))
+
+
 def invalid_cursor_error_handler(
     eh: ExceptionHandler,
     request: Request,
@@ -127,13 +125,10 @@ def invalid_cursor_error_handler(
     Returns 400 Bad Request per HTTP semantics: an invalid cursor is a
     malformed request parameter, not a schema validation error (422).
     """
-    schema_url = build_schema_url(request, PROBLEM_SCHEMA_PATH)
-    extras: dict[str, Any] = {"$schema": schema_url}
     return Problem(
         title="Bad Request",
         detail=str(exc) or "invalid cursor format",
         status=400,
-        **extras,
     )
 
 
@@ -146,6 +141,7 @@ eh = new_exception_handler(
         CBORDecodeError: cast("Handler", cbor_decode_error_handler),
         CBORDecodeHTTPException: cast("Handler", cbor_decode_http_exception_handler),
         UnsupportedMediaTypeHTTPException: cast("Handler", unsupported_media_type_handler),
+        NotAcceptableHTTPException: cast("Handler", not_acceptable_handler),
         InvalidCursorError: cast("Handler", invalid_cursor_error_handler),
     },
     post_hooks=[
@@ -153,7 +149,7 @@ eh = new_exception_handler(
         cast(
             "PostHook",
             StripExtrasPostHook(
-                mandatory_fields=["$schema", "title", "status", "detail", "errors"],
+                mandatory_fields=["title", "status", "detail", "errors"],
                 include=[500, 502, 503, 504],
                 enabled=settings.environment == "production",
                 logger=logger,

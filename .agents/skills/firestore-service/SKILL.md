@@ -39,3 +39,6 @@ result. Do not log profile fields, tokens, request bodies, or exception strings 
 
 Run focused service tests, then `just lint`, `just typing`, and `just test`. Run `just test-e2e` when transaction or
 Firestore integration semantics change and the emulators are available.
+
+The async Firestore client's `close()` method is synchronous in the supported SDK. Call the repository lifecycle
+helper without `await`, and keep shutdown in the lifespan `finally` block so failed requests cannot skip cleanup.

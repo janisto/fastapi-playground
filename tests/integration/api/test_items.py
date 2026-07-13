@@ -24,13 +24,12 @@ class TestItemsList:
         assert "total" in body
         assert isinstance(body["items"], list)
 
-    def test_returns_schema_url(self, client: TestClient) -> None:
-        """Verify GET /v1/items returns $schema URL."""
+    def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
+        """Verify GET /v1/items keeps schema metadata out of the representation."""
         response = client.get("/v1/items")
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/ItemList.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """Verify GET /v1/items returns Link header with describedBy."""
@@ -261,7 +260,7 @@ class TestItemsFiltering:
         body = response.json()
         assert body["title"] == "Unprocessable Entity"
         assert body["detail"] == "validation failed"
-        assert "$schema" in body
+        assert "$schema" not in body
 
     def test_filter_preserves_in_link_header(self, client: TestClient) -> None:
         """Verify category filter is preserved in Link header."""
@@ -288,7 +287,7 @@ class TestItemsInvalidCursor:
         assert body["title"] == "Bad Request"
         assert body["status"] == 400
         assert "invalid cursor" in body["detail"]
-        assert "$schema" in body
+        assert "$schema" not in body
 
     def test_invalid_cursor_detail_contains_error_message(self, client: TestClient) -> None:
         """Verify invalid cursor error has descriptive detail."""

@@ -106,6 +106,9 @@ ignore = [
     "RET504",   # Unnecessary assignment OK in tests for clarity
     "S104",     # Testing 0.0.0.0 binding is intentional
 ]
+"functions/tests/**/*.py" = [
+    "S101",     # Allow assert in tests
+]
 "app/core/config.py" = [
     "S104",     # Binding to 0.0.0.0 is intentional for containers
 ]

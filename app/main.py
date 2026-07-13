@@ -17,12 +17,13 @@ from fastapi_request_observability import (
 )
 from starlette.types import ASGIApp
 
-from app.api import health, schemas, v1_router
+from app.api import business_routers, health, schemas
 from app.api.schemas import populate_schema_cache
 from app.core.config import get_settings
 from app.core.exception_handler import eh
 from app.core.firebase import close_async_firestore_client, initialize_firebase
 from app.core.logging import configure_logging
+from app.core.openapi import register_schema_components
 from app.middleware import (
     BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
@@ -38,10 +39,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_logging()
     initialize_firebase()
 
-    yield
-
-    # Shutdown
-    await close_async_firestore_client()
+    try:
+        yield
+    finally:
+        close_async_firestore_client()
 
 
 # Create the FastAPI application before wrapping it with response-wide ASGI middleware.
@@ -56,12 +57,15 @@ fastapi_app = FastAPI(
 )
 
 # Include routers
-fastapi_app.include_router(v1_router)  # /v1/profile, /v1/hello, /v1/items
+for business_router in business_routers:
+    fastapi_app.include_router(business_router)
 fastapi_app.include_router(health.router)  # /health (unversioned)
 fastapi_app.include_router(schemas.router)  # /schemas (unversioned)
 
 # Populate schema cache from OpenAPI spec (must be after all routers are registered)
-populate_schema_cache(fastapi_app.openapi())
+openapi_schema = fastapi_app.openapi()
+register_schema_components(openapi_schema)
+populate_schema_cache(openapi_schema)
 
 # Register RFC 9457 Problem Details exception handler
 add_exception_handler(fastapi_app, eh)

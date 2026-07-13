@@ -2,7 +2,7 @@
 Profile request models.
 """
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.types import NormalizedEmail, Phone
 
@@ -102,5 +102,15 @@ class ProfileUpdate(BaseModel):
         description="Marketing opt-in",
         examples=[False],
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_explicit_nulls(cls, value: object) -> object:
+        """
+        Reject explicit nulls while allowing fields to be omitted.
+        """
+        if isinstance(value, dict) and any(field_value is None for field_value in value.values()):
+            raise ValueError("profile update fields cannot be null")
+        return value
 
     model_config = ConfigDict(extra="forbid")

@@ -16,6 +16,7 @@ from app.core.cbor import (
     CBOR_MEDIA_TYPE,
     JSON_MEDIA_TYPE,
     PROBLEM_CBOR,
+    PROBLEM_JSON,
     CBORDecodeError,
     CBORDecodeHTTPException,
     CBORProblemPostHook,
@@ -25,6 +26,7 @@ from app.core.cbor import (
     accepts_media_type,
     content_type_is_allowed,
     content_type_matches,
+    negotiate_response_media_type,
     normalize_media_type,
 )
 
@@ -247,19 +249,19 @@ class TestCBORProblemPostHook:
         assert result_response.headers.get("content-type") == original_content_type
         assert result_content == content
 
-    def test_mixed_accept_with_cbor(
+    def test_mixed_accept_tie_prefers_json(
         self,
         hook: CBORProblemPostHook,
         make_request_response: MakeRequestResponseFn,
     ) -> None:
-        """Accept header containing CBOR triggers CBOR serialization."""
+        """Equal client quality uses the server preference for JSON."""
         request, response = make_request_response("application/json, application/cbor")
         content = {"type": "about:blank", "title": "Error", "status": 400}
+        original_content_type = response.headers["content-type"]
 
         result_content, result_response = hook(content, request, response)
 
-        decoded = cbor2.loads(result_response.body)
-        assert decoded == content
+        assert result_response.headers["content-type"] == original_content_type
         assert result_content == content
 
     def test_problem_cbor_accept_serializes_body(
@@ -576,6 +578,34 @@ class TestAcceptsMediaType:
     def test_media_type_with_parameters(self) -> None:
         """Accept header with media type parameters."""
         assert accepts_media_type("application/json; charset=utf-8", "application/json") is True
+
+
+class TestNegotiateResponseMediaType:
+    """Tests for choosing the best supported response representation."""
+
+    @pytest.mark.parametrize("accept", ["", "*/*", "application/*"])
+    def test_defaults_to_json(self, accept: str) -> None:
+        """Absent and wildcard Accept values use the JSON server preference."""
+        assert negotiate_response_media_type(accept) == JSON_MEDIA_TYPE
+
+    def test_honors_relative_quality(self) -> None:
+        """The representation with the higher client quality is selected."""
+        assert negotiate_response_media_type("application/json;q=1, application/cbor;q=0.1") == JSON_MEDIA_TYPE
+        assert negotiate_response_media_type("application/json;q=0.1, application/cbor;q=1") == CBOR_MEDIA_TYPE
+
+    def test_prefers_json_on_tie(self) -> None:
+        """Equal quality uses the documented JSON server preference."""
+        assert negotiate_response_media_type("application/json, application/cbor") == JSON_MEDIA_TYPE
+
+    def test_returns_none_when_no_format_is_acceptable(self) -> None:
+        """Unsupported or excluded representations produce no selection."""
+        assert negotiate_response_media_type("application/xml") is None
+        assert negotiate_response_media_type("application/json;q=0, application/cbor;q=0") is None
+
+    def test_selects_problem_media_types(self) -> None:
+        """Problem Details uses its registered JSON and CBOR media types."""
+        assert negotiate_response_media_type(PROBLEM_JSON, problem=True) == PROBLEM_JSON
+        assert negotiate_response_media_type(PROBLEM_CBOR, problem=True) == PROBLEM_CBOR
 
 
 class TestContentTypeMatches:

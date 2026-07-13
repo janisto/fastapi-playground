@@ -19,8 +19,9 @@ Enable only the products used by the deployment target:
 - Vertex AI for the `dad_joke` function;
 - Cloud Storage for Firebase only if you plan to use the checked-in storage rules.
 
-The repository and `firebase.json` use `europe-west4` for Firestore, Storage, Functions, and Vertex AI. Choose the
-Cloud Run service region explicitly when deploying the FastAPI container.
+The repository uses `europe-west4` for Firestore, Functions, and Vertex AI. Storage location is selected when the bucket
+is provisioned rather than in `firebase.json`. Choose the Cloud Run service region explicitly when deploying the
+FastAPI container.
 
 ## APIs and IAM
 
@@ -39,6 +40,7 @@ Grant the runtime service account the minimum roles required by the deployed com
 
 - FastAPI: `roles/datastore.user` and normally `roles/logging.logWriter`;
 - `dad_joke` function: `roles/aiplatform.user` and normally `roles/logging.logWriter`;
+- intended `dad_joke` callers: `roles/run.invoker` on the function's backing Cloud Run service;
 - Secret Manager consumers: `roles/secretmanager.secretAccessor` for only the required secrets.
 
 Do not grant project-wide `Editor`. Prefer the Cloud Run or Functions runtime service account and Application Default
@@ -81,10 +83,10 @@ These settings are defined in `app/core/config.py`:
 
 | Variable | Required in deployment | Default | Purpose |
 |---|---:|---|---|
-| `FIREBASE_PROJECT_ID` | Yes | `test-project` | Firebase and Firestore project ID |
+| `FIREBASE_PROJECT_ID` | Yes | none | Firebase and Firestore project ID |
 | `FIRESTORE_DATABASE` | No | `(default)` | Optional named Firestore database |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Local only | unset | Explicit credential-file path; omit on Cloud Run |
-| `ENVIRONMENT` | No | `production` | Environment label |
+| `ENVIRONMENT` | No | `production` | `development`, `test`, or `production` |
 | `DEBUG` | No | `false` | Debug logging and development behavior |
 | `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Maximum request-body size |
 | `CORS_ORIGINS` | Browser clients only | empty | JSON array or comma-separated allowed origins |
@@ -125,13 +127,18 @@ just test-e2e
 ```
 
 The emulator ports come from `firebase.json`: Auth `7010`, Functions `7020`, Firestore `7030`, and Storage `7040`.
+`just emulators` intentionally uses the synthetic `demo-test` project so local test data cannot be confused with a
+deployed project.
 The server-side Firestore client connects through `FIRESTORE_EMULATOR_HOST`; keep the value protocol-free, as
 documented by the [Firebase Emulator Suite](https://firebase.google.com/docs/emulator-suite/connect_firestore#admin_sdks).
 
 ## FastAPI container
 
 The Dockerfile uses BuildKit cache mounts, installs only runtime dependencies from `uv.lock`, runs as UID/GID 1001,
-and starts Uvicorn without duplicate access logging.
+and starts Uvicorn without duplicate access logging. Cloud Run terminates TLS before proxying cleartext HTTP to the
+container, so Uvicorn is configured to trust Cloud Run's forwarded headers. This preserves the original HTTPS scheme
+for generated URLs and HSTS decisions; do not remove those runtime flags without verifying `/health`, schema links,
+and security headers through the deployed service.
 
 Production deployment is already managed by existing Google Cloud configuration outside this repository. Do not use
 local container commands or examples in this guide to replace its build, image, or rollout conventions.
@@ -145,9 +152,10 @@ The `dad_joke` HTTP function uses:
 - `MIN_INSTANCES` default `0` and `MAX_INSTANCES` default `2`;
 - Genkit with the Vertex AI model configured in `functions/main.py`;
 - GCP trace and metric export outside local development.
+- private IAM invocation; unauthenticated internet requests cannot consume model quota.
 
-Firebase deployment uses `functions/requirements.txt`. Keep its direct dependencies aligned with
-`functions/pyproject.toml`; `functions/uv.lock` is the local development lockfile.
+Firebase deployment uses `functions/requirements.txt`, which is an exact export of the runtime dependency graph in
+`functions/uv.lock`. Run `just update` to refresh both and `just check-functions-requirements` to detect drift.
 
 ```bash
 cd functions
@@ -157,6 +165,22 @@ export FUNCTIONS_DISCOVERY_TIMEOUT=30
 firebase deploy --only functions --project PROJECT_ID
 ```
 
+The deployed function uses Cloud Run functions v2 authentication. Grant only intended principals the Cloud Run
+Invoker role on the backing service, then call it with an identity token:
+
+```bash
+gcloud run services add-iam-policy-binding FUNCTION_SERVICE \
+  --region europe-west4 \
+  --member="user:ENGINEER@example.com" \
+  --role="roles/run.invoker"
+
+curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" \
+  "FUNCTION_URL?topic=tech"
+```
+
+Cloud Run functions v2 requires both `roles/run.invoker` permission and an ID token for authenticated invocation; see
+[Authenticate for invocation](https://cloud.google.com/functions/docs/securing/authenticating).
+
 For local function emulation:
 
 ```bash
@@ -164,8 +188,9 @@ firebase emulators:start --only functions --project PROJECT_ID
 curl "http://127.0.0.1:7020/PROJECT_ID/europe-west4/dad_joke?topic=tech"
 ```
 
-The emulator runs the HTTP wrapper locally, but generating a joke still calls Vertex AI. It therefore requires network
-access, Application Default Credentials, the Vertex AI API, and `roles/aiplatform.user`; it is not an offline fake.
+The emulator runs the HTTP wrapper locally and does not enforce deployed IAM. Generating a joke still calls Vertex AI,
+so it requires network access, Application Default Credentials, the Vertex AI API, and `roles/aiplatform.user`; it is
+not an offline fake.
 
 See [functions/README.md](functions/README.md) for the endpoint contract and Functions-specific commands. Firebase
 uses `requirements.txt` for Python deployments, consistent with the current
@@ -181,6 +206,7 @@ Production checklist:
 
 - keep `DEBUG=false`;
 - terminate TLS at Cloud Run and verify HSTS on HTTPS responses;
+- keep the model-backed function private and grant `roles/run.invoker` only to intended callers;
 - configure explicit `CORS_ORIGINS` for browser clients;
 - inject production secrets from Secret Manager rather than plain values;
 - rebuild the custom image regularly for OS, Python, and dependency patches;
@@ -194,6 +220,7 @@ Production checklist:
 | Auth returns 401 | Missing, expired, revoked, disabled-user, or invalid token | Bearer token and `WWW-Authenticate` response header |
 | Auth returns 503 | Firebase verification dependency unavailable | ADC, network access, public-key retrieval, and `Retry-After` |
 | Function returns 400 | Unsupported `topic` query value | Use `work`, `tech`, `food`, or `relationships` |
+| Function returns 401/403 before handler | Missing identity token or caller IAM | ID token and `roles/run.invoker` on the backing service |
 | Function returns 503 | Genkit or Vertex AI failure | Vertex API, region/model availability, ADC, IAM, and quotas |
 | E2E test skips | Firestore emulator is not running on `127.0.0.1:7030` | Run `just emulators` |
 | CORS is blocked | Origin is absent from `CORS_ORIGINS` | Configure an exact allowed origin |

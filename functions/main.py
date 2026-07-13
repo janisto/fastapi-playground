@@ -166,8 +166,7 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     )
 
 
-@https_fn.on_request()
-def dad_joke(req: https_fn.Request) -> https_fn.Response:
+def _handle_dad_joke(req: https_fn.Request) -> https_fn.Response:
     """
     HTTP endpoint that returns a dad joke.
 
@@ -177,6 +176,14 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
     Returns:
         JSON with setup, punchline, topic, and style fields.
     """
+    if req.method != "GET":
+        return https_fn.Response(
+            json.dumps({"error": "METHOD_NOT_ALLOWED", "message": "Use GET"}),
+            status=405,
+            headers={"Allow": "GET"},
+            content_type="application/json",
+        )
+
     try:
         topic_param = req.args.get("topic")
         topic = JokeTopic(topic_param.lower()) if topic_param else None
@@ -186,8 +193,7 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
 
         logger.info(
             "Generated dad joke",
-            topic=topic.value if topic else None,
-            style=joke.style.value,
+            topic_provided=topic is not None,
         )
 
         return https_fn.Response(
@@ -197,7 +203,7 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
 
     except ValueError:
         valid_topics = [t.value for t in JokeTopic]
-        logger.warn("Invalid topic requested", topic=topic_param, valid_topics=valid_topics)
+        logger.warn("Invalid topic requested")
         return https_fn.Response(
             json.dumps(
                 {
@@ -209,23 +215,30 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
             content_type="application/json",
         )
 
-    except GenkitError as e:
+    except GenkitError as error:
         logger.error(
             "Genkit error generating joke",
-            error=e,
-            genkit_status=e.status,
-            genkit_message=str(e),
+            genkit_status=error.status,
+            exception_type=type(error).__name__,
         )
         return https_fn.Response(
-            json.dumps({"error": e.status, "message": "Failed to generate joke"}),
+            json.dumps({"error": error.status, "message": "Failed to generate joke"}),
             status=503,
             content_type="application/json",
         )
 
-    except Exception as e:  # noqa: BLE001
-        logger.error("Unexpected error generating joke", error=e)
+    except Exception as error:  # noqa: BLE001
+        logger.error("Unexpected error generating joke", exception_type=type(error).__name__)
         return https_fn.Response(
             json.dumps({"error": "INTERNAL", "message": "An unexpected error occurred"}),
             status=500,
             content_type="application/json",
         )
+
+
+@https_fn.on_request(invoker="private")
+def dad_joke(req: https_fn.Request) -> https_fn.Response:
+    """
+    Serve the private dad-joke HTTP function.
+    """
+    return _handle_dad_joke(req)

@@ -1,12 +1,13 @@
 """
-Integration tests for $schema field on error responses.
+Integration tests for error response schema discovery.
 
-Verifies that all RFC 9457 error responses include $schema and Link header
-as required by the API guidelines.
+RFC 9457 response instances contain problem details only. Their JSON Schema is
+advertised separately through a Link header with the describedBy relation.
 """
 
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.constants import PROBLEM_SCHEMA_PATH, VALIDATION_PROBLEM_SCHEMA_PATH
@@ -16,174 +17,83 @@ from tests.helpers.profiles import make_profile_payload_dict
 BASE_URL = "/v1/profile"
 
 
-class TestErrorSchemaOn4xxResponses:
-    """Tests for $schema on 4xx error responses."""
+def assert_schema_link(response_body: dict[str, object], link: str, expected_path: str) -> None:
+    """
+    Assert that schema discovery uses a portable Link header only.
+    """
+    assert "$schema" not in response_body
+    assert f"<{expected_path}>" in link
+    assert 'rel="describedBy"' in link
 
-    def test_401_includes_schema(
-        self,
-        client: TestClient,
-    ) -> None:
-        """Verify 401 Unauthorized includes $schema."""
-        response = client.get(BASE_URL)
+
+class TestErrorSchemaDiscovery:
+    """
+    Tests for schema discovery on error responses.
+    """
+
+    @pytest.mark.parametrize("method", ["get", "post"])
+    def test_401_uses_problem_schema(self, client: TestClient, method: str) -> None:
+        """
+        Verify authentication failures advertise the generic problem schema.
+        """
+        response = getattr(client, method)(BASE_URL)
 
         assert response.status_code == 401
-        body = response.json()
-        assert "$schema" in body
-        assert PROBLEM_SCHEMA_PATH in body["$schema"]
+        assert_schema_link(response.json(), response.headers["link"], PROBLEM_SCHEMA_PATH)
 
-    def test_401_includes_link_header(
-        self,
-        client: TestClient,
-    ) -> None:
-        """Verify 401 includes Link header with describedBy."""
-        response = client.get(BASE_URL)
-
-        assert response.status_code == 401
-        link = response.headers.get("link", "")
-        assert 'rel="describedBy"' in link
-        assert PROBLEM_SCHEMA_PATH in link
-
-    def test_404_includes_schema(
+    def test_404_uses_problem_schema(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
-        """Verify 404 Not Found includes $schema."""
+        """
+        Verify not-found failures advertise the generic problem schema.
+        """
         mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
 
         response = client.get(BASE_URL)
 
         assert response.status_code == 404
-        body = response.json()
-        assert "$schema" in body
-        assert PROBLEM_SCHEMA_PATH in body["$schema"]
+        assert_schema_link(response.json(), response.headers["link"], PROBLEM_SCHEMA_PATH)
 
-    def test_404_includes_link_header(
+    def test_409_uses_problem_schema(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
-        """Verify 404 includes Link header with describedBy."""
-        mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
-
-        response = client.get(BASE_URL)
-
-        assert response.status_code == 404
-        link = response.headers.get("link", "")
-        assert 'rel="describedBy"' in link
-
-    def test_409_includes_schema(
-        self,
-        client: TestClient,
-        with_fake_user: None,
-        mock_profile_service: AsyncMock,
-    ) -> None:
-        """Verify 409 Conflict includes $schema."""
+        """
+        Verify conflict failures advertise the generic problem schema.
+        """
         mock_profile_service.create_profile.side_effect = ProfileAlreadyExistsError()
 
         response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         assert response.status_code == 409
-        body = response.json()
-        assert "$schema" in body
-        assert PROBLEM_SCHEMA_PATH in body["$schema"]
+        assert_schema_link(response.json(), response.headers["link"], PROBLEM_SCHEMA_PATH)
 
-    def test_422_validation_error_includes_schema(
-        self,
-        client: TestClient,
-        with_fake_user: None,
-    ) -> None:
-        """Verify 422 validation error includes $schema."""
+    def test_422_uses_validation_schema(self, client: TestClient, with_fake_user: None) -> None:
+        """
+        Verify validation failures advertise the validation problem schema.
+        """
         response = client.post(BASE_URL, json={"invalid": "data"})
 
         assert response.status_code == 422
-        body = response.json()
-        assert "$schema" in body
-        assert VALIDATION_PROBLEM_SCHEMA_PATH in body["$schema"]
+        assert_schema_link(response.json(), response.headers["link"], VALIDATION_PROBLEM_SCHEMA_PATH)
 
-    def test_422_validation_error_includes_link_header(
-        self,
-        client: TestClient,
-        with_fake_user: None,
-    ) -> None:
-        """Verify 422 validation error includes Link header."""
-        response = client.post(BASE_URL, json={"invalid": "data"})
-
-        assert response.status_code == 422
-        link = response.headers.get("link", "")
-        assert 'rel="describedBy"' in link
-        assert VALIDATION_PROBLEM_SCHEMA_PATH in link
-
-
-class TestErrorSchemaOn5xxResponses:
-    """Tests for $schema on 5xx error responses."""
-
-    def test_500_includes_schema(
+    def test_500_uses_problem_schema(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
-        """Verify 500 Internal Server Error includes $schema."""
+        """
+        Verify unexpected failures advertise the generic problem schema.
+        """
         mock_profile_service.get_profile.side_effect = RuntimeError("Database failure")
 
         response = client.get(BASE_URL)
 
         assert response.status_code == 500
-        body = response.json()
-        assert "$schema" in body
-        assert PROBLEM_SCHEMA_PATH in body["$schema"]
-
-    def test_500_includes_link_header(
-        self,
-        client: TestClient,
-        with_fake_user: None,
-        mock_profile_service: AsyncMock,
-    ) -> None:
-        """Verify 500 includes Link header with describedBy."""
-        mock_profile_service.get_profile.side_effect = RuntimeError("Database failure")
-
-        response = client.get(BASE_URL)
-
-        assert response.status_code == 500
-        link = response.headers.get("link", "")
-        assert 'rel="describedBy"' in link
-
-
-class TestErrorSchemaFormat:
-    """Tests for $schema URL format compliance."""
-
-    def test_schema_is_absolute_url(
-        self,
-        client: TestClient,
-    ) -> None:
-        """Verify $schema is an absolute URL per JSON Schema spec."""
-        response = client.get(BASE_URL)
-
-        assert response.status_code == 401
-        body = response.json()
-        schema_url = body["$schema"]
-        assert schema_url.startswith(("http://", "https://"))
-
-    def test_schema_url_contains_host(
-        self,
-        client: TestClient,
-    ) -> None:
-        """Verify $schema URL includes the host."""
-        response = client.get(BASE_URL)
-
-        body = response.json()
-        schema_url = body["$schema"]
-        assert "testserver" in schema_url or "localhost" in schema_url
-
-    def test_link_header_uses_relative_path(
-        self,
-        client: TestClient,
-    ) -> None:
-        """Verify Link header uses relative path for portability."""
-        response = client.get(BASE_URL)
-
-        link = response.headers.get("link", "")
-        assert f"<{PROBLEM_SCHEMA_PATH}>" in link
+        assert_schema_link(response.json(), response.headers["link"], PROBLEM_SCHEMA_PATH)

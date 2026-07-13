@@ -5,11 +5,17 @@ Integration tests use the `client` fixture with mocked services
 (no Firebase/Firestore). This is the key fixture setup for fast integration tests.
 """
 
+import os
 from collections.abc import Generator
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+
+os.environ["ENVIRONMENT"] = "test"
+os.environ["DEBUG"] = "false"
+os.environ["FIREBASE_PROJECT_ID"] = "test-project"
+os.environ["CORS_ORIGINS"] = ""
 
 from app.auth.firebase import FirebaseUser, verify_firebase_token
 from app.dependencies import get_profile_service

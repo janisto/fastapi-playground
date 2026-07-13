@@ -11,7 +11,8 @@ tests before editing an endpoint.
 ## Architecture
 
 - Put transport behavior in `app/api/`, domain behavior in `app/services/`, and shared infrastructure in `app/core/`.
-- Register business routers on `v1_router`; keep health and schema discovery unversioned.
+- Give business routers their complete `/v1/...` prefix and export them through `business_routers`; keep health and
+  schema discovery unversioned.
 - Use `CBORRoute` for business endpoints so request and response negotiation stays consistent.
 - Use typed dependency aliases from `app/dependencies.py`; protected routes must use `CurrentUser`.
 - Return Pydantic response models directly. Do not introduce response envelopes or raw dictionaries.
@@ -22,8 +23,9 @@ For every operation, define a stable `<resource>_<action>` operation ID, summary
 error responses, and a precise return type. Use 201 plus `Location` for persistent creation and 204 without a model for
 deletion. Keep paths without trailing slashes because redirects are disabled.
 
-Add a `Link: </schemas/Model.json>; rel="describedBy"` header and an absolute runtime `$schema` URL to modeled
-responses. Keep router-level Problem Details declarations and route-specific statuses aligned with runtime behavior.
+Add a `Link: </schemas/Model.json>; rel="describedBy"` header to modeled responses. Do not add `$schema` to response
+instances; that keyword identifies the dialect of the standalone schema document. Keep shared OpenAPI response
+metadata in `app/core/openapi.py`, and keep route-specific statuses aligned with runtime behavior.
 Use the `openapi-contract` skill as well when a route, model, error, authentication rule, or response header changes the
 public contract.
 

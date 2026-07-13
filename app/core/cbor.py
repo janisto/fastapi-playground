@@ -91,6 +91,16 @@ def accepts_media_type(accept_header: str, media_type: str, *, explicit_only: bo
     if not accept_header:
         return False
 
+    return _media_type_quality(accept_header, media_type, explicit_only=explicit_only) > 0
+
+
+def _media_type_quality(accept_header: str, media_type: str, *, explicit_only: bool = False) -> float:
+    """
+    Return the effective quality for a supported media type.
+    """
+    if not accept_header:
+        return 0.0
+
     target = normalize_media_type(media_type)
     target_parts = target.split("/")
 
@@ -123,7 +133,29 @@ def accepts_media_type(accept_header: str, media_type: str, *, explicit_only: bo
         elif specificity == best_specificity:
             best_quality = max(best_quality, quality)
 
-    return best_quality > 0
+    return best_quality
+
+
+def negotiate_response_media_type(accept_header: str, *, problem: bool = False) -> str | None:
+    """
+    Select the preferred supported response media type.
+
+    JSON is the server preference for absent headers, wildcards, and equal
+    client quality. CBOR must be requested explicitly.
+    """
+    if not accept_header:
+        return PROBLEM_JSON if problem else JSON_MEDIA_TYPE
+
+    json_types = (PROBLEM_JSON, JSON_MEDIA_TYPE) if problem else (JSON_MEDIA_TYPE,)
+    cbor_types = (PROBLEM_CBOR, CBOR_MEDIA_TYPE) if problem else (CBOR_MEDIA_TYPE,)
+    json_quality = max(_media_type_quality(accept_header, media_type) for media_type in json_types)
+    cbor_quality = max(_media_type_quality(accept_header, media_type, explicit_only=True) for media_type in cbor_types)
+
+    if json_quality <= 0 and cbor_quality <= 0:
+        return None
+    if cbor_quality > json_quality:
+        return PROBLEM_CBOR if problem else CBOR_MEDIA_TYPE
+    return PROBLEM_JSON if problem else JSON_MEDIA_TYPE
 
 
 def content_type_matches(content_type: str, media_type: str) -> bool:
@@ -192,6 +224,24 @@ class UnsupportedMediaTypeHTTPException(HTTPException):
 
     def __init__(self, detail: str) -> None:
         super().__init__(status_code=415, detail=detail)
+
+
+class NotAcceptableProblem(StatusProblem):
+    """
+    Returned when none of the requested response formats are supported.
+    """
+
+    title = "Not Acceptable"
+    status = 406
+
+
+class NotAcceptableHTTPException(HTTPException):
+    """
+    HTTPException for unsupported Accept headers.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(status_code=406, detail="Supported response formats: application/json, application/cbor")
 
 
 class CBORRequest(StarletteRequest):
@@ -282,6 +332,10 @@ class CBORRoute(APIRoute):
                     accept = value.decode("latin1")
                     break
 
+            negotiated_media_type = negotiate_response_media_type(accept)
+            if negotiated_media_type is None:
+                raise NotAcceptableHTTPException
+
             cbor_request = CBORRequest(request.scope, request.receive)
 
             # Pre-process body to trigger CBOR validation before route handler
@@ -292,7 +346,7 @@ class CBORRoute(APIRoute):
             response = await original_handler(cbor_request)
 
             response_content_type = response.media_type or ""
-            if accepts_media_type(accept, CBOR_MEDIA_TYPE, explicit_only=True) and content_type_matches(
+            if negotiated_media_type == CBOR_MEDIA_TYPE and content_type_matches(
                 response_content_type, JSON_MEDIA_TYPE
             ):
                 body = response.body
@@ -338,11 +392,7 @@ class CBORProblemPostHook:
         (per RFC 9110 content negotiation).
         """
         accept = request.headers.get("accept", "")
-        # Accept both application/cbor and application/problem+cbor for Problem Details
-        # This follows the same pattern as application/problem+json vs application/json
-        if accepts_media_type(accept, CBOR_MEDIA_TYPE, explicit_only=True) or accepts_media_type(
-            accept, PROBLEM_CBOR, explicit_only=True
-        ):
+        if negotiate_response_media_type(accept, problem=True) == PROBLEM_CBOR:
             cbor_body = cbor2.dumps(content)
             response.body = cbor_body
             response.headers["content-type"] = PROBLEM_CBOR

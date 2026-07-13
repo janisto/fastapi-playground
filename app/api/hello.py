@@ -8,21 +8,20 @@ This router provides example endpoints showing:
 - Validation errors (422 with structured format)
 """
 
-from fastapi import APIRouter, Request, Response, status
+from fastapi import APIRouter, Response, status
 
 from app.core.cbor import CBORRoute
-from app.core.schema_links import build_described_by_link, build_schema_url
-from app.models.error import ProblemResponse, ValidationProblemResponse
+from app.core.constants import API_V1_PREFIX
+from app.core.openapi import COMMON_CBOR_RESPONSES, problem_response, success_response
+from app.core.schema_links import build_described_by_link
+from app.models.error import ValidationProblemResponse
 from app.models.hello import GREETINGS, Greeting, GreetingRequest
 
 router = APIRouter(
-    prefix="/hello",
+    prefix=f"{API_V1_PREFIX}/hello",
     tags=["Hello"],
     route_class=CBORRoute,
-    responses={
-        422: {"model": ValidationProblemResponse, "description": "Validation error"},
-        500: {"model": ProblemResponse, "description": "Server error"},
-    },
+    responses=COMMON_CBOR_RESPONSES,
 )
 
 GREETING_SCHEMA_PATH = "/schemas/Greeting.json"
@@ -34,10 +33,10 @@ GREETING_SCHEMA_PATH = "/schemas/Greeting.json"
     description="Returns a simple greeting message.",
     operation_id="hello_get",
     responses={
-        200: {"model": Greeting, "description": "Greeting returned successfully"},
+        200: success_response("Greeting returned successfully", "Greeting"),
     },
 )
-async def get_greeting(request: Request, response: Response) -> Greeting:
+async def get_greeting(response: Response) -> Greeting:
     """
     Return a simple greeting message.
 
@@ -45,10 +44,7 @@ async def get_greeting(request: Request, response: Response) -> Greeting:
     a JSON (or CBOR) response.
     """
     response.headers["Link"] = build_described_by_link(GREETING_SCHEMA_PATH)
-    return Greeting(
-        schema_url=build_schema_url(request, GREETING_SCHEMA_PATH),
-        message="Hello, World!",
-    )
+    return Greeting(message="Hello, World!")
 
 
 @router.post(
@@ -58,11 +54,11 @@ async def get_greeting(request: Request, response: Response) -> Greeting:
     description="Creates a personalized greeting for the given name.",
     operation_id="hello_create",
     responses={
-        201: {"model": Greeting, "description": "Greeting created successfully"},
-        422: {"model": ValidationProblemResponse, "description": "Validation error"},
+        201: success_response("Greeting created successfully", "Greeting"),
+        422: problem_response("Validation error", model=ValidationProblemResponse),
     },
 )
-async def create_greeting(http_request: Request, greeting_request: GreetingRequest, response: Response) -> Greeting:
+async def create_greeting(greeting_request: GreetingRequest, response: Response) -> Greeting:
     """
     Create a personalized greeting.
 
@@ -78,7 +74,4 @@ async def create_greeting(http_request: Request, greeting_request: GreetingReque
     message = f"{greeting_word}, {greeting_request.name}!"
 
     response.headers["Link"] = build_described_by_link(GREETING_SCHEMA_PATH)
-    return Greeting(
-        schema_url=build_schema_url(http_request, GREETING_SCHEMA_PATH),
-        message=message,
-    )
+    return Greeting(message=message)

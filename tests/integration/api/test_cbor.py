@@ -246,4 +246,4 @@ class TestCBORErrorResponse:
         assert decoded["title"] == "Unprocessable Entity"
         assert decoded["detail"] == "validation failed"
         assert "errors" in decoded
-        assert "$schema" in decoded
+        assert "$schema" not in decoded

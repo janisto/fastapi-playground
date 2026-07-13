@@ -128,7 +128,7 @@ class ProfileService:
         client = self._get_client()
         doc_ref = client.collection(self.collection_name).document(user_id)
 
-        update_dict = {k: v for k, v in profile_data.model_dump(exclude_unset=True).items() if v is not None}
+        update_dict = profile_data.model_dump(exclude_unset=True)
 
         if not update_dict:
             return await self.get_profile(user_id)

@@ -27,15 +27,14 @@ class TestHealthEndpoint:
         body = response.json()
         assert body["status"] == "healthy"
 
-    def test_returns_schema_url(self, client: TestClient) -> None:
+    def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
         """
-        Verify health endpoint returns $schema URL.
+        Verify health representation omits schema metadata.
         """
         response = client.get("/health")
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/HealthResponse.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """

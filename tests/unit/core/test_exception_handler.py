@@ -75,22 +75,20 @@ class TestCborDecodeErrorHandler:
 class TestSchemaLinkPostHook:
     """Tests for schema_link_post_hook."""
 
-    def test_adds_schema_field_to_content(self) -> None:
-        """Verify $schema field is added with absolute URL."""
+    def test_preserves_problem_content(self) -> None:
+        """Schema discovery does not mutate the Problem Details body."""
         request = MagicMock()
-        request.base_url = "http://testserver/"
         content = {"title": "Not Found", "status": 404, "detail": "Resource not found"}
         response = JSONResponse(content=content)
 
         result_content, _result_response = schema_link_post_hook(content, request, response)
 
-        assert "$schema" in result_content
-        assert result_content["$schema"] == "http://testserver/schemas/ProblemResponse.json"
+        assert result_content == content
+        assert "$schema" not in result_content
 
     def test_adds_link_header_with_describedby(self) -> None:
         """Verify Link header with rel=describedBy is added."""
         request = MagicMock()
-        request.base_url = "http://testserver/"
         content = {"title": "Error", "status": 500}
         response = JSONResponse(content=content)
 
@@ -104,58 +102,20 @@ class TestSchemaLinkPostHook:
         Verify structured validation errors use their specific schema.
         """
         request = MagicMock()
-        request.base_url = "http://testserver/"
         content = {"title": "Unprocessable Entity", "status": 422, "errors": []}
         response = JSONResponse(content=content)
 
-        result_content, result_response = schema_link_post_hook(content, request, response)
+        _result_content, result_response = schema_link_post_hook(content, request, response)
 
-        assert result_content["$schema"] == f"http://testserver{VALIDATION_PROBLEM_SCHEMA_PATH}"
         assert result_response.headers["Link"] == f'<{VALIDATION_PROBLEM_SCHEMA_PATH}>; rel="describedBy"'
 
-    def test_does_not_override_existing_schema(self) -> None:
-        """Verify $schema is not overwritten if already present."""
+    def test_does_not_change_content_length(self) -> None:
+        """Adding a header does not rewrite the response body."""
         request = MagicMock()
-        request.base_url = "http://testserver/"
-        content = {"$schema": "http://custom/schema.json", "title": "Error", "status": 400}
-        response = JSONResponse(content=content)
-
-        result_content, _result_response = schema_link_post_hook(content, request, response)
-
-        assert result_content["$schema"] == "http://custom/schema.json"
-
-    def test_updates_content_length_header(self) -> None:
-        """Verify content-length header is updated after adding $schema."""
-        request = MagicMock()
-        request.base_url = "http://testserver/"
         content = {"title": "Error", "status": 400}
         response = JSONResponse(content=content)
-        original_length = int(response.headers["content-length"])
+        original_length = response.headers["content-length"]
 
         _result_content, result_response = schema_link_post_hook(content, request, response)
 
-        new_length = int(result_response.headers["content-length"])
-        assert new_length > original_length
-
-    def test_handles_base_url_with_trailing_slash(self) -> None:
-        """Verify trailing slash is handled correctly."""
-        request = MagicMock()
-        request.base_url = "http://api.example.com/"
-        content = {"title": "Conflict", "status": 409}
-        response = JSONResponse(content=content)
-
-        result_content, _result_response = schema_link_post_hook(content, request, response)
-
-        assert result_content["$schema"] == "http://api.example.com/schemas/ProblemResponse.json"
-        assert "//" not in result_content["$schema"].replace("http://", "")
-
-    def test_handles_base_url_without_trailing_slash(self) -> None:
-        """Verify base_url without trailing slash works correctly."""
-        request = MagicMock()
-        request.base_url = "https://api.example.com"
-        content = {"title": "Unauthorized", "status": 401}
-        response = JSONResponse(content=content)
-
-        result_content, _result_response = schema_link_post_hook(content, request, response)
-
-        assert result_content["$schema"] == "https://api.example.com/schemas/ProblemResponse.json"
+        assert result_response.headers["content-length"] == original_length

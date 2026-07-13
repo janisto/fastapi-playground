@@ -38,22 +38,21 @@ class TestCreateProfile:
         assert response.headers.get("Location") == "/v1/profile"
         mock_profile_service.create_profile.assert_awaited_once()
 
-    def test_returns_schema_url(
+    def test_response_does_not_embed_schema_metadata(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
         """
-        Verify POST /profile/ returns $schema URL.
+        Verify POST /profile/ keeps schema metadata out of the representation.
         """
         mock_profile_service.create_profile.return_value = make_profile()
 
         response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/Profile.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(
         self,
@@ -211,22 +210,21 @@ class TestGetProfile:
         assert "firstname" in body
         mock_profile_service.get_profile.assert_awaited_once()
 
-    def test_returns_schema_url(
+    def test_response_does_not_embed_schema_metadata(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
         """
-        Verify GET /profile/ returns $schema URL.
+        Verify GET /profile/ keeps schema metadata out of the representation.
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
         response = client.get(BASE_URL)
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/Profile.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(
         self,
@@ -313,22 +311,21 @@ class TestUpdateProfile:
         assert body["firstname"] == "Updated"
         mock_profile_service.update_profile.assert_awaited_once()
 
-    def test_returns_schema_url(
+    def test_response_does_not_embed_schema_metadata(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
         """
-        Verify PATCH /profile/ returns $schema URL.
+        Verify PATCH /profile/ keeps schema metadata out of the representation.
         """
         mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
 
         response = client.patch(BASE_URL, json={"firstname": "Updated"})
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/Profile.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(
         self,
@@ -420,6 +417,23 @@ class TestUpdateProfile:
         response = client.patch(BASE_URL, json={})
 
         assert response.status_code == 200
+
+    @pytest.mark.parametrize("field", ["firstname", "lastname", "email", "phone_number", "marketing"])
+    def test_rejects_explicit_null(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+        field: str,
+    ) -> None:
+        """
+        Verify explicit null fields return validation errors instead of no-op updates.
+        """
+        response = client.patch(BASE_URL, json={field: None})
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "validation failed"
+        mock_profile_service.update_profile.assert_not_awaited()
 
 
 class TestDeleteProfile:

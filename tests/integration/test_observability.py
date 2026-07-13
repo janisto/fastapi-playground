@@ -42,3 +42,22 @@ def test_emits_correlated_gcp_access_record(
     assert payload["status"] == 200
     assert payload["httpRequest"]["status"] == 200
     assert "logging.googleapis.com/spanId" not in payload
+
+
+def test_access_record_uses_full_prefixed_route_template(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """
+    Verify observability identifies the public route instead of its unprefixed router path.
+    """
+    with caplog.at_level(logging.INFO, logger="http.access"):
+        response = client.get("/v1/hello")
+
+    assert response.status_code == 200
+    access_records = [record for record in caplog.records if record.name == "http.access"]
+    assert len(access_records) == 1
+
+    payload = json.loads(JSONFormatter(LoggingPreset.GCP).format(access_records[0]))
+    assert payload["path_template"] == "/v1/hello"
+    assert payload["operation_id"] == "hello_get"

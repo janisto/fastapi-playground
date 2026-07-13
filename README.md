@@ -9,7 +9,7 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 ## Features
 
 - Layered middleware architecture with security headers, CORS, request IDs, and structured access logs via [`fastapi-request-observability`](https://pypi.org/project/fastapi-request-observability/)
-- Request-scoped logging with Google Cloud Trace correlation via [W3C Trace Context](https://www.w3.org/TR/trace-context/) `traceparent` header
+- Request-scoped logging with incoming [W3C Trace Context](https://www.w3.org/TR/trace-context/) correlation metadata
 - [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) for all error responses with field-level validation errors
 - JSON and CBOR request/response content negotiation using `Content-Type` and `Accept`
 - Cursor-based pagination with [RFC 8288 Link](https://datatracker.ietf.org/doc/html/rfc8288) headers
@@ -41,7 +41,6 @@ Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.
 
 ```json
 {
-  "$schema": "https://api.example.com/schemas/ProblemResponse.json",
   "title": "Not Found",
   "status": 404,
   "detail": "Profile not found"
@@ -52,7 +51,6 @@ Validation errors (422) include detailed field locations:
 
 ```json
 {
-  "$schema": "https://api.example.com/schemas/ValidationProblemResponse.json",
   "title": "Unprocessable Entity",
   "status": 422,
   "detail": "validation failed",
@@ -62,11 +60,15 @@ Validation errors (422) include detailed field locations:
 }
 ```
 
+Modeled responses advertise their standalone JSON Schema through an RFC 8288
+`Link: </schemas/Model.json>; rel="describedBy"` header. `$schema` belongs to the schema document itself, not to each
+API response instance.
+
 ### Content Negotiation
 
 - Responses default to `application/json`; request `application/cbor` explicitly with `Accept`.
 - JSON and CBOR request bodies are selected with `Content-Type`.
-- Explicit exclusions such as `application/cbor;q=0` are honored.
+- Quality weights are honored, with JSON preferred on ties; unsupported explicit response formats return 406.
 
 ### Pagination
 
@@ -166,6 +168,7 @@ app/
     firebase.py        # Firebase Admin SDK and async Firestore client
     exception_handler.py  # RFC 9457 Problem Details
     cbor.py            # CBOR content negotiation
+    openapi.py         # Reusable response contract metadata
   exceptions/          # Domain exceptions using fastapi-problem
     profile.py         # ProfileNotFoundError, ProfileAlreadyExistsError
   middleware/          # ASGI middleware stack
@@ -192,6 +195,7 @@ tests/
 functions/             # Firebase Cloud Functions (Python 3.14)
   main.py              # HTTP dad-joke function
   pyproject.toml       # Functions-specific dependencies
+  tests/               # Isolated function contract tests
 ```
 
 Repository guidance follows the canonical [AGENTS.md format](https://github.com/agentsmd/agents.md). Portable skills
@@ -225,6 +229,7 @@ Protected routes require `Authorization: Bearer <Firebase ID token>` header.
 just lint               # Check Ruff linting and formatting
 just typing             # Type-check the FastAPI app
 just typing-functions   # Type-check the separate Functions project
+just test-functions     # Run isolated Functions tests
 just test               # Run unit + integration tests
 just test-unit          # Run unit tests only
 just test-integration   # Run integration tests only
@@ -242,11 +247,12 @@ just cov                # Generate HTML and JSON coverage reports
 | `just lint` | Check Ruff linting and formatting |
 | `just typing` | Type checking via ty |
 | `just typing-functions` | Type-check the separate Functions project |
+| `just test-functions` | Test the separate Functions project |
 | `just test` | Unit + integration tests |
 | `just test-e2e` | Firebase emulator E2E tests |
 | `just test-all` | All test tiers |
 | `just cov` | Coverage report (html/json) |
-| `just check` | lint + typing + test |
+| `just check` | Full app and Functions lint, type, test, and lock/export checks |
 | `just emulators` | Start Firebase emulators for E2E |
 
 Run `just` to see all available commands.
@@ -315,7 +321,9 @@ gcloud run deploy fastapi-playground \
 
 The `--base-image` and `--automatic-updates` flags enable [automatic base image updates](https://cloud.google.com/run/docs/configuring/services/automatic-base-image-updates), allowing Google to apply security patches to the OS and runtime without rebuilding or redeploying.
 
-Set `FIREBASE_PROJECT_ID` environment variable to enable trace correlation in Cloud Logging.
+The image trusts Cloud Run's forwarded proxy headers so application URLs and HTTPS-only security headers reflect the
+original client request after Cloud Run terminates TLS. Request logs correlate an incoming valid `traceparent`; the
+middleware does not create tracing spans.
 
 For detailed infrastructure setup, see [GCP.md](GCP.md).
 
@@ -328,7 +336,8 @@ uv pip install --python venv/bin/python -r requirements.txt
 firebase deploy --only functions
 ```
 
-See [functions/README.md](functions/README.md) for Cloud Functions documentation.
+The model-backed function is private. Grant intended callers `roles/run.invoker` on its backing Cloud Run service and
+send an ID token when invoking it. See [functions/README.md](functions/README.md) for Cloud Functions documentation.
 
 ## CI/CD
 
@@ -337,7 +346,6 @@ GitHub Actions workflows in `.github/workflows/`:
 | Workflow | Description |
 |----------|-------------|
 | `app-ci.yml` | App and Functions quality checks plus app test coverage |
-| `app-lint.yml` | Code quality (Ruff linting and formatting) |
 | `labeler.yml` | Automatic PR labeling |
 | `labeler-manual.yml` | Manual labeling for historical PRs |
 | `dependabot-auto-merge.yml` | Auto-merge Dependabot minor/patch updates |

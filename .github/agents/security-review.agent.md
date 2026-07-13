@@ -34,6 +34,8 @@ Before analysis, read these files:
 - [ ] Token validation distinguishes credential failures (401) from Firebase dependency failures (503)
 - [ ] `WWW-Authenticate: Bearer` header included in 401 responses
 - [ ] HTTP Bearer scheme properly documented for OpenAPI
+- [ ] The model-backed `dad_joke` function remains GET-only and private, with `roles/run.invoker` granted only to
+      intended callers
 
 ### 2. Input Validation & Data Sanitization
 - [ ] All inputs validated via Pydantic models with strict types
@@ -60,12 +62,16 @@ HSTS applies only to HTTPS responses outside debug mode. CSP is intentionally om
 and `/openapi.json`; other security headers must remain. Content type varies between JSON, CBOR, schema documents, and
 HTML documentation.
 
+Cloud Run terminates TLS before proxying HTTP to the container. Verify the image runtime trusts the platform's
+forwarded headers and that a deployed HTTPS `/health` response includes HSTS; do not infer this from local plain HTTP.
+
 ### 4. Error Handling & Information Leakage
 - [ ] Error responses use generic messages (e.g., "Unauthorized" not token details)
 - [ ] Stack traces never exposed in production (`debug=False`)
 - [ ] Internal exception details logged but not returned to clients
 - [ ] 404 vs 403 responses don't leak resource existence
 - [ ] Validation errors redact sensitive input values while retaining public field locations
+- [ ] Missing-field errors cannot reflect a complete request body, and compound secret field names remain redacted
 
 ### 5. Logging & Monitoring
 - [ ] Authentication failures use appropriate warning/exception records without token or profile data
@@ -104,6 +110,7 @@ HTML documentation.
 - [ ] Root and Functions dependencies are current (`just update`) and both lockfiles resolve
 - [ ] Vulnerability-scanning evidence is reported when available; freshness alone is not treated as proof
 - [ ] Runtime dependencies exclude test-only packages
+- [ ] `functions/requirements.txt` exactly matches the runtime-only export from `functions/uv.lock`
 
 ## Output Format
 

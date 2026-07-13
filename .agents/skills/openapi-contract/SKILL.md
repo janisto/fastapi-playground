@@ -20,13 +20,14 @@ Treat the public contract as four connected surfaces:
 4. Runtime behavior adds RFC 9457 JSON or CBOR errors, authentication, request limits, and response headers that the
    generated contract must describe accurately where FastAPI supports them.
 
-Do not add a hand-maintained specification, duplicate model registry, or generated artifact unless the runtime contract
-can no longer be tested reliably without one.
+Do not add a hand-maintained specification or generated artifact. The small schema-component registration in
+`app/core/openapi.py` is the source for error schemas that are documented inline and served through `/schemas/`.
 
 ## Contract rules
 
 - Keep every operation ID stable and unique, paths free of trailing slashes, and summaries and descriptions accurate.
-- Document every reachable success and error status with the correct Pydantic model; omit a model for 204 responses.
+- Document every reachable success and error status with the correct schema and implemented JSON or CBOR media types;
+  omit content for 204 responses.
 - Keep request and response models separate. Reject unknown request fields and preserve aliases, examples, constraints,
   and UTC millisecond serialization in component schemas.
 - Mark protected operations through the existing bearer dependency and verify the generated security requirement.
@@ -35,8 +36,8 @@ can no longer be tested reliably without one.
   and `WWW-Authenticate` or `Retry-After` headers where applicable.
 - Keep runtime JSON and CBOR negotiation tests aligned with the documented request, success, and error contract. Do not
   claim a media type in OpenAPI merely because a custom route can serialize it.
-- Ensure response `$schema` values are absolute, `describedBy` links use stable relative paths, and every advertised
-  schema resolves through `/schemas/`.
+- Keep `$schema` on standalone schema documents only. Response instances use stable relative `describedBy` links, and
+  every advertised schema must resolve through `/schemas/`.
 
 ## Workflow
 
@@ -56,5 +57,5 @@ Run focused integration tests, then `just lint`, `just typing`, and `just test`.
 - Operation IDs are unique and protected routes declare bearer authentication.
 - Request, success, validation, and Problem Details schemas match runtime bodies.
 - 201 responses document `Location`; 204 responses have no body; paginated responses document `Link`.
-- `$schema` values and `describedBy` links resolve to the intended component schema.
+- Standalone schema documents declare the JSON Schema dialect, and `describedBy` links resolve to the intended schema.
 - `/openapi.json`, `/api-docs`, `/api-redoc`, and hidden `/schemas/` routes retain their intended visibility.

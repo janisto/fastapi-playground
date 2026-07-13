@@ -90,4 +90,4 @@ EXPOSE 8080
 
 # Run the application (exec form with sh -c for proper signal handling and $PORT expansion)
 # --no-server-header: Hide server fingerprinting (OWASP recommendation)
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-server-header --no-access-log"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*' --no-server-header --no-access-log"]

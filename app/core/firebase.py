@@ -17,7 +17,7 @@ _firebase_app: firebase_admin.App | None = None
 _async_firestore_client: AsyncClient | None = None
 
 
-def initialize_firebase() -> None:  # pragma: no cover
+def initialize_firebase() -> None:
     """
     Initialize Firebase Admin SDK.
 
@@ -37,8 +37,8 @@ def initialize_firebase() -> None:  # pragma: no cover
             cred = credentials.Certificate(settings.google_application_credentials)
             _firebase_app = firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
         else:
-            # Use default credentials (for Cloud Run)
-            _firebase_app = firebase_admin.initialize_app()
+            # Use default credentials (for Cloud Run) with an explicit Firebase project.
+            _firebase_app = firebase_admin.initialize_app(options={"projectId": settings.firebase_project_id})
 
         logger.info("Firebase initialized successfully")
 
@@ -72,11 +72,11 @@ def get_async_firestore_client() -> AsyncClient:
     return _async_firestore_client
 
 
-async def close_async_firestore_client() -> None:
+def close_async_firestore_client() -> None:
     """
     Close the async Firestore client (call on shutdown).
     """
     global _async_firestore_client
     if _async_firestore_client is not None:
-        await _async_firestore_client.close()
+        _async_firestore_client.close()
         _async_firestore_client = None

@@ -8,8 +8,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -47,6 +45,12 @@ jobs:
       - name: Run Functions typing checks
         run: just typing-functions
 
+      - name: Verify Functions deployment requirements
+        run: just check-functions-requirements
+
+      - name: Run Functions tests
+        run: just test-functions
+
       - name: Run test coverage
         run: just cov
 
@@ -55,15 +59,3 @@ jobs:
         with:
           name: coverage-report
           path: htmlcov
-
-      - name: Pytest coverage reporter (PR only)
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: dima-engineer/pytest-reporter@v4.3.0
-        with:
-          pytest-root-dir: app
-          pytest-tests-dir: tests
-          cov-omit-list: tests/*
-          cov-threshold-single: 75
-          cov-threshold-total: 75
-          async-tests: true
-          uv-version: latest

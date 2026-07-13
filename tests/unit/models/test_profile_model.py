@@ -267,6 +267,14 @@ class TestProfileUpdate:
         dumped = profile.model_dump(exclude_unset=True)
         assert dumped == {"firstname": "Jane"}
 
+    @pytest.mark.parametrize("field", ["firstname", "lastname", "email", "phone_number", "marketing"])
+    def test_explicit_null_is_rejected(self, field: str) -> None:
+        """
+        Verify null cannot silently become an omitted partial update.
+        """
+        with pytest.raises(ValidationError, match="profile update fields cannot be null"):
+            ProfileUpdate.model_validate({field: None})
+
     def test_invalid_email_raises(self) -> None:
         """
         Verify invalid email format raises ValidationError when provided.

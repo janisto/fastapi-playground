@@ -4,7 +4,7 @@ RFC 9457 Problem Details response models.
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class ValidationErrorDetail(BaseModel):
@@ -31,14 +31,6 @@ class ProblemResponse(BaseModel):
     Per RFC 9457, when type is omitted it defaults to "about:blank".
     """
 
-    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
-
-    schema_url: str | None = Field(
-        default=None,
-        serialization_alias="$schema",
-        description="JSON Schema URL for this response",
-        examples=["http://api.example.com/schemas/ProblemResponse.json"],
-    )
     title: str = Field(..., description="Short human-readable summary of the problem", examples=["Not Found"])
     status: int = Field(..., description="HTTP status code", examples=[404])
     detail: str = Field(..., description="Human-readable explanation", examples=["Profile not found"])
@@ -52,14 +44,6 @@ class ValidationProblemResponse(BaseModel):
     Does not include 'type' field per RFC 9457 (defaults to about:blank).
     """
 
-    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
-
-    schema_url: str | None = Field(
-        default=None,
-        serialization_alias="$schema",
-        description="JSON Schema URL for this response",
-        examples=["http://api.example.com/schemas/ValidationProblemResponse.json"],
-    )
     title: str = Field(
         default="Unprocessable Entity",
         description="Short human-readable summary of the problem",

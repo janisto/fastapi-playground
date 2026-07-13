@@ -2,17 +2,18 @@
 Health check router.
 """
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Response
 
-from app.core.schema_links import build_described_by_link, build_schema_url
-from app.models.error import ProblemResponse
+from app.core.openapi import problem_response, success_response
+from app.core.schema_links import build_described_by_link
 from app.models.health import HealthResponse
 
 router = APIRouter(
     prefix="/health",
     tags=["Health"],
     responses={
-        500: {"model": ProblemResponse, "description": "Server error"},
+        413: problem_response("Request body is too large"),
+        500: problem_response("Server error"),
     },
 )
 
@@ -24,10 +25,10 @@ router = APIRouter(
     description="Lightweight health probe for liveness checks.",
     operation_id="health_get",
     responses={
-        200: {"model": HealthResponse, "description": "Service is healthy"},
+        200: success_response("Service is healthy", "HealthResponse", cbor=False),
     },
 )
-async def health_check(request: Request, response: Response) -> HealthResponse:
+async def health_check(response: Response) -> HealthResponse:
     """
     Lightweight health probe for liveness checks.
 
@@ -36,7 +37,4 @@ async def health_check(request: Request, response: Response) -> HealthResponse:
     """
     schema_path = "/schemas/HealthResponse.json"
     response.headers["Link"] = build_described_by_link(schema_path)
-    return HealthResponse(
-        schema_url=build_schema_url(request, schema_path),
-        status="healthy",
-    )
+    return HealthResponse(status="healthy")

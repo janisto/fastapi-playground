@@ -3,7 +3,7 @@ Unit tests for ProfileService.
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pytest_mock import MockerFixture
@@ -71,13 +71,14 @@ def _make_profile_update(
     """
     Create ProfileUpdate model for tests.
     """
-    return ProfileUpdate(
-        firstname=firstname,
-        lastname=lastname,
-        email=email,
-        phone_number=phone_number,
-        marketing=marketing,
-    )
+    values = {
+        "firstname": firstname,
+        "lastname": lastname,
+        "email": email,
+        "phone_number": phone_number,
+        "marketing": marketing,
+    }
+    return ProfileUpdate(**cast("Any", {key: value for key, value in values.items() if value is not None}))
 
 
 @pytest.fixture

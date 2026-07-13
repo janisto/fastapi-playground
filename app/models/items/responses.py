@@ -23,13 +23,6 @@ class Item(BaseModel):
         serialize_by_alias=True,
     )
 
-    schema_url: str | None = Field(
-        default=None,
-        serialization_alias="$schema",
-        description="JSON Schema URL for this response",
-        examples=["/schemas/Item.json"],
-        exclude_if=lambda v: v is None,
-    )
     id: str = Field(..., description="Unique item identifier", examples=["item-001"])
     name: str = Field(..., description="Item name", examples=["Alpha Widget"])
     category: VALID_CATEGORIES = Field(..., description="Item category", examples=["electronics"])
@@ -46,13 +39,5 @@ class ItemList(BaseModel):
     Paginated list of items.
     """
 
-    model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
-
-    schema_url: str | None = Field(
-        default=None,
-        serialization_alias="$schema",
-        description="JSON Schema URL for this response",
-        examples=["/schemas/ItemList.json"],
-    )
     items: list[Item] = Field(..., description="List of items in current page")
     total: int = Field(..., ge=0, description="Total number of items matching filter", examples=[30])

@@ -129,7 +129,7 @@ class TestBodySizeLimitErrorResponse:
                 assert body["title"] == "Payload Too Large"
                 assert body["status"] == 413
                 assert body["detail"] == "Request body too large"
-                assert body["$schema"] == "http://testserver/schemas/ProblemResponse.json"
+                assert "$schema" not in body
                 assert response.headers["Link"] == '</schemas/ProblemResponse.json>; rel="describedBy"'
                 assert response.headers["Vary"] == "Accept"
 
@@ -396,9 +396,9 @@ class TestBodySizeLimitWithChunkedTransfer:
             await middleware(scope, receive, send)
             assert received_body == b"a" * 30 + b"b" * 30 + b"c" * 30
 
-    async def test_drains_remaining_body_after_413(self) -> None:
+    async def test_stops_reading_body_after_413(self) -> None:
         """
-        Verify middleware drains remaining body after sending 413.
+        Verify an oversized stream cannot retain the request by sending more data slowly.
         """
         with patch("app.middleware.body_limit.get_settings") as mock_settings:
             mock_settings.return_value.max_request_size_bytes = 50
@@ -416,4 +416,4 @@ class TestBodySizeLimitWithChunkedTransfer:
 
             await middleware(scope, receive, send)
 
-            assert receive.call_count == 3
+            assert receive.call_count == 2

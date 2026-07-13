@@ -3,7 +3,7 @@ Unit tests for application lifespan and main module.
 """
 
 import sys
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -24,7 +24,7 @@ class TestLifespan:
         with (
             patch("app.main.configure_logging") as mock_configure_logging,
             patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+            patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 
@@ -38,7 +38,7 @@ class TestLifespan:
         with (
             patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase") as mock_init_firebase,
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+            patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 
@@ -52,14 +52,14 @@ class TestLifespan:
         with (
             patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock) as mock_close,
+            patch("app.main.close_async_firestore_client") as mock_close,
         ):
             from app.main import app
 
             with TestClient(app):
                 pass
 
-            mock_close.assert_awaited_once()
+            mock_close.assert_called_once_with()
 
 
 class TestAppConfiguration:
@@ -157,7 +157,7 @@ class TestCorsMiddleware:
         with (
             patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+            patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 
@@ -192,7 +192,7 @@ class TestCorsMiddleware:
         with (
             patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+            patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 
@@ -220,7 +220,7 @@ class TestCorsMiddleware:
         with (
             patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+            patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 
@@ -258,7 +258,7 @@ class TestCorsMiddleware:
         with (
             patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+            patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 
@@ -293,7 +293,7 @@ class TestCorsMiddleware:
         with (
             patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+            patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 

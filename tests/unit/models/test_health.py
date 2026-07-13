@@ -28,21 +28,7 @@ class TestHealthResponse:
         """
         health = HealthResponse(status="healthy")
         data = health.model_dump()
-        assert data == {"$schema": None, "status": "healthy"}
-
-    def test_serialization_with_schema(self) -> None:
-        """
-        Verify health response with schema serializes correctly.
-        """
-        health = HealthResponse(
-            schema_url="http://localhost/schemas/HealthResponse.json",
-            status="healthy",
-        )
-        data = health.model_dump()
-        assert data == {
-            "$schema": "http://localhost/schemas/HealthResponse.json",
-            "status": "healthy",
-        }
+        assert data == {"status": "healthy"}
 
     def test_invalid_status_raises(self) -> None:
         """

@@ -22,13 +22,12 @@ class TestHelloGet:
         body = response.json()
         assert body["message"] == "Hello, World!"
 
-    def test_returns_schema_url(self, client: TestClient) -> None:
-        """Verify GET /hello/ returns $schema URL."""
+    def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
+        """Verify GET /hello/ keeps schema metadata out of the representation."""
         response = client.get("/v1/hello")
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/Greeting.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """Verify GET /hello/ returns Link header with describedBy."""
@@ -53,6 +52,28 @@ class TestHelloGet:
         decoded = cbor2.loads(response.content)
         assert decoded["message"] == "Hello, World!"
 
+    def test_prefers_higher_quality_json(self, client: TestClient) -> None:
+        """
+        Verify representation selection honors client quality weights.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=1, application/cbor;q=0.5"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_unsupported_accept_returns_406(self, client: TestClient) -> None:
+        """
+        Verify an explicit unsupported representation is not silently ignored.
+        """
+        response = client.get("/v1/hello", headers={"Accept": "text/csv"})
+
+        assert response.status_code == 406
+        assert response.headers["content-type"] == "application/problem+json"
+        assert response.json()["title"] == "Not Acceptable"
+
 
 class TestHelloPost:
     """Tests for POST /hello/."""
@@ -75,13 +96,12 @@ class TestHelloPost:
 
         assert response.headers.get("location") is None
 
-    def test_returns_schema_url(self, client: TestClient) -> None:
-        """Verify POST /hello/ returns $schema URL."""
+    def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
+        """Verify POST /hello/ keeps schema metadata out of the representation."""
         response = client.post("/v1/hello", json={"name": "Alice"})
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/Greeting.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """Verify POST /hello/ returns Link header with describedBy."""
@@ -200,7 +220,7 @@ class TestHelloValidation:
         assert body["status"] == 422
         assert body["detail"] == "validation failed"
         assert "errors" in body
-        assert "$schema" in body
+        assert "$schema" not in body
         error = body["errors"][0]
         assert "location" in error
         assert "message" in error

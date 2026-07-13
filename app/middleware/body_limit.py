@@ -5,13 +5,12 @@ ASGI middleware to enforce maximum request body size with early abort.
 import json
 
 import cbor2
-from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.core.cbor import CBOR_MEDIA_TYPE, PROBLEM_CBOR, PROBLEM_JSON, accepts_media_type
+from app.core.cbor import PROBLEM_CBOR, PROBLEM_JSON, negotiate_response_media_type
 from app.core.config import get_settings
 from app.core.constants import PROBLEM_SCHEMA_PATH
-from app.core.schema_links import build_described_by_link, build_schema_url
+from app.core.schema_links import build_described_by_link
 
 
 class BodySizeLimitMiddleware:
@@ -34,8 +33,6 @@ class BodySizeLimitMiddleware:
             cl = headers.get("content-length")
             if cl is not None and int(cl) > self._max:
                 await self._send_413(send, scope)
-                # Drain the incoming body to keep connection sane
-                await self._drain_body(receive)
                 return
         except Exception:
             # Ignore header parsing errors; rely on streaming guard
@@ -56,9 +53,6 @@ class BodySizeLimitMiddleware:
                 total += len(chunk)
                 if total > self._max:
                     await self._send_413(send, scope)
-                    # Drain remainder if any
-                    if message.get("more_body"):
-                        await self._drain_body(receive)
                     return
                 buffered.append(chunk)
             more_body = message.get("more_body", False)
@@ -81,10 +75,7 @@ class BodySizeLimitMiddleware:
         headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
 
         # Build RFC 9457 Problem Details payload
-        request = Request(scope)
-        schema_url = build_schema_url(request, PROBLEM_SCHEMA_PATH)
         problem = {
-            "$schema": schema_url,
             "title": "Payload Too Large",
             "status": 413,
             "detail": "Request body too large",
@@ -94,9 +85,7 @@ class BodySizeLimitMiddleware:
         # Check for explicit CBOR request (application/cbor or application/problem+cbor)
         # Use explicit_only=True since CBOR is non-default content type
         accept = headers.get("accept", "")
-        wants_cbor = accepts_media_type(accept, CBOR_MEDIA_TYPE, explicit_only=True) or accepts_media_type(
-            accept, PROBLEM_CBOR, explicit_only=True
-        )
+        wants_cbor = negotiate_response_media_type(accept, problem=True) == PROBLEM_CBOR
 
         if wants_cbor:
             payload = cbor2.dumps(problem)
@@ -118,11 +107,3 @@ class BodySizeLimitMiddleware:
             }
         )
         await send({"type": "http.response.body", "body": payload, "more_body": False})
-
-    async def _drain_body(self, receive: Receive) -> None:
-        more = True
-        while more:
-            message = await receive()
-            if message.get("type") != "http.request":  # pragma: no cover
-                break
-            more = message.get("more_body", False)

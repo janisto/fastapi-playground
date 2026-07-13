@@ -14,18 +14,21 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, Response
 
 from app.core.cbor import CBORRoute
-from app.core.schema_links import build_described_by_link, build_schema_url
-from app.models.error import ProblemResponse, ValidationProblemResponse
+from app.core.constants import API_V1_PREFIX
+from app.core.openapi import COMMON_CBOR_RESPONSES, problem_response, success_response
+from app.core.schema_links import build_described_by_link
+from app.models.error import ValidationProblemResponse
 from app.models.items import MOCK_ITEMS, VALID_CATEGORIES, ItemList
 from app.pagination import CursorParam, LimitParam, paginate
 
 router = APIRouter(
-    prefix="/items",
+    prefix=f"{API_V1_PREFIX}/items",
     tags=["Items"],
     route_class=CBORRoute,
     responses={
-        422: {"model": ValidationProblemResponse, "description": "Validation error"},
-        500: {"model": ProblemResponse, "description": "Server error"},
+        **COMMON_CBOR_RESPONSES,
+        400: problem_response("Invalid pagination cursor"),
+        422: problem_response("Validation error", model=ValidationProblemResponse),
     },
 )
 
@@ -38,7 +41,7 @@ ITEM_LIST_SCHEMA_PATH = "/schemas/ItemList.json"
     description="Returns a paginated list of items with optional category filter.",
     operation_id="items_list",
     responses={
-        200: {"model": ItemList, "description": "Items retrieved successfully"},
+        200: success_response("Items retrieved successfully", "ItemList"),
     },
 )
 async def list_items(
@@ -88,8 +91,4 @@ async def list_items(
     links.append(build_described_by_link(ITEM_LIST_SCHEMA_PATH))
     response.headers["Link"] = ", ".join(links)
 
-    return ItemList(
-        schema_url=build_schema_url(request, ITEM_LIST_SCHEMA_PATH),
-        items=result.items,
-        total=result.total,
-    )
+    return ItemList(items=result.items, total=result.total)
