@@ -1024,6 +1024,47 @@ Checklist for PRs
 - Use this convenience setup only on a trusted workstation; child processes inherit the short-lived access token.
 - Never commit an expanded access token, a real project ID, or developer-specific shell configuration.
 
+### Debugging deployed services with Cloud Logging MCP
+
+Use the managed Cloud Logging MCP server for read-only investigation of deployed Cloud Run behavior. A failed or
+mis-scoped query cannot change the service, but it can produce an incomplete diagnosis or expose sensitive log data in
+agent output. Keep every query narrow and sanitize the result before reporting it.
+
+When asked to inspect a deployed service:
+
+1. Confirm the intended project, Cloud Run service, and region. Use the configured `GOOGLE_CLOUD_PROJECT`; do not infer
+   a project ID from the numeric identifier in a `run.app` hostname.
+2. Call `list_log_entries` for one project and choose the ordering, result size, time range, and filters appropriate to
+   the investigation. For a Cloud Run service, this resource filter is a useful starting point; replace every
+   placeholder:
+
+   ```text
+   resource.type="cloud_run_revision" AND
+   resource.labels.service_name="SERVICE_NAME" AND
+   resource.labels.location="REGION"
+   ```
+
+3. Narrow the query further when possible: add `severity>=ERROR`, an explicit UTC timestamp range, a log name, HTTP
+   status, trace ID, or revision. Prefer indexed fields over broad payload substring searches.
+4. If no entries are returned, verify the project, service, region, and time range before concluding that the service
+   emitted no logs. Use `list_log_names` when the relevant log name is unknown.
+5. Correlate entries by `trace`, timestamp, request path, and revision. Cloud Run platform request logs
+   (`run.googleapis.com/requests`) and container logs from stdout/stderr are separate; Uvicorn access logging can therefore
+   represent the same request a second time. Do not report duplicate traffic without correlation evidence.
+6. Report only the fields needed for diagnosis, normally timestamp, severity, method, path, status, latency, service,
+   revision, logger, and a shortened trace identifier. Do not reproduce access tokens, authorization or cookie headers,
+   request or response bodies, query-string secrets, IP addresses, account identifiers, or other personal data. Redact
+   sensitive values already present in log messages.
+7. State the query scope, distinguish observations from conclusions, and mention relevant gaps such as pagination,
+   sampling, retention, an expired token, or an unsearched time range. Do not treat a small recent sample as proof that
+   an issue does not exist.
+
+The repository intentionally enables only the read-only `list_log_entries` and `list_log_names` tools. See the official
+[Cloud Logging MCP guide](https://docs.cloud.google.com/logging/docs/use-logging-mcp),
+[`list_log_entries` tool reference](https://docs.cloud.google.com/logging/docs/reference/v2_mcp/mcp/tools_list/list_log_entries),
+[Logging query language](https://docs.cloud.google.com/logging/docs/view/logging-query-language), and
+[Cloud Run logging guide](https://docs.cloud.google.com/run/docs/logging).
+
 ---
 
 ## CI Required Checks (recommended)
