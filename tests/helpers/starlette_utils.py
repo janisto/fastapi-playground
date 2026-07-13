@@ -2,15 +2,13 @@
 Starlette app utilities for isolated middleware tests.
 """
 
-from __future__ import annotations
-
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from typing import Any
 
 from starlette.applications import Starlette
 
-RouteHandler = Callable[..., Awaitable[Any]]
-MiddlewareSpec = tuple[type, dict[str, Any]]
+type RouteHandler = Callable[..., Awaitable[Any]]
+type MiddlewareSpec = tuple[type, dict[str, Any]]
 
 
 def build_starlette_app(

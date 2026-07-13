@@ -11,6 +11,7 @@ This router provides example endpoints showing:
 from fastapi import APIRouter, Request, Response, status
 
 from app.core.cbor import CBORRoute
+from app.core.schema_links import build_described_by_link, build_schema_url
 from app.models.error import ProblemResponse, ValidationProblemResponse
 from app.models.hello import GREETINGS, Greeting, GreetingRequest
 
@@ -23,6 +24,8 @@ router = APIRouter(
         500: {"model": ProblemResponse, "description": "Server error"},
     },
 )
+
+GREETING_SCHEMA_PATH = "/schemas/Greeting.json"
 
 
 @router.get(
@@ -41,9 +44,9 @@ async def get_greeting(request: Request, response: Response) -> Greeting:
     Demonstrates a basic GET endpoint with no parameters that returns
     a JSON (or CBOR) response.
     """
-    response.headers["Link"] = '</schemas/Greeting.json>; rel="describedBy"'
+    response.headers["Link"] = build_described_by_link(GREETING_SCHEMA_PATH)
     return Greeting(
-        schema_url=str(request.base_url) + "schemas/Greeting.json",
+        schema_url=build_schema_url(request, GREETING_SCHEMA_PATH),
         message="Hello, World!",
     )
 
@@ -74,8 +77,8 @@ async def create_greeting(http_request: Request, greeting_request: GreetingReque
     greeting_word = GREETINGS[greeting_request.language]
     message = f"{greeting_word}, {greeting_request.name}!"
 
-    response.headers["Link"] = '</schemas/Greeting.json>; rel="describedBy"'
+    response.headers["Link"] = build_described_by_link(GREETING_SCHEMA_PATH)
     return Greeting(
-        schema_url=str(http_request.base_url) + "schemas/Greeting.json",
+        schema_url=build_schema_url(http_request, GREETING_SCHEMA_PATH),
         message=message,
     )

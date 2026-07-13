@@ -31,7 +31,7 @@ class Profile(BaseModel):
         default=None,
         serialization_alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["/schemas/ProfileData.json"],
+        examples=["/schemas/Profile.json"],
     )
     id: str = Field(
         ...,

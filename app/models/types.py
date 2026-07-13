@@ -2,7 +2,7 @@
 Shared Pydantic type aliases for validation and normalization.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, EmailStr, PlainSerializer, StringConstraints
@@ -18,8 +18,21 @@ def _serialize_datetime_ms(value: datetime) -> str:
     return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
 
 
+def _normalize_utc_datetime(value: datetime) -> datetime:
+    """
+    Require timezone awareness and normalize values to UTC.
+    """
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("datetime must include timezone information")
+    return value.astimezone(UTC)
+
+
 # UTC datetime with consistent .000Z milliseconds format
-UtcDatetime = Annotated[datetime, PlainSerializer(_serialize_datetime_ms)]
+UtcDatetime = Annotated[
+    datetime,
+    AfterValidator(_normalize_utc_datetime),
+    PlainSerializer(_serialize_datetime_ms),
+]
 
 
 def normalize_email(email: str) -> str:
@@ -36,16 +49,4 @@ NormalizedEmail = Annotated[EmailStr, AfterValidator(normalize_email)]
 Phone = Annotated[
     str,
     StringConstraints(min_length=8, max_length=16, pattern=r"^\+[1-9]\d{6,14}$", strip_whitespace=True),
-]
-
-# ISO 639-1 language codes (e.g., "en", "fi")
-LanguageCode = Annotated[
-    str,
-    StringConstraints(min_length=2, max_length=2, pattern=r"^[a-z]{2}$"),
-]
-
-# ISO 3166-1 alpha-2 country codes (e.g., "US", "FI")
-CountryCode = Annotated[
-    str,
-    StringConstraints(min_length=2, max_length=2, pattern=r"^[A-Z]{2}$"),
 ]

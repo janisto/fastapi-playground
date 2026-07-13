@@ -9,7 +9,7 @@ from app.pagination.cursor import Cursor, InvalidCursorError, decode_cursor
 from app.pagination.link import build_link_header
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PaginationResult[T]:
     """
     Result of pagination operation.
@@ -54,10 +54,13 @@ def paginate[T](
         decoded = decode_cursor(cursor)
         if decoded.type != cursor_type:
             raise InvalidCursorError(f"invalid cursor type: expected '{cursor_type}'")
-        for i, item in enumerate(items):
-            if get_id(item) == decoded.value:
-                start_idx = i + 1
-                break
+        if decoded.value:
+            for i, item in enumerate(items):
+                if get_id(item) == decoded.value:
+                    start_idx = i + 1
+                    break
+            else:
+                raise InvalidCursorError("cursor references unknown item")
 
     # Get page of items
     end_idx = start_idx + limit

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Pytest Testing"
+  short_description: "Write focused tests at the right boundary"
+  default_prompt: "Use $pytest-testing to add focused tests for the requested behavior and run the relevant project checks."

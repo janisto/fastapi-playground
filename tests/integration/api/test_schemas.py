@@ -29,6 +29,7 @@ class TestGetSchema:
         assert "properties" in data
         assert "type" in data
         assert data["type"] == "object"
+        assert data["$schema"] == "https://json-schema.org/draft/2020-12/schema"
 
     def test_works_without_json_extension(self) -> None:
         response = client.get("/schemas/HealthResponse")
@@ -71,6 +72,8 @@ class TestSchemaContent:
 
         assert "items" in data["properties"]
         assert "total" in data["properties"]
+        assert data["properties"]["items"]["items"]["$ref"] == "#/$defs/Item"
+        assert "Item" in data["$defs"]
 
     def test_profile_schema_exists(self) -> None:
         response = client.get("/schemas/Profile.json")
@@ -78,6 +81,14 @@ class TestSchemaContent:
         assert response.status_code == 200
         data = response.json()
         assert "properties" in data
+
+    def test_problem_schemas_exist(self) -> None:
+        problem = client.get("/schemas/ProblemResponse.json")
+        validation = client.get("/schemas/ValidationProblemResponse.json")
+
+        assert problem.status_code == 200
+        assert validation.status_code == 200
+        assert "ValidationErrorDetail" in validation.json()["$defs"]
 
 
 class TestSchemaNotInOpenAPI:

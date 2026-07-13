@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenAPI Contract"
+  short_description: "Maintain and verify the generated API contract"
+  default_prompt: "Use $openapi-contract to update and verify the OpenAPI, schema discovery, and runtime API contract for the current changes."

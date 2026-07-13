@@ -7,16 +7,16 @@ from fastapi.testclient import TestClient
 
 
 class TestItemsList:
-    """Tests for GET /items/."""
+    """Tests for GET /v1/items."""
 
     def test_returns_200(self, client: TestClient) -> None:
-        """Verify GET /items/ returns 200 OK."""
+        """Verify GET /v1/items returns 200 OK."""
         response = client.get("/v1/items")
 
         assert response.status_code == 200
 
     def test_returns_items_list(self, client: TestClient) -> None:
-        """Verify GET /items/ returns list of items."""
+        """Verify GET /v1/items returns list of items."""
         response = client.get("/v1/items")
 
         body = response.json()
@@ -25,7 +25,7 @@ class TestItemsList:
         assert isinstance(body["items"], list)
 
     def test_returns_schema_url(self, client: TestClient) -> None:
-        """Verify GET /items/ returns $schema URL."""
+        """Verify GET /v1/items returns $schema URL."""
         response = client.get("/v1/items")
 
         body = response.json()
@@ -33,7 +33,7 @@ class TestItemsList:
         assert "schemas/ItemList.json" in body["$schema"]
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
-        """Verify GET /items/ returns Link header with describedBy."""
+        """Verify GET /v1/items returns Link header with describedBy."""
         response = client.get("/v1/items")
 
         link = response.headers.get("link", "")
@@ -68,7 +68,7 @@ class TestItemsList:
 
 
 class TestItemsPagination:
-    """Tests for cursor-based pagination on /items/."""
+    """Tests for cursor-based pagination on /v1/items."""
 
     def test_first_page_has_link_header(self, client: TestClient) -> None:
         """Verify first page includes Link header with next."""
@@ -94,7 +94,7 @@ class TestItemsPagination:
 
         # Extract cursor from Link header
         link = response1.headers.get("link", "")
-        # Parse cursor from link like: </items/?limit=5&cursor=xxx>; rel="next"
+        # Parse cursor from link like: </v1/items?limit=5&cursor=xxx>; rel="next"
         import re
 
         match = re.search(r"cursor=([^&>]+)", link)
@@ -179,22 +179,22 @@ class TestItemsPagination:
         assert body["title"] == "Bad Request"
         assert "invalid cursor type" in body["detail"]
 
-    def test_cursor_with_nonexistent_item_starts_from_beginning(self, client: TestClient) -> None:
-        """Verify cursor with non-existent item ID starts from beginning."""
+    def test_cursor_with_nonexistent_item_returns_error(self, client: TestClient) -> None:
+        """Verify a stale item cursor returns 400 Bad Request."""
         import base64
 
         # Create a cursor with item type but non-existent item ID
         cursor_value = base64.b64encode(b"item:nonexistent-item").decode("ascii")
         response = client.get("/v1/items", params={"cursor": cursor_value, "limit": 5})
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         body = response.json()
-        # Should start from beginning since item is not found
-        assert body["items"][0]["id"] == "item-001"
+        assert body["title"] == "Bad Request"
+        assert body["detail"] == "cursor references unknown item"
 
 
 class TestItemsFiltering:
-    """Tests for category filtering on /items/."""
+    """Tests for category filtering on /v1/items."""
 
     def test_category_filter_electronics(self, client: TestClient) -> None:
         """Verify category filter returns only electronics items."""
@@ -272,7 +272,7 @@ class TestItemsFiltering:
 
 
 class TestItemsInvalidCursor:
-    """Tests for invalid cursor handling on /items/."""
+    """Tests for invalid cursor handling on /v1/items."""
 
     def test_invalid_cursor_returns_400(self, client: TestClient) -> None:
         """Verify invalid cursor returns 400 Bad Request."""
@@ -326,7 +326,7 @@ class TestItemsInvalidCursor:
 
 
 class TestItemsCBOR:
-    """Tests for CBOR content negotiation on /items/."""
+    """Tests for CBOR content negotiation on /v1/items."""
 
     def test_accept_cbor_returns_cbor(self, client: TestClient) -> None:
         """Verify Accept: application/cbor returns CBOR response."""

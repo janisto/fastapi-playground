@@ -4,7 +4,6 @@ Unit tests for CBOR serialization support.
 
 import json
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -21,7 +20,6 @@ from app.core.cbor import (
     CBORDecodeHTTPException,
     CBORProblemPostHook,
     CBORRequest,
-    CBORResponse,
     UnsupportedMediaTypeHTTPException,
     UnsupportedMediaTypeProblem,
     accepts_media_type,
@@ -30,11 +28,8 @@ from app.core.cbor import (
     normalize_media_type,
 )
 
-# Type alias for the make_request fixture
-MakeRequestFn = Callable[[bytes, str], CBORRequest]
-
-# Type alias for the make_request_response fixture
-MakeRequestResponseFn = Callable[[str], tuple[MagicMock, JSONResponse]]
+type MakeRequestFn = Callable[[bytes, str], CBORRequest]
+type MakeRequestResponseFn = Callable[[str], tuple[MagicMock, JSONResponse]]
 
 
 class TestCBORDecodeError:
@@ -168,51 +163,6 @@ class TestCBORRequest:
         result = await request.body()
 
         assert result == body
-
-
-class TestCBORResponse:
-    """Tests for CBORResponse serialization."""
-
-    def test_media_type(self) -> None:
-        """CBORResponse has correct media type."""
-        assert CBORResponse.media_type == CBOR_MEDIA_TYPE
-
-    def test_dict_serialization(self) -> None:
-        """Dictionary is serialized to CBOR."""
-        data = {"name": "test", "value": 123}
-        response = CBORResponse(content=data)
-
-        decoded = cbor2.loads(response.body)
-        assert decoded == data
-
-    def test_list_serialization(self) -> None:
-        """List is serialized to CBOR."""
-        data = [1, 2, 3]
-        response = CBORResponse(content=data)
-
-        decoded = cbor2.loads(response.body)
-        assert decoded == data
-
-    def test_datetime_as_timestamp(self) -> None:
-        """Datetime is serialized with CBOR tag 1 (epoch timestamp) and decoded back to datetime."""
-        dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
-        data = {"created_at": dt}
-        response = CBORResponse(content=data)
-
-        # cbor2 uses tag 1 for epoch timestamp, which when decoded returns a datetime
-        decoded = cbor2.loads(response.body)
-        assert decoded["created_at"] == dt
-
-    def test_nested_structure(self) -> None:
-        """Nested structures are serialized correctly."""
-        data = {
-            "user": {"name": "test", "active": True},
-            "items": [{"id": 1}, {"id": 2}],
-        }
-        response = CBORResponse(content=data)
-
-        decoded = cbor2.loads(response.body)
-        assert decoded == data
 
 
 class TestCBORProblemPostHook:
@@ -557,6 +507,22 @@ class TestAcceptsMediaType:
         assert accepts_media_type("application/cbor; q=0", "application/cbor") is False
         assert accepts_media_type("application/cbor;Q=0", "application/cbor") is False
 
+    def test_exact_exclusion_overrides_wildcard(self) -> None:
+        """
+        Verify a specific q=0 exclusion overrides a broader wildcard.
+        """
+        accept = "application/cbor;q=0, application/*;q=0.5, */*;q=1"
+
+        assert accepts_media_type(accept, "application/cbor") is False
+
+    def test_type_exclusion_overrides_global_wildcard(self) -> None:
+        """
+        Verify a type-level q=0 exclusion overrides the global wildcard.
+        """
+        accept = "application/*;q=0, */*;q=1"
+
+        assert accepts_media_type(accept, "application/cbor") is False
+
     def test_qvalue_greater_than_zero_is_acceptable(self) -> None:
         """q>0 means the media type is acceptable."""
         assert accepts_media_type("application/cbor;q=0.1", "application/cbor") is True
@@ -581,10 +547,14 @@ class TestAcceptsMediaType:
         # But exact match still works
         assert accepts_media_type("application/cbor", "application/cbor", explicit_only=True) is True
 
-    def test_invalid_qvalue_defaults_to_one(self) -> None:
-        """Invalid q value defaults to 1.0 (acceptable)."""
-        assert accepts_media_type("application/cbor;q=invalid", "application/cbor") is True
-        assert accepts_media_type("application/cbor;q=", "application/cbor") is True
+    def test_invalid_qvalue_is_not_acceptable(self) -> None:
+        """
+        Verify malformed and out-of-range quality values are rejected.
+        """
+        assert accepts_media_type("application/cbor;q=invalid", "application/cbor") is False
+        assert accepts_media_type("application/cbor;q=", "application/cbor") is False
+        assert accepts_media_type("application/cbor;q=-1", "application/cbor") is False
+        assert accepts_media_type("application/cbor;q=2", "application/cbor") is False
 
     def test_handles_whitespace_in_accept_header(self) -> None:
         """Handles extra whitespace in Accept header."""

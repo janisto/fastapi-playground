@@ -7,6 +7,9 @@ Enables clients to discover and validate response structures.
 See: https://json-schema.org/draft/2020-12/json-schema-core.html
 """
 
+from copy import deepcopy
+from typing import Any
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -14,19 +17,67 @@ from app.exceptions import SchemaNotFoundError
 
 router = APIRouter(prefix="/schemas", tags=["Schemas"])
 
-_schema_cache: dict[str, dict] = {}
+_OPENAPI_COMPONENT_PREFIX = "#/components/schemas/"
+_JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
+
+type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
+
+_schema_cache: dict[str, dict[str, Any]] = {}
 
 
-def populate_schema_cache(openapi_schema: dict) -> None:
+def _rewrite_component_refs(value: JsonValue, referenced: set[str]) -> None:
+    """
+    Rewrite OpenAPI component references for a standalone JSON Schema.
+    """
+    if isinstance(value, dict):
+        ref = value.get("$ref")
+        if isinstance(ref, str) and ref.startswith(_OPENAPI_COMPONENT_PREFIX):
+            schema_name = ref.removeprefix(_OPENAPI_COMPONENT_PREFIX)
+            referenced.add(schema_name)
+            value["$ref"] = f"#/$defs/{schema_name}"
+        for child in value.values():
+            _rewrite_component_refs(child, referenced)
+    elif isinstance(value, list):
+        for child in value:
+            _rewrite_component_refs(child, referenced)
+
+
+def _build_standalone_schema(
+    schema_name: str,
+    components: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    Build a self-contained JSON Schema from an OpenAPI component.
+    """
+    schema = deepcopy(components[schema_name])
+    referenced: set[str] = set()
+    _rewrite_component_refs(schema, referenced)
+
+    definitions: dict[str, dict[str, Any]] = {}
+    while referenced:
+        referenced_name = referenced.pop()
+        if referenced_name in definitions:
+            continue
+        definition = deepcopy(components[referenced_name])
+        definitions[referenced_name] = definition
+        _rewrite_component_refs(definition, referenced)
+
+    schema["$schema"] = _JSON_SCHEMA_DIALECT
+    if definitions:
+        schema["$defs"] = definitions
+    return schema
+
+
+def populate_schema_cache(openapi_schema: dict[str, Any]) -> None:
     """
     Populate schema cache from OpenAPI spec.
 
     Called during application startup to extract JSON schemas from
     the OpenAPI components.schemas section.
     """
-    schemas = openapi_schema.get("components", {}).get("schemas", {})
+    schemas: dict[str, dict[str, Any]] = openapi_schema.get("components", {}).get("schemas", {})
     _schema_cache.clear()
-    _schema_cache.update(schemas)
+    _schema_cache.update({name: _build_standalone_schema(name, schemas) for name in schemas})
 
 
 @router.get(

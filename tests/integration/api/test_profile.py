@@ -53,7 +53,7 @@ class TestCreateProfile:
 
         body = response.json()
         assert "$schema" in body
-        assert "schemas/ProfileData.json" in body["$schema"]
+        assert "schemas/Profile.json" in body["$schema"]
 
     def test_returns_describedby_link_header(
         self,
@@ -70,7 +70,7 @@ class TestCreateProfile:
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/ProfileData.json" in link
+        assert "/schemas/Profile.json" in link
 
     def test_returns_409_when_duplicate(
         self,
@@ -226,7 +226,7 @@ class TestGetProfile:
 
         body = response.json()
         assert "$schema" in body
-        assert "schemas/ProfileData.json" in body["$schema"]
+        assert "schemas/Profile.json" in body["$schema"]
 
     def test_returns_describedby_link_header(
         self,
@@ -243,7 +243,7 @@ class TestGetProfile:
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/ProfileData.json" in link
+        assert "/schemas/Profile.json" in link
 
     def test_returns_404_when_not_found(
         self,
@@ -328,7 +328,7 @@ class TestUpdateProfile:
 
         body = response.json()
         assert "$schema" in body
-        assert "schemas/ProfileData.json" in body["$schema"]
+        assert "schemas/Profile.json" in body["$schema"]
 
     def test_returns_describedby_link_header(
         self,
@@ -345,7 +345,7 @@ class TestUpdateProfile:
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/ProfileData.json" in link
+        assert "/schemas/Profile.json" in link
 
     def test_returns_404_when_not_found(
         self,

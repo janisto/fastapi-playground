@@ -37,7 +37,7 @@ class ProblemResponse(BaseModel):
         default=None,
         serialization_alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["http://api.example.com/schemas/ErrorModel.json"],
+        examples=["http://api.example.com/schemas/ProblemResponse.json"],
     )
     title: str = Field(..., description="Short human-readable summary of the problem", examples=["Not Found"])
     status: int = Field(..., description="HTTP status code", examples=[404])
@@ -58,7 +58,7 @@ class ValidationProblemResponse(BaseModel):
         default=None,
         serialization_alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["http://api.example.com/schemas/ErrorModel.json"],
+        examples=["http://api.example.com/schemas/ValidationProblemResponse.json"],
     )
     title: str = Field(
         default="Unprocessable Entity",

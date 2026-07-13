@@ -1,256 +1,169 @@
-## Google Cloud & Firebase Setup
+# Google Cloud and Firebase setup
 
-This guide provisions the infrastructure required for the FastAPI service (deployable to Cloud Run) and the optional Firebase Cloud Functions code under `functions/`. Steps are ordered; you can skip sections not relevant to your deployment model.
+This guide covers the two independent deployment targets in this repository:
 
-See:
-- https://cloud.google.com/build/docs/automating-builds/github/connect-repo-github?generation=2nd-gen
-- https://cloud.google.com/build/docs/automating-builds/github/build-repos-from-github?generation=2nd-gen
+- the FastAPI container in `app/`, deployed to Cloud Run;
+- the Python function in `functions/`, deployed with the Firebase CLI to Cloud Run functions.
 
----
-### 1. Create Projects
-1. (If new) Create a Google Cloud Project (GCP). Note the `PROJECT_ID`.
-2. Create / Link a Firebase project to the same GCP project (Firebase console). The Firebase project ID must match the `FIREBASE_PROJECT_ID` environment variable used by the app.
+Both target Python 3.14. The function runtime is pinned to `python314` in `firebase.json`; Python 3.14 is currently a
+supported [Cloud Run functions runtime](https://cloud.google.com/functions/docs/runtime-support#python).
 
----
-### 2. Enable Firebase Products (Console, Build section)
-Enable (region: `europe-west4` to match repo defaults):
-- Firestore (Native mode) - location: `europe-west4`
-- Cloud Storage for Firebase - location: `europe-west4`
-- Authentication, Sign-in methods:
-    - Phone (add test numbers if needed)
-    - Google (configure OAuth consent & SHA if using Android, etc.)
+## Project and Firebase products
 
-Add a Web App in Firebase console (used by front-end clients only; not required for backend).
+Use one Google Cloud project linked to Firebase. Configure its project ID as `FIREBASE_PROJECT_ID` for the FastAPI
+service and use the same project when running Firebase CLI commands.
 
----
-### 3. Service Account & Credentials
-The backend prefers Application Default Credentials on Cloud Run / Functions. Locally you can:
-1. Create a Service Account (e.g. `firebase-admin-sdk` or reuse the auto-created Admin SDK account).
-2. Grant roles (see IAM section below).
-3. Download a JSON key ONLY for local development; store outside version control. Point to it via:
-     `GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/service_account.json`
+Enable only the products used by the deployment target:
 
-Avoid deploying JSON keys to Cloud Run (use Workload Identity / default service account instead).
+- Authentication and Firestore in Native mode for the FastAPI profile API;
+- Vertex AI for the `dad_joke` function;
+- Cloud Storage for Firebase only if you plan to use the checked-in storage rules.
 
----
-### 4. Required / Recommended GCP APIs
-Enable the following in the GCP console or via `gcloud services enable`:
-- `run.googleapis.com` (Cloud Run) – if deploying container
-- `secretmanager.googleapis.com` – if you plan to store secrets (code currently just has a flag placeholder)
-- `cloudbuild.googleapis.com` – if using Cloud Build triggers
-- `containeranalysis.googleapis.com` – for image vulnerability scanning (optional but recommended)
-- `binaryauthorization.googleapis.com` – optional (policy-based deploy control)
-- `firestore.googleapis.com` (should auto-enable with Firestore)
-- `storage.googleapis.com` (auto-enabled with Firebase Storage)
+The repository and `firebase.json` use `europe-west4` for Firestore, Storage, Functions, and Vertex AI. Choose the
+Cloud Run service region explicitly when deploying the FastAPI container.
 
-Vertex AI is not presently used in code; only enable if you intend to uncomment & use Vertex / Generative AI clients.
+## APIs and IAM
 
----
-### 5. IAM Roles (Principle of Least Privilege)
-Assign to the runtime service account (Cloud Run or Functions default). Consolidate where possible using predefined roles:
+Enable the relevant APIs for your deployment:
 
-Minimum for current features:
-- `roles/datastore.user` (Firestore access)
-- `roles/logging.logWriter` (structured log export – though default often has it)
+- `run.googleapis.com` for Cloud Run and the function's backing service;
+- `cloudfunctions.googleapis.com` for Firebase CLI-managed function deployment;
+- `firestore.googleapis.com` for Firestore;
+- `aiplatform.googleapis.com` for the Genkit Vertex AI function;
+- `artifactregistry.googleapis.com` for the FastAPI image and function build artifacts;
+- `cloudbuild.googleapis.com` for Firebase's function source build;
+- `logging.googleapis.com` for build and runtime logs;
+- `secretmanager.googleapis.com` only when injecting managed secrets.
 
-If using Secret Manager flag in future:
-- `roles/secretmanager.secretAccessor`
+Grant the runtime service account the minimum roles required by the deployed component:
 
-Optional (only if needed):
-- `roles/aiplatform.user` (Vertex AI; not active yet)
+- FastAPI: `roles/datastore.user` and normally `roles/logging.logWriter`;
+- `dad_joke` function: `roles/aiplatform.user` and normally `roles/logging.logWriter`;
+- Secret Manager consumers: `roles/secretmanager.secretAccessor` for only the required secrets.
 
-Do NOT broadly grant `Editor` in production.
+Do not grant project-wide `Editor`. Prefer the Cloud Run or Functions runtime service account and Application Default
+Credentials. For local development, prefer `gcloud auth application-default login`; use a downloaded service-account
+key only when necessary, keep it outside the repository, and point `GOOGLE_APPLICATION_CREDENTIALS` to it.
 
----
-### 6. Environment Variables (Match `app/core/config.py`)
-These are consumed by the FastAPI app. Provide via Cloud Run console, `gcloud run deploy --set-env-vars`, or Cloud Build substitutions.
+## FastAPI configuration
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FIREBASE_PROJECT_ID` | Yes | Firebase / GCP project ID (trace correlation & Firestore) |
-| `FIREBASE_PROJECT_NUMBER` | No | Project number (useful for some integrations) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | No (local) | Path to service account JSON locally. Omit in Cloud Run. |
-| `ENVIRONMENT` | No | Environment label (`development`, `staging`, `production`) |
-| `DEBUG` | No | Set `false` in production |
-| `APP_ENVIRONMENT` | No | Optional metadata surfaced in logs |
-| `APP_URL` | No | Public base URL (informational) |
-| `SECRET_MANAGER_ENABLED` | No | Currently a placeholder flag (`true`/`false`) |
-| `MAX_REQUEST_SIZE_BYTES` | No | Request size guard (default 1_000_000) |
-| `CORS_ORIGINS` | No | Comma-separated origins (empty blocks all) |
+These settings are defined in `app/core/config.py`:
 
-Example (staging):
-```
+| Variable | Required in deployment | Default | Purpose |
+|---|---:|---|---|
+| `FIREBASE_PROJECT_ID` | Yes | `test-project` | Firebase and Firestore project ID |
+| `FIRESTORE_DATABASE` | No | `(default)` | Optional named Firestore database |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Local only | unset | Explicit credential-file path; omit on Cloud Run |
+| `ENVIRONMENT` | No | `production` | Environment label |
+| `DEBUG` | No | `false` | Debug logging and development behavior |
+| `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Maximum request-body size |
+| `CORS_ORIGINS` | Browser clients only | empty | JSON array or comma-separated allowed origins |
+
+`PORT` is consumed by the development and container commands, not by `Settings`; it defaults to `8080`.
+
+Example Cloud Run values:
+
+```dotenv
 FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PROJECT_NUMBER=1234567890
-ENVIRONMENT=staging
+ENVIRONMENT=production
 DEBUG=false
-APP_ENVIRONMENT=staging
-APP_URL=https://your-service-europe-west4.run.app
-SECRET_MANAGER_ENABLED=true
+FIRESTORE_DATABASE=(default)
+CORS_ORIGINS=["https://app.example.com"]
 ```
 
----
-### 7. Local Development
-1. Clone repo & install deps: `just install`
-2. Create `.env` with at least `FIREBASE_PROJECT_ID` (and credentials path if needed).
-3. Run: `just serve` (opens `http://127.0.0.1:8080/api-docs`)
-4. (Optional) Start Firebase emulators for Firestore/Auth/Functions:
-     ```bash
-     firebase emulators:start
-     ```
-5. Run tests: `just test` or `just cov`.
+## Local development and tests
 
-Firestore + Auth calls in tests are mocked; real GCP resources not required.
+Install and run the FastAPI app from the repository root:
 
----
-### 8. Container Build & Cloud Run Deployment
-Build image locally (BuildKit is required for the `--mount` syntax used in the Dockerfile):
 ```bash
-DOCKER_BUILDKIT=1 docker build -t gcr.io/PROJECT_ID/fastapi-playground:latest .
-docker push gcr.io/PROJECT_ID/fastapi-playground:latest
+just install
+just serve
 ```
 
-> **Note:** Docker 23.0+ uses BuildKit by default. If using an older Docker version, prefix the build command with `DOCKER_BUILDKIT=1`.
-Deploy:
+The API documentation is available at `http://127.0.0.1:8080/api-docs`; `/health` is a dependency-free liveness
+endpoint and does not verify Firebase, Firestore, or Vertex AI readiness.
+
+Unit and integration tests mock Auth and Firestore. The E2E profile test overrides authentication but uses the local
+Firestore emulator for real transaction behavior:
+
 ```bash
-gcloud run deploy fastapi-playground \
-    --image gcr.io/PROJECT_ID/fastapi-playground:latest \
-    --region europe-west4 \
-    --platform managed \
-    --allow-unauthenticated \
-    --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,DEBUG=false
-```
-Add additional env vars with a comma list or `--set-secrets` (if migrating to Secret Manager later).
+# Terminal 1
+just emulators
 
-Automatic base image updates (optional; see Dockerfile comments) via `--base-image` & `--automatic-updates` flags.
-
-Health check: Cloud Run uses `/` for default checks by default; you can configure a custom probe path `/health` (returns `{ "status": "healthy" }`).
-
----
-### 9. Cloud Build (2nd Gen) – Optional CI/CD
-If you want automated builds from GitHub:
-1. Connect repository (Cloud Build Console, Repositories, Connect).
-2. Create a build trigger:
-     - Source: GitHub, branch pattern (e.g. `main`)
-     - Build config: Use inline configuration (see below)
-     - Service account: one with Cloud Run Deploy + Artifact Registry Write + (optional) Secret Manager Access
-
-**Important: BuildKit Requirement**
-
-The Dockerfile uses BuildKit features (`RUN --mount=type=cache,...`) for efficient caching. The default `gcr.io/cloud-builders/docker` image does **NOT** support BuildKit natively.
-
-When configuring your inline build config, ensure you:
-- Use the official `docker` image (not `gcr.io/cloud-builders/docker`)
-- Set `DOCKER_BUILDKIT=1` environment variable
-
-Example inline configuration:
-```yaml
-steps:
-  # Build with BuildKit enabled (required for --mount syntax in Dockerfile)
-  - name: 'docker:27'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        docker build -t gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA .
-    env:
-      - 'DOCKER_BUILDKIT=1'
-
-  # Push to Container Registry
-  - name: 'docker:27'
-    args: ['push', 'gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA']
-
-  # Deploy to Cloud Run
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: 'gcloud'
-    args:
-      - 'run'
-      - 'deploy'
-      - 'fastapi-playground'
-      - '--image=gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA'
-      - '--region=europe-west4'
-      - '--allow-unauthenticated'
-      - '--set-env-vars=FIREBASE_PROJECT_ID=$PROJECT_ID,ENVIRONMENT=production,DEBUG=false'
-
-images:
-  - 'gcr.io/$PROJECT_ID/fastapi-playground:$COMMIT_SHA'
+# Terminal 2
+just test-e2e
 ```
 
-**Why the official `docker` image?**
-- The `gcr.io/cloud-builders/docker` image uses an older Docker version that doesn't support BuildKit's `--mount` option
-- The official `docker` image (from Docker Hub) includes Docker 23.x+ with full BuildKit support
-- Setting `DOCKER_BUILDKIT=1` enables BuildKit for advanced Dockerfile features
+The emulator ports come from `firebase.json`: Auth `7010`, Functions `7020`, Firestore `7030`, and Storage `7040`.
+The server-side Firestore client connects through `FIRESTORE_EMULATOR_HOST`; keep the value protocol-free, as
+documented by the [Firebase Emulator Suite](https://firebase.google.com/docs/emulator-suite/connect_firestore#admin_sdks).
 
-3. (Optional) Add a build-time health check script that curls `/health` after deploying to verify rollout.
+## FastAPI container
 
-Secrets: Use Secret Manager with Cloud Build by adding `--set-secrets VAR=projects/<num>/secrets/<name>:latest` if you introduce secrets later.
+The Dockerfile uses BuildKit cache mounts, installs only runtime dependencies from `uv.lock`, runs as UID/GID 1001,
+and starts Uvicorn without duplicate access logging.
 
----
-### 10. Firebase Cloud Functions (Python) (Optional Alternate / Complement)
-Contained in `functions/` with regional + scaling config:
-- Runtime: `python314`
-- Region: `europe-west4`
-- Scaling: `MIN_INSTANCES` / `MAX_INSTANCES` env params (default 0/2)
+Production deployment is already managed by existing Google Cloud configuration outside this repository. Do not use
+local container commands or examples in this guide to replace its build, image, or rollout conventions.
 
-Deploy:
+## Deploy the Firebase function
+
+The `dad_joke` HTTP function uses:
+
+- runtime `python314` in `europe-west4`;
+- 512 MiB memory and `TIMEOUT_SEC` default `120`;
+- `MIN_INSTANCES` default `0` and `MAX_INSTANCES` default `2`;
+- Genkit with the Vertex AI model configured in `functions/main.py`;
+- GCP trace and metric export outside local development.
+
+Firebase deployment uses `functions/requirements.txt`. Keep its direct dependencies aligned with
+`functions/pyproject.toml`; `functions/uv.lock` is the local development lockfile.
+
 ```bash
 cd functions
 uv venv --python 3.14 venv
 uv pip install --python venv/bin/python -r requirements.txt
-firebase deploy --only functions
+export FUNCTIONS_DISCOVERY_TIMEOUT=30
+firebase deploy --only functions --project PROJECT_ID
 ```
 
-Emulate locally:
+For local function emulation:
+
 ```bash
-firebase emulators:start --only functions
+firebase emulators:start --only functions --project PROJECT_ID
+curl "http://127.0.0.1:7020/PROJECT_ID/europe-west4/dad_joke?topic=tech"
 ```
 
-Use Functions when you need a small single endpoint (webhook, prototype) and keep the full FastAPI service for cohesive REST APIs & middleware features.
+The emulator runs the HTTP wrapper locally, but generating a joke still calls Vertex AI. It therefore requires network
+access, Application Default Credentials, the Vertex AI API, and `roles/aiplatform.user`; it is not an offline fake.
 
----
-### 11. Logging & Trace Correlation
-The FastAPI app emits structured JSON logs (see `app/middleware/logging.py`). When requests include the W3C `traceparent` header, logs embed:
-- `trace`: `projects/<FIREBASE_PROJECT_ID>/traces/<trace-id>`
-- `spanId`: The `parent-id` from traceparent
+See [functions/README.md](functions/README.md) for the endpoint contract and Functions-specific commands. Firebase
+uses `requirements.txt` for Python deployments, consistent with the current
+[Firebase Functions setup](https://firebase.google.com/docs/functions/get-started).
 
-The `traceparent` header format: `{version}-{trace-id}-{parent-id}-{trace-flags}` (e.g., `00-a0892f3577b34da6a3ce929d0e0e4736-f03067aa0ba902b7-01`).
+## Observability and security
 
-No direct Cloud Logging API usage (stdout ingestion). Ensure log-based metrics / alerts are configured in GCP as needed.
+The FastAPI service writes structured JSON to stdout. `fastapi-request-observability` adds request IDs, one access
+record per request, route metadata, and incoming W3C Trace Context correlation. It does not create spans. The Functions
+project separately configures Genkit GCP telemetry.
 
----
-### 12. Security Notes & Hardening Checklist
-- Remove unused direct deps (`python-jose`, `httpx2`) if not planned.
-- Enforce HTTPS (Cloud Run provides TLS terminator; HSTS enabled by middleware when configured).
-- Set `DEBUG=false` in production.
-- Restrict CORS explicitly (`CORS_ORIGINS`).
-- Consider enabling Binary Authorization + vulnerability scanning for supply chain assurance.
-- Migrate any future secrets to Secret Manager (currently only placeholder flag).
+Production checklist:
 
----
-### 13. Troubleshooting
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| Cloud Build: `the --mount option requires BuildKit` | Using `gcr.io/cloud-builders/docker` which doesn't support BuildKit | Use the official `docker` image with `DOCKER_BUILDKIT=1` in your inline config (see Section 9) |
-| 500 + log `Firestore client is not available` | Missing permissions or Firestore not initialized | Check IAM role `datastore.user` and region | 
-| Auth 401/403 | Missing/invalid `Authorization` header | Provide valid Firebase ID token |
-| Cold start latency | Min instances = 0 | Raise `MIN_INSTANCES` (Cloud Run: `--min-instances`) or Functions env param |
-| CORS blocked | `CORS_ORIGINS` unset | Add origins env var |
+- keep `DEBUG=false`;
+- terminate TLS at Cloud Run and verify HSTS on HTTPS responses;
+- configure explicit `CORS_ORIGINS` for browser clients;
+- inject production secrets from Secret Manager rather than plain values;
+- rebuild the custom image regularly for OS, Python, and dependency patches;
+- configure log-based alerts and budgets for Vertex AI usage.
 
----
-### 14. Quick Reference Commands
-```bash
-# Local
-just serve
-just test
+## Troubleshooting
 
-# Container build & push (BuildKit required)
-DOCKER_BUILDKIT=1 docker build -t gcr.io/PROJECT_ID/fastapi-playground:latest .
-docker push gcr.io/PROJECT_ID/fastapi-playground:latest
-
-# Deploy Cloud Run
-gcloud run deploy fastapi-playground --image gcr.io/PROJECT_ID/fastapi-playground:latest --region europe-west4 --allow-unauthenticated \
-    --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,DEBUG=false
-
-# Functions deploy
-cd functions && uv venv --python 3.14 venv && uv pip install --python venv/bin/python -r requirements.txt && firebase deploy --only functions
-```
+| Symptom | Likely cause | Check |
+|---|---|---|
+| Profile request returns 500 | Firestore configuration or permission failure | Project ID, ADC, database name, and `roles/datastore.user` |
+| Auth returns 401 | Missing, expired, revoked, disabled-user, or invalid token | Bearer token and `WWW-Authenticate` response header |
+| Auth returns 503 | Firebase verification dependency unavailable | ADC, network access, public-key retrieval, and `Retry-After` |
+| Function returns 400 | Unsupported `topic` query value | Use `work`, `tech`, `food`, or `relationships` |
+| Function returns 503 | Genkit or Vertex AI failure | Vertex API, region/model availability, ADC, IAM, and quotas |
+| E2E test skips | Firestore emulator is not running on `127.0.0.1:7030` | Run `just emulators` |
+| CORS is blocked | Origin is absent from `CORS_ORIGINS` | Configure an exact allowed origin |

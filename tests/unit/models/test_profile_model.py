@@ -327,15 +327,17 @@ class TestProfile:
         """
         now = datetime.now(UTC)
         with pytest.raises(ValidationError):
-            Profile(
-                firstname="John",
-                lastname="Doe",
-                email="john@example.com",
-                phone_number="+358401234567",
-                marketing=True,
-                terms=True,
-                created_at=now,
-                updated_at=now,
+            Profile.model_validate(
+                {
+                    "firstname": "John",
+                    "lastname": "Doe",
+                    "email": "john@example.com",
+                    "phone_number": "+358401234567",
+                    "marketing": True,
+                    "terms": True,
+                    "created_at": now,
+                    "updated_at": now,
+                }
             )
 
     def test_missing_timestamps_raises(self) -> None:
@@ -343,14 +345,16 @@ class TestProfile:
         Verify missing timestamps raise ValidationError.
         """
         with pytest.raises(ValidationError):
-            Profile(
-                id="user-123",
-                firstname="John",
-                lastname="Doe",
-                email="john@example.com",
-                phone_number="+358401234567",
-                marketing=True,
-                terms=True,
+            Profile.model_validate(
+                {
+                    "id": "user-123",
+                    "firstname": "John",
+                    "lastname": "Doe",
+                    "email": "john@example.com",
+                    "phone_number": "+358401234567",
+                    "marketing": True,
+                    "terms": True,
+                }
             )
 
     def test_id_max_length_raises(self) -> None:

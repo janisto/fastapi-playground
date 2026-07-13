@@ -31,9 +31,9 @@ class TestProblemResponse:
             title="Not Found",
             status=404,
             detail="Profile not found",
-            schema_url="http://example.com/schemas/ErrorModel.json",
+            schema_url="http://example.com/schemas/ProblemResponse.json",
         )
-        assert problem.schema_url == "http://example.com/schemas/ErrorModel.json"
+        assert problem.schema_url == "http://example.com/schemas/ProblemResponse.json"
 
     def test_serialization(self) -> None:
         """
@@ -60,12 +60,12 @@ class TestProblemResponse:
             title="Not Found",
             status=404,
             detail="Profile not found",
-            schema_url="http://example.com/schemas/ErrorModel.json",
+            schema_url="http://example.com/schemas/ProblemResponse.json",
         )
         # No need for by_alias=True - serialize_by_alias=True is set in model_config
         data = problem.model_dump()
         assert "$schema" in data
-        assert data["$schema"] == "http://example.com/schemas/ErrorModel.json"
+        assert data["$schema"] == "http://example.com/schemas/ProblemResponse.json"
 
     def test_json_serialization(self) -> None:
         """
@@ -129,10 +129,10 @@ class TestValidationProblemResponse:
         Verify validation problem with $schema URL.
         """
         problem = ValidationProblemResponse(
-            schema_url="http://example.com/schemas/ErrorModel.json",
+            schema_url="http://example.com/schemas/ValidationProblemResponse.json",
             errors=[],
         )
-        assert problem.schema_url == "http://example.com/schemas/ErrorModel.json"
+        assert problem.schema_url == "http://example.com/schemas/ValidationProblemResponse.json"
 
     def test_serialization(self) -> None:
         """

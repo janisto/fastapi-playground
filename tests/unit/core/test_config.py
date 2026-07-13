@@ -29,15 +29,9 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     env_vars = [
         "ENVIRONMENT",
         "DEBUG",
-        "HOST",
-        "PORT",
         "FIREBASE_PROJECT_ID",
         "GOOGLE_APPLICATION_CREDENTIALS",
-        "FIREBASE_PROJECT_NUMBER",
         "FIRESTORE_DATABASE",
-        "APP_ENVIRONMENT",
-        "APP_URL",
-        "SECRET_MANAGER_ENABLED",
         "MAX_REQUEST_SIZE_BYTES",
         "CORS_ORIGINS",
     ]
@@ -165,22 +159,6 @@ class TestSettings:
 
         assert settings.debug is False
 
-    def test_default_host(self) -> None:
-        """
-        Verify default host.
-        """
-        settings = _create_settings()
-
-        assert settings.host == "0.0.0.0"
-
-    def test_default_port(self) -> None:
-        """
-        Verify default port.
-        """
-        settings = _create_settings()
-
-        assert settings.port == 8080
-
     def test_default_firebase_project_id(self) -> None:
         """
         Verify default Firebase project ID.
@@ -204,14 +182,6 @@ class TestSettings:
         settings = _create_settings()
 
         assert settings.cors_origins == []
-
-    def test_default_secret_manager_enabled(self) -> None:
-        """
-        Verify Secret Manager is enabled by default.
-        """
-        settings = _create_settings()
-
-        assert settings.secret_manager_enabled is True
 
 
 class TestSettingsFromEnv:
@@ -238,16 +208,6 @@ class TestSettingsFromEnv:
         settings = _create_settings()
 
         assert settings.debug is False
-
-    def test_port_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """
-        Verify port is loaded from env var.
-        """
-        monkeypatch.setenv("PORT", "9000")
-
-        settings = _create_settings()
-
-        assert settings.port == 9000
 
     def test_firebase_project_id_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -408,14 +368,6 @@ class TestSettingsOptionalFields:
 
         assert settings.google_application_credentials is None
 
-    def test_firebase_project_number_default_none(self) -> None:
-        """
-        Verify Firebase project number defaults to None.
-        """
-        settings = _create_settings()
-
-        assert settings.firebase_project_number is None
-
     def test_firestore_database_default_none(self) -> None:
         """
         Verify Firestore database defaults to None (uses default database).
@@ -423,33 +375,3 @@ class TestSettingsOptionalFields:
         settings = _create_settings()
 
         assert settings.firestore_database is None
-
-    def test_app_environment_default_none(self) -> None:
-        """
-        Verify app environment defaults to None.
-        """
-        settings = _create_settings()
-
-        assert settings.app_environment is None
-
-    def test_app_url_default_none(self) -> None:
-        """
-        Verify app URL defaults to None.
-        """
-        settings = _create_settings()
-
-        assert settings.app_url is None
-
-    def test_optional_fields_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """
-        Verify optional fields can be set from env.
-        """
-        monkeypatch.setenv("APP_ENVIRONMENT", "production")
-        monkeypatch.setenv("APP_URL", "https://api.example.com")
-        monkeypatch.setenv("FIREBASE_PROJECT_NUMBER", "123456789")
-
-        settings = _create_settings()
-
-        assert settings.app_environment == "production"
-        assert settings.app_url == "https://api.example.com"
-        assert settings.firebase_project_number == "123456789"

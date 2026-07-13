@@ -10,7 +10,8 @@ from fastapi_problem.handler import ExceptionHandler
 from rfc9457 import Problem
 from starlette.requests import Request
 
-from app.core.constants import ERROR_SCHEMA_PATH
+from app.core.constants import VALIDATION_PROBLEM_SCHEMA_PATH
+from app.core.schema_links import build_schema_url
 
 SENSITIVE_FIELD_NAMES = frozenset(
     {
@@ -68,7 +69,7 @@ def validation_error_handler(
 
     Response format:
     {
-        "$schema": "http://example.com/schemas/ErrorModel.json",
+        "$schema": "http://example.com/schemas/ValidationProblemResponse.json",
         "title": "Unprocessable Entity",
         "status": 422,
         "detail": "validation failed",
@@ -87,7 +88,7 @@ def validation_error_handler(
         errors.append(error_detail)
 
     # Build absolute $schema URL from request base URL
-    schema_url = str(request.base_url).rstrip("/") + ERROR_SCHEMA_PATH
+    schema_url = build_schema_url(request, VALIDATION_PROBLEM_SCHEMA_PATH)
 
     # Note: $schema is passed via **kwargs to Problem.extras, not as a named parameter
     extras: dict[str, Any] = {"$schema": schema_url, "errors": errors}

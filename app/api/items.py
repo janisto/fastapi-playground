@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, Request, Response
 
 from app.core.cbor import CBORRoute
+from app.core.schema_links import build_described_by_link, build_schema_url
 from app.models.error import ProblemResponse, ValidationProblemResponse
 from app.models.items import MOCK_ITEMS, VALID_CATEGORIES, ItemList
 from app.pagination import CursorParam, LimitParam, paginate
@@ -27,6 +28,8 @@ router = APIRouter(
         500: {"model": ProblemResponse, "description": "Server error"},
     },
 )
+
+ITEM_LIST_SCHEMA_PATH = "/schemas/ItemList.json"
 
 
 @router.get(
@@ -82,11 +85,11 @@ async def list_items(
     links: list[str] = []
     if result.link_header:
         links.append(result.link_header)
-    links.append('</schemas/ItemList.json>; rel="describedBy"')
+    links.append(build_described_by_link(ITEM_LIST_SCHEMA_PATH))
     response.headers["Link"] = ", ".join(links)
 
     return ItemList(
-        schema_url=str(request.base_url) + "schemas/ItemList.json",
+        schema_url=build_schema_url(request, ITEM_LIST_SCHEMA_PATH),
         items=result.items,
         total=result.total,
     )

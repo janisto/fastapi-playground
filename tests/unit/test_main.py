@@ -7,6 +7,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from fastapi_request_observability import AccessLogMiddleware, LoggingPreset, RequestContextMiddleware
+
+from app.middleware import SecurityHeadersMiddleware
 
 
 class TestLifespan:
@@ -16,24 +19,24 @@ class TestLifespan:
 
     def test_startup_initializes_logging(self) -> None:
         """
-        Verify lifespan startup calls setup_logging.
+        Verify lifespan startup configures logging.
         """
         with (
-            patch("app.main.setup_logging") as mock_setup_logging,
+            patch("app.main.configure_logging") as mock_configure_logging,
             patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
         ):
             from app.main import app
 
             with TestClient(app):
-                mock_setup_logging.assert_called_once()
+                mock_configure_logging.assert_called_once()
 
     def test_startup_initializes_firebase(self) -> None:
         """
         Verify lifespan startup calls initialize_firebase.
         """
         with (
-            patch("app.main.setup_logging"),
+            patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase") as mock_init_firebase,
             patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
         ):
@@ -47,7 +50,7 @@ class TestLifespan:
         Verify lifespan shutdown calls close_async_firestore_client.
         """
         with (
-            patch("app.main.setup_logging"),
+            patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client", new_callable=AsyncMock) as mock_close,
         ):
@@ -68,33 +71,46 @@ class TestAppConfiguration:
         """
         Verify app has correct title.
         """
-        from app.main import app
+        from app.main import fastapi_app
 
-        assert app.title == "FastAPI Playground"
+        assert fastapi_app.title == "FastAPI Playground"
 
     def test_app_version(self) -> None:
         """
         Verify app has correct version.
         """
-        from app.main import app
+        from app.main import fastapi_app
 
-        assert app.version == "0.1.0"
+        assert fastapi_app.version == "0.1.0"
 
     def test_docs_url(self) -> None:
         """
         Verify API docs URL is configured.
         """
-        from app.main import app
+        from app.main import fastapi_app
 
-        assert app.docs_url == "/api-docs"
+        assert fastapi_app.docs_url == "/api-docs"
 
     def test_redoc_url(self) -> None:
         """
         Verify ReDoc URL is configured.
         """
-        from app.main import app
+        from app.main import fastapi_app
 
-        assert app.redoc_url == "/api-redoc"
+        assert fastapi_app.redoc_url == "/api-redoc"
+
+    def test_observability_middleware_configuration(self) -> None:
+        """
+        Verify request context wraps GCP access logging.
+        """
+        from app.main import access_log_middleware, app, security_headers_middleware
+
+        assert isinstance(app, RequestContextMiddleware)
+        assert isinstance(security_headers_middleware, SecurityHeadersMiddleware)
+        assert isinstance(access_log_middleware, AccessLogMiddleware)
+        access_config = access_log_middleware.config
+        assert access_config.preset is LoggingPreset.GCP
+        assert access_config.logger.name == "http.access"
 
 
 class TestRouterConfiguration:
@@ -106,47 +122,23 @@ class TestRouterConfiguration:
         """
         Verify profile router is included.
         """
-        from app.main import app
+        from app.main import fastapi_app
 
-        assert "/v1/profile" in app.openapi()["paths"]
+        assert "/v1/profile" in fastapi_app.openapi()["paths"]
 
     def test_health_router_included(self) -> None:
         """
         Verify health router is included.
         """
-        from app.main import app
+        from app.main import fastapi_app
 
-        assert "/health" in app.openapi()["paths"]
+        assert "/health" in fastapi_app.openapi()["paths"]
 
 
 class TestCorsMiddleware:
     """
     Tests for CORS middleware configuration.
     """
-
-    def test_cors_middleware_added_when_origins_configured(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        """
-        Verify CORS middleware is added when cors_origins is not empty.
-        """
-        monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3000"]')
-
-        if "app.main" in sys.modules:
-            del sys.modules["app.main"]
-        if "app.core.config" in sys.modules:
-            del sys.modules["app.core.config"]
-
-        with (
-            patch("app.main.setup_logging"),
-            patch("app.main.initialize_firebase"),
-            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
-        ):
-            from app.main import app
-
-            middleware_classes = [m.cls.__name__ for m in app.user_middleware if hasattr(m.cls, "__name__")]
-            assert "CORSMiddleware" in middleware_classes
 
     def test_cors_preflight_handled_when_configured(
         self,
@@ -163,7 +155,7 @@ class TestCorsMiddleware:
             del sys.modules["app.core.config"]
 
         with (
-            patch("app.main.setup_logging"),
+            patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
         ):
@@ -181,6 +173,36 @@ class TestCorsMiddleware:
             assert response.status_code == 200
             assert "access-control-allow-origin" in response.headers
 
+    def test_cors_error_response_has_one_origin_variance(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """
+        Verify the outer CORS middleware is the single owner of CORS headers.
+        """
+        monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3000"]')
+
+        if "app.main" in sys.modules:
+            del sys.modules["app.main"]
+        if "app.core.config" in sys.modules:
+            del sys.modules["app.core.config"]
+        if "app.core.exception_handler" in sys.modules:
+            del sys.modules["app.core.exception_handler"]
+
+        with (
+            patch("app.main.configure_logging"),
+            patch("app.main.initialize_firebase"),
+            patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
+        ):
+            from app.main import app
+
+            with TestClient(app, raise_server_exceptions=False) as client:
+                response = client.get("/missing", headers={"Origin": "http://localhost:3000"})
+
+        assert response.status_code == 404
+        assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+        assert response.headers["vary"].split(", ").count("Origin") == 1
+
     def test_cors_allows_specific_methods(
         self,
         monkeypatch: pytest.MonkeyPatch,
@@ -196,7 +218,7 @@ class TestCorsMiddleware:
             del sys.modules["app.core.config"]
 
         with (
-            patch("app.main.setup_logging"),
+            patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
         ):
@@ -234,7 +256,7 @@ class TestCorsMiddleware:
             del sys.modules["app.core.config"]
 
         with (
-            patch("app.main.setup_logging"),
+            patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
         ):
@@ -254,12 +276,12 @@ class TestCorsMiddleware:
             assert "authorization" in allowed_headers
             assert "content-type" in allowed_headers
 
-    def test_cors_allows_traceparent_header_for_logging(
+    def test_cors_allows_trace_context_headers_for_logging(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """
-        Verify CORS allows traceparent header for logging middleware.
+        Verify CORS allows W3C trace context headers for observability middleware.
         """
         monkeypatch.setenv("CORS_ORIGINS", '["http://localhost:3000"]')
 
@@ -269,7 +291,7 @@ class TestCorsMiddleware:
             del sys.modules["app.core.config"]
 
         with (
-            patch("app.main.setup_logging"),
+            patch("app.main.configure_logging"),
             patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client", new_callable=AsyncMock),
         ):
@@ -281,9 +303,10 @@ class TestCorsMiddleware:
                     headers={
                         "Origin": "http://localhost:3000",
                         "Access-Control-Request-Method": "GET",
-                        "Access-Control-Request-Headers": "traceparent",
+                        "Access-Control-Request-Headers": "traceparent, tracestate",
                     },
                 )
 
             allowed_headers = response.headers.get("access-control-allow-headers", "").lower()
             assert "traceparent" in allowed_headers
+            assert "tracestate" in allowed_headers

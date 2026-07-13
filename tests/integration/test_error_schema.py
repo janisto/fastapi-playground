@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
+from app.core.constants import PROBLEM_SCHEMA_PATH, VALIDATION_PROBLEM_SCHEMA_PATH
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
 from tests.helpers.profiles import make_profile_payload_dict
 
-ERROR_SCHEMA_PATH = "/schemas/ErrorModel.json"
 BASE_URL = "/v1/profile"
 
 
@@ -29,7 +29,7 @@ class TestErrorSchemaOn4xxResponses:
         assert response.status_code == 401
         body = response.json()
         assert "$schema" in body
-        assert ERROR_SCHEMA_PATH in body["$schema"]
+        assert PROBLEM_SCHEMA_PATH in body["$schema"]
 
     def test_401_includes_link_header(
         self,
@@ -41,7 +41,7 @@ class TestErrorSchemaOn4xxResponses:
         assert response.status_code == 401
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert ERROR_SCHEMA_PATH in link
+        assert PROBLEM_SCHEMA_PATH in link
 
     def test_404_includes_schema(
         self,
@@ -57,7 +57,7 @@ class TestErrorSchemaOn4xxResponses:
         assert response.status_code == 404
         body = response.json()
         assert "$schema" in body
-        assert ERROR_SCHEMA_PATH in body["$schema"]
+        assert PROBLEM_SCHEMA_PATH in body["$schema"]
 
     def test_404_includes_link_header(
         self,
@@ -88,7 +88,7 @@ class TestErrorSchemaOn4xxResponses:
         assert response.status_code == 409
         body = response.json()
         assert "$schema" in body
-        assert ERROR_SCHEMA_PATH in body["$schema"]
+        assert PROBLEM_SCHEMA_PATH in body["$schema"]
 
     def test_422_validation_error_includes_schema(
         self,
@@ -101,7 +101,7 @@ class TestErrorSchemaOn4xxResponses:
         assert response.status_code == 422
         body = response.json()
         assert "$schema" in body
-        assert ERROR_SCHEMA_PATH in body["$schema"]
+        assert VALIDATION_PROBLEM_SCHEMA_PATH in body["$schema"]
 
     def test_422_validation_error_includes_link_header(
         self,
@@ -114,6 +114,7 @@ class TestErrorSchemaOn4xxResponses:
         assert response.status_code == 422
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
+        assert VALIDATION_PROBLEM_SCHEMA_PATH in link
 
 
 class TestErrorSchemaOn5xxResponses:
@@ -133,7 +134,7 @@ class TestErrorSchemaOn5xxResponses:
         assert response.status_code == 500
         body = response.json()
         assert "$schema" in body
-        assert ERROR_SCHEMA_PATH in body["$schema"]
+        assert PROBLEM_SCHEMA_PATH in body["$schema"]
 
     def test_500_includes_link_header(
         self,
@@ -185,4 +186,4 @@ class TestErrorSchemaFormat:
         response = client.get(BASE_URL)
 
         link = response.headers.get("link", "")
-        assert f"<{ERROR_SCHEMA_PATH}>" in link
+        assert f"<{PROBLEM_SCHEMA_PATH}>" in link

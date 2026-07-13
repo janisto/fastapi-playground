@@ -4,125 +4,15 @@ Unit tests for exception handler hooks.
 
 from unittest.mock import MagicMock
 
-from starlette.datastructures import State
 from starlette.responses import JSONResponse
 
 from app.core.cbor import CBORDecodeError
+from app.core.constants import PROBLEM_SCHEMA_PATH, VALIDATION_PROBLEM_SCHEMA_PATH
 from app.core.exception_handler import (
-    ERROR_SCHEMA_PATH,
-    REQUEST_ID_HEADER,
     cbor_decode_error_handler,
-    request_id_post_hook,
-    request_id_pre_hook,
     schema_link_post_hook,
     strip_about_blank_type_post_hook,
 )
-
-
-class TestRequestIdPreHook:
-    """
-    Tests for request_id_pre_hook.
-    """
-
-    def test_sets_request_id_when_not_in_state(self) -> None:
-        """
-        Verify pre_hook generates request_id when not already set.
-        """
-        request = MagicMock()
-        request.state = State()
-        request.headers = {}
-        exc = ValueError("test error")
-
-        request_id_pre_hook(request, exc)
-
-        assert hasattr(request.state, "request_id")
-        request_id = request.state.request_id
-        assert len(request_id) == 36
-        assert request_id.count("-") == 4
-
-    def test_uses_incoming_header_when_state_not_set(self) -> None:
-        """
-        Verify pre_hook uses X-Request-ID header when state not set.
-        """
-        request = MagicMock()
-        request.state = State()
-        request.headers = {REQUEST_ID_HEADER: "incoming-request-id"}
-        exc = ValueError("test error")
-
-        request_id_pre_hook(request, exc)
-
-        assert request.state.request_id == "incoming-request-id"
-
-    def test_preserves_existing_state_request_id(self) -> None:
-        """
-        Verify pre_hook does not override existing request_id in state.
-        """
-        request = MagicMock()
-        request.state = State()
-        request.state.request_id = "existing-request-id"
-        request.headers = {REQUEST_ID_HEADER: "incoming-request-id"}
-        exc = ValueError("test error")
-
-        request_id_pre_hook(request, exc)
-
-        assert request.state.request_id == "existing-request-id"
-
-
-class TestRequestIdPostHook:
-    """
-    Tests for request_id_post_hook.
-    """
-
-    def test_adds_request_id_header_to_response(self) -> None:
-        """
-        Verify post_hook adds X-Request-ID header to response.
-        """
-        request = MagicMock()
-        request.state = State()
-        request.state.request_id = "test-request-id"
-
-        content = {"type": "about:blank", "title": "Error", "status": 500}
-        response = JSONResponse(content=content)
-
-        result_content, result_response = request_id_post_hook(content, request, response)
-
-        assert result_response.headers[REQUEST_ID_HEADER] == "test-request-id"
-        assert result_content == content
-
-    def test_handles_missing_request_id_in_state(self) -> None:
-        """
-        Verify post_hook handles case where request_id is not in state.
-        """
-        request = MagicMock()
-        request.state = State()
-
-        content = {"type": "about:blank", "title": "Error", "status": 500}
-        response = JSONResponse(content=content)
-
-        result_content, result_response = request_id_post_hook(content, request, response)
-
-        assert REQUEST_ID_HEADER not in result_response.headers
-        assert result_content == content
-
-    def test_does_not_modify_content(self) -> None:
-        """
-        Verify post_hook returns content unchanged.
-        """
-        request = MagicMock()
-        request.state = State()
-        request.state.request_id = "test-request-id"
-
-        original_content = {
-            "type": "about:blank",
-            "title": "Validation Error",
-            "status": 422,
-            "errors": [{"location": "body.email", "message": "required"}],
-        }
-        response = JSONResponse(content=original_content)
-
-        result_content, _ = request_id_post_hook(original_content, request, response)
-
-        assert result_content == original_content
 
 
 class TestStripAboutBlankTypePostHook:
@@ -195,7 +85,7 @@ class TestSchemaLinkPostHook:
         result_content, _result_response = schema_link_post_hook(content, request, response)
 
         assert "$schema" in result_content
-        assert result_content["$schema"] == "http://testserver/schemas/ErrorModel.json"
+        assert result_content["$schema"] == "http://testserver/schemas/ProblemResponse.json"
 
     def test_adds_link_header_with_describedby(self) -> None:
         """Verify Link header with rel=describedBy is added."""
@@ -207,7 +97,21 @@ class TestSchemaLinkPostHook:
         _result_content, result_response = schema_link_post_hook(content, request, response)
 
         assert "Link" in result_response.headers
-        assert result_response.headers["Link"] == f'<{ERROR_SCHEMA_PATH}>; rel="describedBy"'
+        assert result_response.headers["Link"] == f'<{PROBLEM_SCHEMA_PATH}>; rel="describedBy"'
+
+    def test_uses_validation_schema_for_structured_errors(self) -> None:
+        """
+        Verify structured validation errors use their specific schema.
+        """
+        request = MagicMock()
+        request.base_url = "http://testserver/"
+        content = {"title": "Unprocessable Entity", "status": 422, "errors": []}
+        response = JSONResponse(content=content)
+
+        result_content, result_response = schema_link_post_hook(content, request, response)
+
+        assert result_content["$schema"] == f"http://testserver{VALIDATION_PROBLEM_SCHEMA_PATH}"
+        assert result_response.headers["Link"] == f'<{VALIDATION_PROBLEM_SCHEMA_PATH}>; rel="describedBy"'
 
     def test_does_not_override_existing_schema(self) -> None:
         """Verify $schema is not overwritten if already present."""
@@ -242,7 +146,7 @@ class TestSchemaLinkPostHook:
 
         result_content, _result_response = schema_link_post_hook(content, request, response)
 
-        assert result_content["$schema"] == "http://api.example.com/schemas/ErrorModel.json"
+        assert result_content["$schema"] == "http://api.example.com/schemas/ProblemResponse.json"
         assert "//" not in result_content["$schema"].replace("http://", "")
 
     def test_handles_base_url_without_trailing_slash(self) -> None:
@@ -254,4 +158,4 @@ class TestSchemaLinkPostHook:
 
         result_content, _result_response = schema_link_post_hook(content, request, response)
 
-        assert result_content["$schema"] == "https://api.example.com/schemas/ErrorModel.json"
+        assert result_content["$schema"] == "https://api.example.com/schemas/ProblemResponse.json"

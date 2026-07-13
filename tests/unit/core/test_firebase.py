@@ -13,7 +13,6 @@ from app.core.firebase import (
     close_async_firestore_client,
     get_async_firestore_client,
     get_firebase_app,
-    get_firestore_client,
 )
 
 
@@ -23,17 +22,14 @@ def reset_global_state() -> Generator[None]:
     Reset global Firebase state before and after each test.
     """
     original_app = firebase_mod._firebase_app
-    original_client = firebase_mod._firestore_client
     original_async_client = firebase_mod._async_firestore_client
 
     firebase_mod._firebase_app = None
-    firebase_mod._firestore_client = None
     firebase_mod._async_firestore_client = None
 
     yield
 
     firebase_mod._firebase_app = original_app
-    firebase_mod._firestore_client = original_client
     firebase_mod._async_firestore_client = original_async_client
 
 
@@ -59,30 +55,6 @@ class TestGetFirebaseApp:
         result = get_firebase_app()
 
         assert result is mock_app
-
-
-class TestGetFirestoreClient:
-    """
-    Tests for get_firestore_client function.
-    """
-
-    def test_raises_when_not_initialized(self) -> None:
-        """
-        Verify RuntimeError is raised when Firestore client is not available.
-        """
-        with pytest.raises(RuntimeError, match="Firestore client is not available"):
-            get_firestore_client()
-
-    def test_returns_client_when_initialized(self) -> None:
-        """
-        Verify client is returned when Firestore is initialized.
-        """
-        mock_client = MagicMock()
-        firebase_mod._firestore_client = mock_client
-
-        result = get_firestore_client()
-
-        assert result is mock_client
 
 
 class TestGetAsyncFirestoreClient:

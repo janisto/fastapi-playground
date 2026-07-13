@@ -188,8 +188,6 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
             "Generated dad joke",
             topic=topic.value if topic else None,
             style=joke.style.value,
-            setup=joke.setup,
-            punchline=joke.punchline,
         )
 
         return https_fn.Response(

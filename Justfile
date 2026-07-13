@@ -37,7 +37,7 @@ test-integration *args:
 # Run E2E tests (requires Firebase emulators)
 [group('test')]
 test-e2e *args:
-    uv run {{ ARGS_TEST }} -m pytest tests/e2e/ -v -s {{ args }}
+    uv run {{ ARGS_TEST }} -m pytest tests/e2e/ -v -s --no-cov {{ args }}
 
 # Run all tests including E2E
 [group('test')]
@@ -73,6 +73,11 @@ modernize:
 typing:
     uvx ty check
 
+# Check types in the independent Functions project
+[group('qa')]
+typing-functions:
+    uvx ty check --python functions/.venv functions/main.py
+
 # Quality assurance: fix, format, type check, and test
 [group('qa')]
 qa: fix typing test
@@ -85,7 +90,7 @@ check: lint typing test
 # --no-server-header: Hide server fingerprinting (OWASP recommendation)
 [group('run')]
 serve:
-    uv run {{ ARGS_SERVE }} uvicorn app.main:app --reload --port {{ PORT }} --no-server-header
+    uv run {{ ARGS_SERVE }} uvicorn app.main:app --reload --port {{ PORT }} --no-server-header --no-access-log
 
 # Send HTTP request to development server
 [group('run')]
@@ -130,11 +135,17 @@ container-down name="fastapi-playground":
 [group('lifecycle')]
 update:
     uv sync --upgrade
+    uv sync --project functions --upgrade
 
 # Ensure project virtualenv is up to date
 [group('lifecycle')]
 install:
     uv sync
+
+# Sync the independent Functions project
+[group('lifecycle')]
+install-functions:
+    uv sync --project functions
 
 # Remove temporary files
 [group('lifecycle')]

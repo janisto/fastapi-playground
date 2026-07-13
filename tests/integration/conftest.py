@@ -36,17 +36,17 @@ def client(mock_profile_service: AsyncMock) -> Generator[TestClient]:
     - Injects mock_profile_service via dependency_overrides.
     - Clears all overrides after the test.
     """
-    from app.main import app
+    from app.main import app, fastapi_app
 
     with (
         patch("app.main.initialize_firebase"),
-        patch("app.main.setup_logging"),
+        patch("app.main.configure_logging"),
         patch("app.main.close_async_firestore_client"),
     ):
-        app.dependency_overrides[get_profile_service] = lambda: mock_profile_service
+        fastapi_app.dependency_overrides[get_profile_service] = lambda: mock_profile_service
         with TestClient(app, raise_server_exceptions=False) as c:
             yield c
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -62,8 +62,8 @@ def with_fake_user(fake_user: FirebaseUser) -> Generator[None]:
     """
     Override auth to return fake user.
     """
-    from app.main import app
+    from app.main import fastapi_app
 
-    app.dependency_overrides[verify_firebase_token] = lambda: fake_user
+    fastapi_app.dependency_overrides[verify_firebase_token] = lambda: fake_user
     yield
-    app.dependency_overrides.pop(verify_firebase_token, None)
+    fastapi_app.dependency_overrides.pop(verify_firebase_token, None)

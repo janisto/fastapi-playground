@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from app.pagination import Cursor, paginate
+from app.pagination import Cursor, InvalidCursorError, paginate
 from app.pagination.paginator import PaginationResult
 
 
@@ -296,21 +296,20 @@ class TestPaginateCursorNavigation:
                 base_url="/items",
             )
 
-    def test_nonexistent_cursor_value_starts_from_beginning(self) -> None:
-        """Verify cursor with nonexistent value starts from beginning."""
+    def test_nonexistent_cursor_value_raises_error(self) -> None:
+        """Verify stale cursor values are rejected."""
         items = create_items(10)
         cursor = Cursor(type="item", value="nonexistent").encode()
 
-        result = paginate(
-            items=items,
-            cursor=cursor,
-            limit=3,
-            cursor_type="item",
-            get_id=get_mock_id,
-            base_url="/items",
-        )
-
-        assert [i.id for i in result.items] == ["item-001", "item-002", "item-003"]
+        with pytest.raises(InvalidCursorError, match="cursor references unknown item"):
+            paginate(
+                items=items,
+                cursor=cursor,
+                limit=3,
+                cursor_type="item",
+                get_id=get_mock_id,
+                base_url="/items",
+            )
 
     def test_full_pagination_traversal(self) -> None:
         """Verify complete traversal through all pages."""

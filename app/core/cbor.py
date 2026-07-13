@@ -39,39 +39,33 @@ def normalize_media_type(media_type: str) -> str:
     return base_type.lower()
 
 
-def _parse_qvalue(params: list[str]) -> float:
+def _parse_qvalue(params: list[str]) -> float | None:
     """
-    Parse quality value from media type parameters. Returns 1.0 if not specified.
+    Parse a quality value from media type parameters.
     """
     for raw_param in params:
         param = raw_param.strip()
         if param.lower().startswith("q="):
             try:
-                return float(param[2:])
+                quality = float(param[2:])
             except ValueError:
-                return 1.0
+                return None
+            return quality if 0 <= quality <= 1 else None
     return 1.0
 
 
-def _matches_media_range(range_type: str, target: str, target_parts: list[str], *, explicit_only: bool) -> bool:
+def _media_range_specificity(range_type: str, target: str, target_parts: list[str]) -> int | None:
     """
-    Check if a media range matches the target media type.
+    Return the matching media range specificity.
     """
-    # Exact match
     if range_type == target:
-        return True
-
-    # Wildcard matches (skip if explicit_only)
-    if explicit_only:
-        return False
-
-    # Wildcard */*
+        return 2
     if range_type == "*/*":
-        return True
-
-    # Type wildcard (e.g., application/*)
+        return 0
     range_parts = range_type.split("/")
-    return len(range_parts) == 2 and range_parts[1] == "*" and range_parts[0] == target_parts[0]
+    if len(range_parts) == 2 and range_parts[1] == "*" and range_parts[0] == target_parts[0]:
+        return 1
+    return None
 
 
 def accepts_media_type(accept_header: str, media_type: str, *, explicit_only: bool = False) -> bool:
@@ -91,14 +85,17 @@ def accepts_media_type(accept_header: str, media_type: str, *, explicit_only: bo
             Use this when checking for non-default content types like CBOR
             that should only be returned when explicitly requested.
 
-    Note: Does not implement full precedence algorithm for wildcards vs specific types.
-    Returns True if the media type is acceptable (q > 0).
+    More specific media ranges take precedence over wildcards, including an
+    explicit q=0 exclusion.
     """
     if not accept_header:
         return False
 
     target = normalize_media_type(media_type)
     target_parts = target.split("/")
+
+    best_specificity = -1
+    best_quality = 0.0
 
     for raw_item in accept_header.split(","):
         item = raw_item.strip()
@@ -109,18 +106,24 @@ def accepts_media_type(accept_header: str, media_type: str, *, explicit_only: bo
         parts = item.split(";")
         range_type = normalize_media_type(parts[0])
 
-        # Skip if q=0 (not acceptable)
-        if _parse_qvalue(parts[1:]) == 0:
+        quality = _parse_qvalue(parts[1:])
+        if quality is None:
             continue
 
         # Skip malformed media ranges
         if "/" not in range_type:
             continue
 
-        if _matches_media_range(range_type, target, target_parts, explicit_only=explicit_only):
-            return True
+        specificity = _media_range_specificity(range_type, target, target_parts)
+        if specificity is None or (explicit_only and specificity < 2):
+            continue
+        if specificity > best_specificity:
+            best_specificity = specificity
+            best_quality = quality
+        elif specificity == best_specificity:
+            best_quality = max(best_quality, quality)
 
-    return False
+    return best_quality > 0
 
 
 def content_type_matches(content_type: str, media_type: str) -> bool:
@@ -306,24 +309,11 @@ class CBORRoute(APIRoute):
                         status_code=response.status_code,
                         headers=headers,
                         media_type=CBOR_MEDIA_TYPE,
+                        background=response.background,
                     )
             return response
 
         return custom_handler
-
-
-class CBORResponse(Response):
-    """
-    Response with CBOR serialization.
-    """
-
-    media_type = CBOR_MEDIA_TYPE
-
-    def render(self, content: object) -> bytes:
-        """
-        Serialize content as CBOR with datetime as epoch timestamps.
-        """
-        return cbor2.dumps(content, datetime_as_timestamp=True, timezone=UTC)
 
 
 class CBORProblemPostHook:

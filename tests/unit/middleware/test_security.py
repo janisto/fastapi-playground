@@ -72,6 +72,24 @@ class TestSecurityHeaders:
             response = client.get("/ping")
             assert response.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
 
+    def test_preserves_existing_vary_and_adds_accept(self) -> None:
+        """
+        Verify content negotiation augments an existing Vary header.
+        """
+
+        async def varied(request: Request) -> PlainTextResponse:
+            return PlainTextResponse("pong", headers={"Vary": "Origin"})
+
+        app = build_starlette_app(
+            routes=[("/ping", varied, ["GET"])],
+            middleware=[(SecurityHeadersMiddleware, {})],
+        )
+
+        with TestClient(app) as client:
+            response = client.get("/ping")
+
+        assert response.headers["Vary"] == "Origin, Accept"
+
     def test_custom_x_frame_options(self) -> None:
         """
         Verify custom X-Frame-Options value is applied.

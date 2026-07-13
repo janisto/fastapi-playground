@@ -6,7 +6,6 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 
 from app.auth.firebase import FirebaseUser, verify_firebase_token
-from app.main import app
 
 
 def make_fake_user(
@@ -33,8 +32,10 @@ def override_current_user(user_factory: Callable[[], FirebaseUser]) -> Generator
     def _override() -> FirebaseUser:
         return user_factory()
 
-    app.dependency_overrides[verify_firebase_token] = _override
+    from app.main import fastapi_app
+
+    fastapi_app.dependency_overrides[verify_firebase_token] = _override
     try:
         yield
     finally:
-        app.dependency_overrides.clear()
+        fastapi_app.dependency_overrides.clear()

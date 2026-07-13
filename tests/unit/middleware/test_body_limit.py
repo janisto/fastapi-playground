@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import cbor2
+from fastapi_request_observability import RequestContextMiddleware
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
@@ -39,6 +40,7 @@ def _create_app(max_size: int = 1024) -> Starlette:
     with patch("app.middleware.body_limit.get_settings") as mock_settings:
         mock_settings.return_value.max_request_size_bytes = max_size
         app.add_middleware(BodySizeLimitMiddleware)  # type: ignore[arg-type]
+        app.add_middleware(RequestContextMiddleware)
 
     return app
 
@@ -127,6 +129,9 @@ class TestBodySizeLimitErrorResponse:
                 assert body["title"] == "Payload Too Large"
                 assert body["status"] == 413
                 assert body["detail"] == "Request body too large"
+                assert body["$schema"] == "http://testserver/schemas/ProblemResponse.json"
+                assert response.headers["Link"] == '</schemas/ProblemResponse.json>; rel="describedBy"'
+                assert response.headers["Vary"] == "Accept"
 
     def test_413_response_detail_message(self) -> None:
         """

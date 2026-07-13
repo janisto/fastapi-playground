@@ -3,6 +3,7 @@ Cursor encoding/decoding for pagination.
 """
 
 import base64
+import binascii
 from dataclasses import dataclass
 
 
@@ -12,7 +13,7 @@ class InvalidCursorError(Exception):
     """
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Cursor:
     """
     Pagination cursor with type and value.
@@ -39,8 +40,8 @@ def decode_cursor(s: str) -> Cursor:
     if padding != 4:
         s += "=" * padding
     try:
-        decoded = base64.urlsafe_b64decode(s.encode()).decode()
-    except Exception as e:
+        decoded = base64.b64decode(s.encode("ascii"), altchars=b"-_", validate=True).decode()
+    except (binascii.Error, UnicodeError) as e:
         raise InvalidCursorError("invalid cursor format") from e
     parts = decoded.split(":", 1)
     if len(parts) != 2:

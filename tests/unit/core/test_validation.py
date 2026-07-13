@@ -147,7 +147,7 @@ class TestValidationErrorHandler:
         assert result.title == "Unprocessable Entity"
         assert result.status == 422
         assert result.detail == "validation failed"
-        assert result.extras["$schema"] == "http://testserver/schemas/ErrorModel.json"
+        assert result.extras["$schema"] == "http://testserver/schemas/ValidationProblemResponse.json"
 
     def test_includes_error_location_and_message(
         self,

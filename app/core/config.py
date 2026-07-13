@@ -49,22 +49,10 @@ class Settings(BaseSettings):
     environment: str = Field(default="production", description="Environment name")
     debug: bool = Field(default=False, description="Debug mode")
 
-    # Server
-    host: str = Field(default="0.0.0.0", description="Server host")
-    port: int = Field(default=8080, description="Server port")
-
     # Firebase
     firebase_project_id: str = Field(default="test-project", description="Firebase project ID")
     google_application_credentials: str | None = Field(default=None, description="Path to service account credentials")
-    firebase_project_number: str | None = Field(default=None, description="Firebase project number")
     firestore_database: str | None = Field(default=None, description="Firestore database ID (default: (default))")
-
-    # App metadata (optional / informational)
-    app_environment: str | None = Field(default=None, description="Application environment")
-    app_url: str | None = Field(default=None, description="Application URL")
-
-    # Secrets
-    secret_manager_enabled: bool = Field(default=True, description="Enable Secret Manager")
 
     # Security / Limits
     max_request_size_bytes: int = Field(default=1_000_000, description="Maximum request body size in bytes")
@@ -79,7 +67,7 @@ class Settings(BaseSettings):
         description="Allowed CORS methods",
     )
     cors_headers: list[str] = Field(
-        default=["Authorization", "Content-Type", "traceparent", "X-Request-ID"],
+        default=["Authorization", "Content-Type", "traceparent", "tracestate", "X-Request-ID"],
         description="Allowed CORS headers",
     )
     cors_expose_headers: list[str] = Field(

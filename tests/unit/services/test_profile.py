@@ -146,7 +146,7 @@ def mock_audit_log(mocker: MockerFixture) -> None:
     """
     Mock audit logging to avoid side effects.
     """
-    mocker.patch("app.services.profile.service.log_audit_event")
+    mocker.patch("app.services.profile.service._log_profile_audit_event")
 
 
 class TestProfileServiceGetProfile:

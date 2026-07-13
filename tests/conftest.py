@@ -23,7 +23,7 @@ def client() -> Generator[TestClient]:
     """
     with (
         patch("app.main.initialize_firebase"),
-        patch("app.main.setup_logging"),
+        patch("app.main.configure_logging"),
         patch("app.main.close_async_firestore_client"),
         TestClient(app) as c,
     ):

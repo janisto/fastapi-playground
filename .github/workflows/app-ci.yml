@@ -35,11 +35,17 @@ jobs:
       - name: Install dependencies
         run: just install
 
+      - name: Install Functions dependencies
+        run: uv sync --project functions --locked
+
       - name: Run linting checks
         run: just lint
 
       - name: Run typing checks
         run: just typing
+
+      - name: Run Functions typing checks
+        run: just typing-functions
 
       - name: Run test coverage
         run: just cov

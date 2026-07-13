@@ -4,6 +4,7 @@ Health check router.
 
 from fastapi import APIRouter, Request, Response
 
+from app.core.schema_links import build_described_by_link, build_schema_url
 from app.models.error import ProblemResponse
 from app.models.health import HealthResponse
 
@@ -33,8 +34,9 @@ async def health_check(request: Request, response: Response) -> HealthResponse:
     Returns a simple status response without database or external service checks.
     Suitable for Kubernetes liveness probes and load balancer health checks.
     """
-    response.headers["Link"] = '</schemas/HealthResponse.json>; rel="describedBy"'
+    schema_path = "/schemas/HealthResponse.json"
+    response.headers["Link"] = build_described_by_link(schema_path)
     return HealthResponse(
-        schema_url=str(request.base_url) + "schemas/HealthResponse.json",
+        schema_url=build_schema_url(request, schema_path),
         status="healthy",
     )

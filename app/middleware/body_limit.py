@@ -2,18 +2,16 @@
 ASGI middleware to enforce maximum request body size with early abort.
 """
 
-from __future__ import annotations
-
 import json
-import uuid
 
 import cbor2
+from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.cbor import CBOR_MEDIA_TYPE, PROBLEM_CBOR, PROBLEM_JSON, accepts_media_type
 from app.core.config import get_settings
-
-REQUEST_ID_HEADER = b"x-request-id"
+from app.core.constants import PROBLEM_SCHEMA_PATH
+from app.core.schema_links import build_described_by_link, build_schema_url
 
 
 class BodySizeLimitMiddleware:
@@ -82,11 +80,11 @@ class BodySizeLimitMiddleware:
     async def _send_413(self, send: Send, scope: Scope) -> None:
         headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
 
-        # Get or generate request ID for traceability
-        request_id = headers.get("x-request-id") or str(uuid.uuid4())
-
         # Build RFC 9457 Problem Details payload
+        request = Request(scope)
+        schema_url = build_schema_url(request, PROBLEM_SCHEMA_PATH)
         problem = {
+            "$schema": schema_url,
             "title": "Payload Too Large",
             "status": 413,
             "detail": "Request body too large",
@@ -114,7 +112,8 @@ class BodySizeLimitMiddleware:
                 "headers": [
                     (b"content-type", content_type.encode("latin1")),
                     (b"content-length", str(len(payload)).encode("latin1")),
-                    (REQUEST_ID_HEADER, request_id.encode("latin1")),
+                    (b"link", build_described_by_link(PROBLEM_SCHEMA_PATH).encode("latin1")),
+                    (b"vary", b"Accept"),
                 ],
             }
         )

@@ -2,6 +2,7 @@
 Profile service with async Firestore operations.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -9,11 +10,30 @@ from google.cloud import firestore
 
 from app.core.firebase import get_async_firestore_client
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
-from app.middleware import log_audit_event
 from app.models.profile import PROFILE_COLLECTION, Profile, ProfileCreate, ProfileUpdate
 
 if TYPE_CHECKING:
     from google.cloud.firestore import AsyncClient, AsyncDocumentReference, AsyncTransaction
+
+logger = logging.getLogger(__name__)
+
+
+def _log_profile_audit_event(action: str, user_id: str) -> None:
+    """
+    Log a successful profile mutation as a structured audit event.
+    """
+    logger.info(
+        "Audit event",
+        extra={
+            "audit": {
+                "action": action,
+                "user_id": user_id,
+                "resource_type": "profile",
+                "resource_id": user_id,
+                "result": "success",
+            }
+        },
+    )
 
 
 class ProfileService:
@@ -58,19 +78,9 @@ class ProfileService:
         }
         await self._create_in_transaction(transaction, doc_ref, profile_dict)
 
-        log_audit_event("create", user_id, "profile", user_id, "success")
+        _log_profile_audit_event("create", user_id)
 
-        return Profile(
-            id=user_id,
-            firstname=profile_data.firstname,
-            lastname=profile_data.lastname,
-            email=profile_data.email,
-            phone_number=profile_data.phone_number,
-            marketing=profile_data.marketing,
-            terms=profile_data.terms,
-            created_at=now,
-            updated_at=now,
-        )
+        return Profile.model_validate(profile_dict)
 
     async def get_profile(self, user_id: str) -> Profile:
         """
@@ -131,7 +141,7 @@ class ProfileService:
         if merged_data is None:
             raise ProfileNotFoundError("Profile not found")
 
-        log_audit_event("update", user_id, "profile", user_id, "success")
+        _log_profile_audit_event("update", user_id)
 
         return Profile(**merged_data)
 
@@ -170,4 +180,4 @@ class ProfileService:
         if not deleted:
             raise ProfileNotFoundError("Profile not found")
 
-        log_audit_event("delete", user_id, "profile", user_id, "success")
+        _log_profile_audit_event("delete", user_id)

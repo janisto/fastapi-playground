@@ -7,12 +7,14 @@ import logging
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.core.cbor import CBORRoute
+from app.core.schema_links import build_described_by_link, build_schema_url
 from app.dependencies import CurrentUser, ProfileServiceDep
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
 from app.models.error import ProblemResponse, ValidationProblemResponse
 from app.models.profile import Profile, ProfileCreate, ProfileUpdate
 
 logger = logging.getLogger(__name__)
+PROFILE_SCHEMA_PATH = "/schemas/Profile.json"
 
 router = APIRouter(
     prefix="/profile",
@@ -22,8 +24,17 @@ router = APIRouter(
         401: {"model": ProblemResponse, "description": "Unauthorized"},
         422: {"model": ValidationProblemResponse, "description": "Validation error"},
         500: {"model": ProblemResponse, "description": "Server error"},
+        503: {"model": ProblemResponse, "description": "Authentication service unavailable"},
     },
 )
+
+
+def _profile_response(request: Request, response: Response, profile: Profile) -> Profile:
+    """
+    Add profile schema discovery metadata to a response model.
+    """
+    response.headers["Link"] = build_described_by_link(PROFILE_SCHEMA_PATH)
+    return profile.model_copy(update={"schema_url": build_schema_url(request, PROFILE_SCHEMA_PATH)})
 
 
 @router.post(
@@ -53,19 +64,7 @@ async def create_profile(
     try:
         profile = await service.create_profile(current_user.uid, profile_data)
         response.headers["Location"] = str(request.url.path)
-        response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
-        return Profile(
-            schema_url=str(request.base_url) + "schemas/ProfileData.json",
-            id=profile.id,
-            firstname=profile.firstname,
-            lastname=profile.lastname,
-            email=profile.email,
-            phone_number=profile.phone_number,
-            marketing=profile.marketing,
-            terms=profile.terms,
-            created_at=profile.created_at,
-            updated_at=profile.updated_at,
-        )
+        return _profile_response(request, response, profile)
     except HTTPException, ProfileAlreadyExistsError:
         raise
     except Exception:
@@ -98,19 +97,7 @@ async def get_profile(
     """
     try:
         profile = await service.get_profile(current_user.uid)
-        response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
-        return Profile(
-            schema_url=str(request.base_url) + "schemas/ProfileData.json",
-            id=profile.id,
-            firstname=profile.firstname,
-            lastname=profile.lastname,
-            email=profile.email,
-            phone_number=profile.phone_number,
-            marketing=profile.marketing,
-            terms=profile.terms,
-            created_at=profile.created_at,
-            updated_at=profile.updated_at,
-        )
+        return _profile_response(request, response, profile)
     except HTTPException, ProfileNotFoundError:
         raise
     except Exception:
@@ -148,19 +135,7 @@ async def update_profile(
     """
     try:
         profile = await service.update_profile(current_user.uid, profile_data)
-        response.headers["Link"] = '</schemas/ProfileData.json>; rel="describedBy"'
-        return Profile(
-            schema_url=str(request.base_url) + "schemas/ProfileData.json",
-            id=profile.id,
-            firstname=profile.firstname,
-            lastname=profile.lastname,
-            email=profile.email,
-            phone_number=profile.phone_number,
-            marketing=profile.marketing,
-            terms=profile.terms,
-            created_at=profile.created_at,
-            updated_at=profile.updated_at,
-        )
+        return _profile_response(request, response, profile)
     except HTTPException, ProfileNotFoundError:
         raise
     except Exception:

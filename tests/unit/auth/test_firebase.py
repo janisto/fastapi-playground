@@ -144,9 +144,9 @@ class TestVerifyFirebaseToken:
         assert exc_info.value.status_code == 401
         assert exc_info.value.detail == "Unauthorized"
 
-    async def test_generic_error_raises_401(self, monkeypatch: MonkeyPatch) -> None:
+    async def test_generic_error_raises_503(self, monkeypatch: MonkeyPatch) -> None:
         """
-        Verify generic errors raise HTTPException with 401.
+        Verify unexpected authentication failures report dependency unavailability.
         """
         patch_get_firebase_app(monkeypatch)
         patch_firebase_verify_error(monkeypatch, RuntimeError("Unexpected error"))
@@ -156,8 +156,9 @@ class TestVerifyFirebaseToken:
         with pytest.raises(HTTPException) as exc_info:
             await verify_firebase_token(credentials)
 
-        assert exc_info.value.status_code == 401
-        assert exc_info.value.detail == "Unauthorized"
+        assert exc_info.value.status_code == 503
+        assert exc_info.value.detail == "Authentication service temporarily unavailable"
+        assert exc_info.value.headers == {"Retry-After": "30"}
 
     async def test_certificate_fetch_error_raises_503(self, monkeypatch: MonkeyPatch) -> None:
         """

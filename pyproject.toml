@@ -5,18 +5,19 @@ description = "FastAPI playground for just, uv, ty and Ruff"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi[standard]>=0.138.2",
+    "fastapi[standard]>=0.139.0",
+    "fastapi-request-observability>=0.1.0",
     "firebase-admin>=7.4.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
     "uvicorn[standard]>=0.49.0",
     "fastapi-problem>=0.12.1",
     "cbor2>=5.7.1",
-    "httpx2>=2.5.0",
 ]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.5.0",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
@@ -112,10 +113,6 @@ ignore = [
     "BLE001",   # Broad exception catch intentional for header parsing resilience
     "S110",     # try-except-pass is intentional for robustness
 ]
-"app/middleware/logging.py" = [
-    "BLE001",   # Broad exception catch intentional for trace header parsing
-]
-
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
     "fastapi.Depends",

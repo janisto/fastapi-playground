@@ -2,7 +2,7 @@
 description: AI agent guidelines for this FastAPI/Python repository. Covers coding conventions, project structure, workflow principles, and tech stack (Python 3.14+, FastAPI, Pydantic v2, Firebase).
 ---
 
-# Copilot Instructions
+# AGENTS.md
 
 These guidelines define how AI agents and contributors should work in this FastAPI/Python repository. Use GitHub Issues/PRs for tracking, GitHub Actions for CI (if configured), and local tooling via uv and just.
 
@@ -21,7 +21,7 @@ These guidelines define how AI agents and contributors should work in this FastA
 > - **TRY**: Exception handling patterns
 > - **UP**: Modern Python syntax (pyupgrade for 3.14+)
 >
-> Run `just lint` to check and auto-fix. This document focuses only on project-specific conventions.
+> Run `just lint` to check and `just fix` to auto-fix. This document focuses only on project-specific conventions.
 
 ---
 
@@ -68,10 +68,27 @@ Violations should be removed before a PR is marked ready. Default to silence unl
 
 ---
 
+## Documentation Alignment
+
+Keep `README.md`, `GCP.md`, and `AGENTS.md` mutually consistent whenever application behavior, configuration,
+commands, deployment guidance, or contributor workflows change:
+
+- `README.md` is the concise public project overview.
+- `GCP.md` is intentionally detailed, project-agnostic onboarding for engineers working with Google Cloud and
+  Firebase. Preserve useful setup and troubleshooting guidance.
+- `AGENTS.md` is the authoritative contributor and agent workflow guide.
+- Treat all three as public. Use placeholders in deployment examples and never include real project IDs or numbers,
+  account or service-account emails, deployed URLs, registry paths, build or revision identifiers, image digests,
+  credentials, secret values, or developer-specific absolute paths.
+- Preserve established build and image conventions in documentation. Change them only when the proposed convention is
+  materially better and has been verified in detail against the repository and the active deployment configuration.
+
+---
+
 ## Tech & Tooling
 
 - Language/runtime: Python 3.14+
-- Frameworks/libs: FastAPI, Pydantic v2, Uvicorn, Firebase Admin SDK, Google Cloud (Firestore/Logging/Secret Manager)
+- Frameworks/libs: FastAPI, Pydantic v2, Uvicorn, Firebase Admin SDK, Google Cloud (Firestore/Logging)
 - Package/devenv: uv (+ virtualenv in `.venv`), Justfile for tasks
 - Lint/format: Ruff (line-length 120; comprehensive rules in pyproject.toml)
 - Type checking: ty
@@ -90,7 +107,7 @@ This project follows modern REST API best practices:
 #### Response Conventions
 
 - Return resources directly without wrapper envelopes
-- POST endpoints return 201 Created with `Location` header
+- POST endpoints return 201 Created; persistent resource creation includes a `Location` header
 - DELETE endpoints return 204 No Content
 - All timestamps use ISO 8601 format with UTC timezone and explicit milliseconds (e.g., `2025-01-15T10:30:00.000Z`)
 
@@ -119,7 +136,7 @@ Errors use RFC 9457 Problem Details format via `fastapi-problem`:
 
 ```json
 {
-  "type": "about:blank",
+  "$schema": "https://api.example.com/schemas/ProblemResponse.json",
   "title": "Not Found",
   "status": 404,
   "detail": "Profile not found"
@@ -133,11 +150,15 @@ Define domain exceptions using fastapi-problem base classes:
 from fastapi_problem.error import ConflictProblem, NotFoundProblem
 
 class ProfileNotFoundError(NotFoundProblem):
-    """Raised when a profile cannot be found."""
+    """
+    Raised when a profile cannot be found.
+    """
     title = "Profile not found"
 
 class ProfileAlreadyExistsError(ConflictProblem):
-    """Raised when attempting to create a duplicate profile."""
+    """
+    Raised when attempting to create a duplicate profile.
+    """
     title = "Profile already exists"
 ```
 
@@ -147,17 +168,17 @@ Register the exception handler in `main.py`:
 from fastapi_problem.handler import add_exception_handler
 from app.core.exception_handler import eh
 
-add_exception_handler(app, eh)
+add_exception_handler(fastapi_app, eh)
 ```
 
 Validation errors (422) use a structured format with `errors` array:
 
 ```json
 {
-  "type": "about:blank",
-  "title": "Validation Error",
+  "$schema": "https://api.example.com/schemas/ValidationProblemResponse.json",
+  "title": "Unprocessable Entity",
   "status": 422,
-  "detail": "Request validation failed",
+  "detail": "validation failed",
   "errors": [
     {"location": "body.email", "message": "value is not a valid email address", "value": "invalid"}
   ]
@@ -167,9 +188,9 @@ Validation errors (422) use a structured format with `errors` array:
 #### Request Tracking (X-Request-ID)
 
 All requests include an `X-Request-ID` header:
-- Echoes client-provided ID or generates UUID v4
+- Echoes a valid client-provided ID or generates a 128-bit random ID
 - Appears in all responses including errors
-- Implemented via `RequestContextLogMiddleware` and exception handler hooks
+- Implemented by the outer `fastapi-request-observability` `RequestContextMiddleware` wrapper
 
 #### Content Negotiation (JSON/CBOR)
 
@@ -263,9 +284,9 @@ class ItemList(BaseModel):
 
     schema_url: str | None = Field(
         default=None,
-        alias="$schema",
+        serialization_alias="$schema",
         description="JSON Schema URL for this response",
-        examples=["/schemas/ItemsData.json"],  # Use relative path in examples
+        examples=["/schemas/ItemList.json"],  # Use relative path in examples
     )
     items: list[Item] = Field(...)
     total: int = Field(...)
@@ -274,29 +295,33 @@ class ItemList(BaseModel):
 **Important**: Per JSON Schema spec, the `$schema` value MUST be an absolute URI with a scheme. Use `request.base_url` to build the full URL at runtime:
 
 ```python
+from app.core.schema_links import build_described_by_link, build_schema_url
+
 @router.get("")
 async def list_items(request: Request, response: Response) -> ItemList:
-    # Add describedBy Link header
-    response.headers["Link"] = '</schemas/ItemsData.json>; rel="describedBy"'
+    schema_path = "/schemas/ItemList.json"
+    response.headers["Link"] = build_described_by_link(schema_path)
     
     return ItemList(
-        schema_url=str(request.base_url) + "schemas/ItemsData.json",  # Absolute URL
+        schema_url=build_schema_url(request, schema_path),
         items=page_items,
         total=len(filtered_items),
     )
 ```
 
 - Field `examples` can use relative paths (documentation only)
-- Runtime `$schema` value must be absolute (e.g., `http://api.example.com/schemas/ItemsData.json`)
+- Runtime `$schema` value must be absolute (e.g., `http://api.example.com/schemas/ItemList.json`)
 - Also add `Link` header with `rel="describedBy"` for discoverability
 
 ---
 
 - FastAPI style
   - Use `async def` for I/O-bound endpoints and services.
-  - Validate inputs/outputs with Pydantic models; set `response_model` and explicit status codes.
+  - Validate inputs/outputs with Pydantic models; use a precise return annotation or explicit `response_model`, plus
+    explicit non-default status codes.
   - Keep separate request/response models (no leaking internal fields).
-  - Raise `HTTPException` with clear messages; add contextual logging on failures.
+  - Raise domain-specific `fastapi-problem` exceptions for expected business failures. Use `HTTPException` only for
+    transport/framework failures without a domain exception; log unexpected failures with safe context.
   - Keep routers thin; put business logic in `services/` and shared logic in `core/`.
   - **Use lifespan context manager** for app startup/shutdown. Initialize Firebase and logging on startup; close async clients on shutdown:
     ```python
@@ -309,22 +334,21 @@ async def list_items(request: Request, response: Response) -> ItemList:
         Application lifespan manager.
         """
         # Startup
-        setup_logging()
+        configure_logging()
         initialize_firebase()
         yield
         # Shutdown
         await close_async_firestore_client()
 
-    app = FastAPI(lifespan=lifespan, ...)
+    fastapi_app = FastAPI(lifespan=lifespan, ...)
     ```
-  - **Middleware order matters**: Last added = outermost (first to run on request). Order in `main.py`:
-    1. CORS (innermost) - handles preflight
-    2. BodySizeLimitMiddleware - reject oversized requests early
-    3. SecurityHeadersMiddleware - add security headers to responses
-    4. RequestContextLogMiddleware (outermost) - capture full request lifecycle
+  - **Middleware order matters**: `main.py` explicitly wraps the completed `fastapi_app` so final recovery responses
+    pass through the response-wide middleware. The request flow is RequestContext → SecurityHeaders → AccessLog →
+    CORS (when configured) → BodySizeLimit → FastAPI. Keep dependency overrides and OpenAPI inspection on
+    `fastapi_app`; send test and production traffic to the exported outer `app`.
   - **Always add meaningful docstrings to endpoint functions.** Describe what the endpoint does, key behaviors, and notable error conditions. The docstring complements the decorator's `summary`/`description` by documenting implementation details for developers:
     ```python
-    async def create_profile(...) -> ProfileResponse:
+    async def create_profile(...) -> Profile:
         """
         Create a new profile for the authenticated user.
 
@@ -368,7 +392,7 @@ async def list_items(request: Request, response: Response) -> ItemList:
         profile_data: ProfileCreate,
         current_user: CurrentUser,
         service: ProfileServiceDep,
-    ) -> ProfileResponse:
+    ) -> Profile:
     ```
 
 - Pydantic schemas (`app/models/`)
@@ -400,13 +424,15 @@ async def list_items(request: Request, response: Response) -> ItemList:
         created_at: UtcDatetime = Field(...)
         updated_at: UtcDatetime = Field(...)
     ```
-  - **Use `serialize_by_alias=True`** for models with field aliases (e.g., `alias="$schema"`). This ensures `model_dump()` uses aliases by default, matching FastAPI's `response_model_by_alias=True` behavior. This setting was introduced in Pydantic v2.11 and will default to `True` in v3:
+  - **Use `serialize_by_alias=True`** for models with output aliases (for example,
+    `serialization_alias="$schema"`). This ensures `model_dump()` uses aliases by default, matching FastAPI's
+    `response_model_by_alias=True` behavior:
     ```python
     class HealthResponse(BaseModel):
         model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
-        schema_url: str | None = Field(default=None, alias="$schema", ...)
-        message: str = Field(...)
+        schema_url: str | None = Field(default=None, serialization_alias="$schema", ...)
+        status: Literal["healthy"] = Field(...)
     ```
   - Use `from_attributes=True` for models that need to be constructed from ORM-like objects or dataclasses.
   - Use Pydantic v2 `.model_dump()` for serialization instead of deprecated `.dict()`. Use `exclude_unset=True` for partial updates.
@@ -452,32 +478,49 @@ async def list_items(request: Request, response: Response) -> ItemList:
 
 - Schema naming conventions
   - **Never reuse a response model as a request body.** Keep request and response models strictly separate.
-  - Use consistent naming to distinguish request vs response models:
+  - Use consistent, purpose-revealing names. Match the current project patterns:
     | Purpose | Naming Pattern | Example |
     |---------|----------------|---------|
     | Base class (internal) | `{Resource}Base` | `ProfileBase` |
     | Create request | `{Resource}Create` | `ProfileCreate` |
     | Update request | `{Resource}Update` | `ProfileUpdate` |
-    | Standard response | `{Resource}Response` | `ProfileResponse` |
-    | Full entity (internal) | `{Resource}` | `Profile` |
-  - Avoid ambiguous names; always indicate request or response purpose.
+    | Resource response | `{Resource}` | `Profile` |
+    | Specialized response | Semantic suffix | `HealthResponse`, `ItemList` |
+  - Avoid ambiguous names and never use a response model as a writable persistence/input model.
 
 - Shared type aliases (`app/models/types.py`)
   - Use predefined type aliases for common constrained strings instead of inline constraints. Create `app/models/types.py` for reusable types:
     ```python
     # app/models/types.py
-    from datetime import datetime
+    from datetime import UTC, datetime
     from typing import Annotated
     from pydantic import AfterValidator, EmailStr, PlainSerializer, StringConstraints
 
     def _serialize_datetime_ms(value: datetime) -> str:
-        """Serialize datetime with explicit milliseconds (.000Z format)."""
+        """
+        Serialize datetime with explicit milliseconds.
+        """
         return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
 
+    def _normalize_utc_datetime(value: datetime) -> datetime:
+        """
+        Require timezone awareness and normalize a datetime to UTC.
+        """
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("datetime must include timezone information")
+        return value.astimezone(UTC)
+
     # UTC datetime with consistent .000Z milliseconds format
-    UtcDatetime = Annotated[datetime, PlainSerializer(_serialize_datetime_ms)]
+    UtcDatetime = Annotated[
+        datetime,
+        AfterValidator(_normalize_utc_datetime),
+        PlainSerializer(_serialize_datetime_ms),
+    ]
 
     def normalize_email(email: str) -> str:
+        """
+        Normalize an email for consistent storage.
+        """
         return email.lower().strip()
 
     # Normalized email (lowercase, stripped)
@@ -489,11 +532,6 @@ async def list_items(request: Request, response: Response) -> ItemList:
         StringConstraints(min_length=8, max_length=16, pattern=r"^\+[1-9]\d{6,14}$", strip_whitespace=True),
     ]
 
-    # ISO 639-1 language codes (e.g., "en", "fi")
-    LanguageCode = Annotated[str, StringConstraints(min_length=2, max_length=2, pattern=r"^[a-z]{2}$")]
-
-    # ISO 3166-1 alpha-2 country codes (e.g., "US", "FI")
-    CountryCode = Annotated[str, StringConstraints(min_length=2, max_length=2, pattern=r"^[A-Z]{2}$")]
     ```
   - Usage in models:
     ```python
@@ -511,50 +549,31 @@ async def list_items(request: Request, response: Response) -> ItemList:
   - **When NOT to use shared types**: If validation is one-off or needs context-specific error messages, keep inline.
 
 - Domain exceptions (`app/exceptions/`)
-  - Define domain exceptions using `fastapi-problem` base classes:
-    ```python
-    # app/exceptions/base.py
-    from fastapi_problem.error import (
-        BadRequestProblem,
-        ConflictProblem,
-        ForbiddenProblem,
-        NotFoundProblem,
-        ServerProblem,
-        UnauthorisedProblem,
-        UnprocessableProblem,
-    )
-
-    __all__ = [
-        "BadRequestProblem",
-        "ConflictProblem",
-        "ForbiddenProblem",
-        "NotFoundProblem",
-        "ServerProblem",
-        "UnauthorisedProblem",
-        "UnprocessableProblem",
-    ]
-    ```
-  - Create resource-specific exceptions:
+  - Create resource-specific exceptions directly from the narrowest `fastapi-problem` base class:
     ```python
     # app/exceptions/profile.py
     from fastapi_problem.error import ConflictProblem, NotFoundProblem
 
     class ProfileNotFoundError(NotFoundProblem):
-        """Raised when a profile cannot be found."""
+        """
+        Raised when a profile cannot be found.
+        """
         title = "Profile not found"
 
     class ProfileAlreadyExistsError(ConflictProblem):
-        """Raised when attempting to create a duplicate profile."""
+        """
+        Raised when attempting to create a duplicate profile.
+        """
         title = "Profile already exists"
     ```
   - Exception handling is centralized via `app/core/exception_handler.py`:
     - Uses `fastapi-problem` singleton `eh` with pre/post hooks
     - Handles validation errors with structured format via `validation_error_handler`
-    - Adds `X-Request-ID` to all error responses
+    - Relies on the outer `RequestContextMiddleware` wrapper to add `X-Request-ID` to final error responses
     - Adds `$schema` field and `Link` header with `rel="describedBy"` to all error responses via `schema_link_post_hook`
     - Supports CBOR error responses via `CBORProblemPostHook`
     - Strips extras from 5xx errors in production via `StripExtrasPostHook`
-  - Register handlers in `main.py`: `add_exception_handler(app, eh)`
+  - Register handlers in `main.py`: `add_exception_handler(fastapi_app, eh)`
   - Import exceptions from the package root:
     ```python
     from app.exceptions import ProfileNotFoundError, ProfileAlreadyExistsError
@@ -569,7 +588,7 @@ async def list_items(request: Request, response: Response) -> ItemList:
   - Do not log secrets or PII. Redact sensitive fields in logs.
 
 - Error handling & logging
-  - Use `app/middleware/logging.py` configuration. Include request context where useful.
+  - Use `app/core/logging.py` configuration and standard-library module loggers. Request context is injected by `fastapi-request-observability`.
   - Wrap critical paths in try/except with actionable messages; avoid silencing exceptions.
   - **Structured logging with `extra={}`**: Always use `extra={}` dict for contextual data instead of `%s` formatting. This ensures proper JSON structured logging for Cloud Logging:
     ```python
@@ -600,15 +619,17 @@ async def list_items(request: Request, response: Response) -> ItemList:
         logger.error("Failed to create profile", extra={"error": str(e)})
     ```
   - **Exception binding (`as e`)**: Use `except Exception:` (no binding) when you only need to log and re-raise. Use `except Exception as e:` only when you need to access the exception object (e.g., check attributes or chain with `raise ... from e`).
-  - **Audit logging**: Use `log_audit_event()` from `app.middleware` for security-relevant operations (create, update, delete). This creates structured audit logs for Cloud Logging:
+  - **Audit logging**: Log security-relevant mutations with a structured `audit` field from the service module:
     ```python
-    from app.middleware import log_audit_event
+    import logging
 
-    # In service layer after successful operation
-    log_audit_event("create", user_id, "profile", user_id, "success")
-    log_audit_event("delete", user_id, "profile", resource_id, "success", details={"reason": "user_request"})
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Audit event",
+        extra={"audit": {"action": "create", "user_id": user_id, "resource_type": "profile", "resource_id": user_id, "result": "success"}},
+    )
     ```
-  - The `app.middleware` package exports: `BodySizeLimitMiddleware`, `CloudRunJSONFormatter`, `RequestContextLogMiddleware`, `SecurityHeadersMiddleware`, `get_logger`, `log_audit_event`, and `setup_logging`.
+  - The `app.middleware` package exports only app-specific middleware: `BodySizeLimitMiddleware` and `SecurityHeadersMiddleware`.
 
 - Testing & testability
   - **NEVER add test-related code to production code.** No `if testing:` branches, no test flags, no mock injection points.
@@ -662,7 +683,7 @@ async def list_items(request: Request, response: Response) -> ItemList:
    - `just test` — Unit + integration tests (CI-compatible)
    - `just test-unit` — Unit tests only
    - `just test-integration` — Integration tests only
-   - `just test-e2e` — E2E tests (requires `just emulators` running)
+   - `just test-e2e` — E2E tests (runs with emulators, or skips when they are unavailable)
    - `just test-all` — All tests including E2E
    - `just cov` — Coverage report (html/json)
 
@@ -677,7 +698,7 @@ async def list_items(request: Request, response: Response) -> ItemList:
   ```python
   # Correct - include model for all status codes (2XX and errors)
   responses={
-      200: {"model": ItemResponse, "description": "Item retrieved successfully"},
+      200: {"model": ItemList, "description": "Items retrieved successfully"},
       404: {"model": ProblemResponse, "description": "Not found"},
   }
 
@@ -693,12 +714,12 @@ FastAPI uses return type annotations as implicit `response_model`. You can omit 
 ```python
 # Preferred - return type serves as response_model
 @router.get("")
-async def get_profile(current_user: CurrentUser) -> ProfileResponse:
+async def get_profile(current_user: CurrentUser) -> Profile:
     ...
 
 # Also valid - explicit response_model (useful for response_model_exclude_unset)
-@router.patch("", response_model=ProfileResponse, response_model_exclude_unset=True)
-async def update_profile(...) -> ProfileResponse:
+@router.patch("", response_model=Profile, response_model_exclude_unset=True)
+async def update_profile(...) -> Profile:
     ...
 ```
 
@@ -706,7 +727,7 @@ Use explicit `response_model=` when you need additional options like `response_m
 
 ### Operation ID Naming Convention
 
-Use stable `operation_id` values with the pattern `<area>_<resource>_<action>` for consistent client SDK generation:
+Use stable `operation_id` values with the pattern `<resource>_<action>` for consistent client SDK generation:
 ```python
 @router.post("", operation_id="profile_create", ...)
 @router.get("", operation_id="profile_get", ...)
@@ -744,7 +765,7 @@ All API routes must use Pydantic response models for type safety and OpenAPI doc
 2. `responses={}` dict with:
    - Success status code (200/201) with `model=` and `description` for clear OpenAPI docs
    - **204 No Content**: Omit `model=` (HTTP spec prohibits body); only `description` is required
-   - Error status codes (400, 401, 403, 404, 409, 500) with `model=ProblemResponse`
+   - Every reachable error status with `ProblemResponse`, or `ValidationProblemResponse` for structured validation
 
 **Example with 2XX success response:**
 ```python
@@ -753,11 +774,11 @@ All API routes must use Pydantic response models for type safety and OpenAPI doc
     status_code=status.HTTP_201_CREATED,
     operation_id="profile_create",
     responses={
-        201: {"model": ProfileResponse, "description": "Profile created successfully"},
+        201: {"model": Profile, "description": "Profile created successfully"},
         409: {"model": ProblemResponse, "description": "Profile already exists"},
     },
 )
-async def create_profile(...) -> ProfileResponse:
+async def create_profile(...) -> Profile:
     ...
 ```
 
@@ -765,12 +786,12 @@ async def create_profile(...) -> ProfileResponse:
 ```python
 @router.patch(
     "",
-    response_model=ProfileResponse,
+    response_model=Profile,
     response_model_exclude_unset=True,
     operation_id="profile_update",
     responses={...},
 )
-async def update_profile(...) -> ProfileResponse:
+async def update_profile(...) -> Profile:
     ...
 ```
 
@@ -801,16 +822,18 @@ async def delete_profile(...) -> None:
 
 ## Project Structure
 
+- `.agents/skills/` — Reusable project-specific agent skills with Codex UI metadata
+- `.github/agents/` — GitHub Copilot custom-agent profiles
 - `app/` — FastAPI app:
   - `api/` — API route definitions with versioning:
     - `__init__.py` — Exports `v1_router` (versioned prefix `/v1`) containing `profile`, `hello`, `items` routers
     - `health.py`, `schemas.py` — Unversioned routes at `/health`, `/schemas`
     - `profile.py`, `hello.py`, `items.py` — Business endpoint routers (mounted under `/v1/`)
   - `auth/` — Firebase authentication (`verify_firebase_token`, `FirebaseUser`, `security` HTTPBearer scheme)
-  - `core/` — Configuration (`config.py`), Firebase initialization (`firebase.py`), exception handler (`exception_handler.py`), CBOR support (`cbor.py`), validation (`validation.py`), shared constants (`constants.py`)
+  - `core/` — Configuration (`config.py`), logging setup (`logging.py`), Firebase initialization (`firebase.py`), exception handler (`exception_handler.py`), CBOR support (`cbor.py`), validation (`validation.py`), shared constants (`constants.py`)
   - `dependencies.py` — Dependency injection aliases (`CurrentUser`, `ProfileServiceDep`, service providers)
-  - `exceptions/` — Domain exceptions using `fastapi-problem` (`base.py` re-exports, resource-specific in `profile.py`, `schema.py`)
-  - `middleware/` — ASGI middleware (body limit, logging with W3C traceparent correlation, security headers); exports `log_audit_event`, `setup_logging`, `get_logger`
+  - `exceptions/` — Domain exceptions using `fastapi-problem` (resource-specific in `profile.py` and `schema.py`)
+  - `middleware/` — App-specific ASGI middleware for body limits and security headers; request correlation and access logging come from `fastapi-request-observability`
   - `models/` — Pydantic schemas organized by domain subdirectories:
     - `profile/` — `requests.py` (ProfileCreate, ProfileUpdate), `responses.py` (Profile, PROFILE_COLLECTION)
     - `health/`, `hello/`, `items/` — Similar structure with domain-specific models
@@ -819,12 +842,40 @@ async def delete_profile(...) -> None:
   - `pagination/` — Cursor-based pagination utilities (`cursor.py`, `link.py`, `paginator.py`, `params.py`)
   - `services/` — Business logic organized by domain subdirectories:
     - `profile/` — `service.py` containing ProfileService with async Firestore operations
-- `tests/` — unit and integration tests
+- `tests/` — unit, integration, and Firebase emulator E2E tests
 - `functions/` — Firebase Cloud Functions (Python 3.14) codebase (`main.py`, its own `pyproject.toml`)
 - `Justfile` — dev/test/build tasks
 - `pyproject.toml` — dependencies and tool configs (Ruff, ty, pytest, coverage)
 
 Keep routers focused on I/O and validation; put domain logic in `services/`; keep shared configuration/utilities in `core/`.
+
+Repository-wide instructions live in this file. Task-specific, portable skills live at
+`.agents/skills/<skill-name>/SKILL.md`. GitHub Copilot custom-agent profiles remain in `.github/agents/` because that is
+the product's supported discovery location.
+
+The repository follows these upstream conventions:
+
+- [AGENTS.md](https://github.com/agentsmd/agents.md) is the canonical open format for repository agent instructions,
+  stewarded by the Agentic AI Foundation under the Linux Foundation.
+- [Agent Skills](https://github.com/agentskills/agentskills) is the canonical specification and documentation source for
+  `SKILL.md` and its frontmatter. The rendered [format specification](https://agentskills.io/specification) provides the
+  detailed schema, while [GitHub's Agent Skills documentation](https://docs.github.com/en/copilot/concepts/agents/about-agent-skills)
+  lists `.agents/skills/` as a supported project discovery location.
+
+Each skill keeps Codex UI metadata in `agents/openai.yaml`; regenerate it with the `skill-creator` tooling whenever a
+skill name, description, or default prompt changes.
+
+Use `openapi-contract` for public API contract work and `readme-maintenance` for README audits. Keep repository-wide
+rules here rather than creating skills for individual file types or implementation details.
+
+| Name | Location | Purpose |
+|---|---|---|
+| `fastapi-endpoint` | `.agents/skills/fastapi-endpoint/` | Implement or change FastAPI endpoints |
+| `firestore-service` | `.agents/skills/firestore-service/` | Implement async Firestore service behavior |
+| `openapi-contract` | `.agents/skills/openapi-contract/` | Maintain generated OpenAPI and schema-discovery contracts |
+| `pytest-testing` | `.agents/skills/pytest-testing/` | Write and review tests at the appropriate boundary |
+| `readme-maintenance` | `.agents/skills/readme-maintenance/` | Reconcile README claims with the repository |
+| `security-review` | `.github/agents/security-review.agent.md` | Run a read-only GitHub Copilot security audit |
 
 ### Monorepo Considerations (FastAPI app + Cloud Functions)
 
@@ -840,12 +891,14 @@ When adding features, decide if logic belongs in the FastAPI service (`app/`) or
 
 Cloud Functions specifics:
 - Runtime pinned via `firebase.json` (`python314`, region `europe-west4`).
-- Global scaling options in `functions/main.py` (memory 128MB; env-param `MIN_INSTANCES` default 0, `MAX_INSTANCES` default 2).
+- Global runtime options in `functions/main.py` (memory 512MB; `TIMEOUT_SEC`, `MIN_INSTANCES`, and `MAX_INSTANCES`
+  defaults 120, 0, and 2).
 - Dependencies managed via `functions/pyproject.toml`; uses uv by default on Python 3.14+. Keep deps lean to reduce cold starts.
 - Add new functions by decorating callables with `@https_fn.on_request()` (or other trigger types) inside `functions/main.py` (or split into modules imported by `main.py`).
 - Deployment: `firebase deploy --only functions`.
 - Emulator: `firebase emulators:start --only functions` (ports defined in `firebase.json`).
-- Vertex / Generative AI support is optional—uncomment and configure client if needed.
+- The current function uses Genkit with Vertex AI and exports GCP telemetry outside local development.
+- The Functions emulator still calls Vertex AI and therefore requires ADC, network access, IAM, and quota.
 
 Agent guidance:
 1. If a change affects shared domain logic used by both environments, refactor into a neutral module under a new `shared/` or reuse `app/services/` only if no Firebase-only dependencies leak in.
@@ -854,7 +907,8 @@ Agent guidance:
 4. Keep environment variables documented in the top-level README when introducing new cross-environment config.
 5. For tests of logic used in functions, write pure unit tests under `tests/unit/` that import the shared module—not the Firebase runtime wrapper—to avoid emulator coupling.
 
-CI note: Currently CI focuses on the FastAPI app; if functions gain complex logic, add a lightweight import test (e.g., ensure `functions/main.py` loads) and possibly a dry-run deployment script.
+CI type-checks the separate Functions project and runs app unit/integration coverage. Emulator E2E tests remain
+local. Add focused Functions tests before expanding function behavior further.
 
 ---
 
@@ -867,7 +921,7 @@ CI note: Currently CI focuses on the FastAPI app; if functions gain complex logi
 | `just test`             | Run unit + integration tests (CI-compatible)        |
 | `just test-unit`        | Run unit tests only                                 |
 | `just test-integration` | Run integration tests only                          |
-| `just test-e2e`         | Run E2E tests (requires Firebase emulators)         |
+| `just test-e2e`         | Run or skip E2E tests based on emulator availability |
 | `just test-all`         | Run all tests including E2E                         |
 | `just cov`              | Run tests with coverage (html report to `htmlcov/`) |
 | `just emulators`        | Start Firebase emulators for E2E tests              |
@@ -905,7 +959,8 @@ CI note: Currently CI focuses on the FastAPI app; if functions gain complex logi
 | Command                 | Purpose                                             |
 | ----------------------- | --------------------------------------------------- |
 | `just install`          | Sync dependencies with uv                           |
-| `just update`           | Upgrade dependencies with uv                        |
+| `just install-functions` | Sync the independent Functions environment         |
+| `just update`           | Upgrade root and Functions dependencies             |
 | `just clean`            | Remove caches and temporary files                   |
 | `just fresh`            | Clean and reinstall                                 |
 
@@ -927,6 +982,7 @@ Checklist for PRs
 - [ ] Tests added/updated and passing locally (`just check`)
 - [ ] Coverage meets target (aim ≥90%)
 - [ ] Lint/type checks clean (Ruff/ty)
+- [ ] `just typing-functions` passes when `functions/` changes
 - [ ] API responses/docs accurate (response models, codes, examples)
 
 ---
@@ -939,12 +995,10 @@ Checklist for PRs
 - Typical env vars
   - `ENVIRONMENT`, `DEBUG`
   - `GOOGLE_APPLICATION_CREDENTIALS` (path to service account JSON)
-  - `FIREBASE_PROJECT_ID` (also used for trace correlation; `GCP_PROJECT_ID` deprecated)
-  - `FIREBASE_PROJECT_NUMBER` (optional, for project number reference)
+  - `FIREBASE_PROJECT_ID`
   - `FIRESTORE_DATABASE` (optional, Firestore database ID; defaults to `(default)`)
   - `MAX_REQUEST_SIZE_BYTES` (default 1,000,000; maximum request body size)
   - `CORS_ORIGINS` (JSON array or comma-separated list of allowed origins)
-  - `SECRET_MANAGER_ENABLED` (default true; enable/disable Secret Manager)
 ---
 
 ## CI Required Checks (recommended)
@@ -952,6 +1006,7 @@ Checklist for PRs
 Per change, run and require the following for green status:
 - Lint/format: `just lint`
 - Typecheck: `just typing`
+- Functions typecheck: `just typing-functions` when `functions/` changes
 - Tests: `just test` (or `just cov`) with coverage thresholds enforced
 - Optional: container build and a basic smoke test (if Dockerized deployment is in use)
 
