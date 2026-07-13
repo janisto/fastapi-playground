@@ -607,6 +607,20 @@ class TestNegotiateResponseMediaType:
         assert negotiate_response_media_type(PROBLEM_JSON, problem=True) == PROBLEM_JSON
         assert negotiate_response_media_type(PROBLEM_CBOR, problem=True) == PROBLEM_CBOR
 
+    def test_problem_media_types_select_the_corresponding_success_family(self) -> None:
+        """
+        Allow a route to reach its error handler when a problem media type is requested.
+        """
+        assert negotiate_response_media_type(PROBLEM_JSON) == JSON_MEDIA_TYPE
+        assert negotiate_response_media_type(PROBLEM_CBOR) == CBOR_MEDIA_TYPE
+
+    def test_can_disable_cbor_for_json_only_routes(self) -> None:
+        """
+        Reject CBOR success negotiation for JSON-only routes.
+        """
+        assert negotiate_response_media_type(JSON_MEDIA_TYPE, allow_cbor=False) == JSON_MEDIA_TYPE
+        assert negotiate_response_media_type(CBOR_MEDIA_TYPE, allow_cbor=False) is None
+
 
 class TestContentTypeMatches:
     """Tests for content_type_matches function."""

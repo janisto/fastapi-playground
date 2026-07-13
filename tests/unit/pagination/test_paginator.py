@@ -311,6 +311,23 @@ class TestPaginateCursorNavigation:
                 base_url="/items",
             )
 
+    def test_empty_cursor_value_raises_error(self) -> None:
+        """
+        Verify an externally supplied empty cursor value is rejected.
+        """
+        items = create_items(10)
+        cursor = Cursor(type="item", value="").encode()
+
+        with pytest.raises(InvalidCursorError, match="cursor value cannot be empty"):
+            paginate(
+                items=items,
+                cursor=cursor,
+                limit=3,
+                cursor_type="item",
+                get_id=get_mock_id,
+                base_url="/items",
+            )
+
     def test_full_pagination_traversal(self) -> None:
         """Verify complete traversal through all pages."""
         items = create_items(12)
@@ -395,6 +412,8 @@ class TestPaginateLinkHeader:
         assert second_result.link_header is not None
         assert 'rel="prev"' in second_result.link_header
         assert 'rel="next"' in second_result.link_header
+        prev_link = next(link for link in second_result.link_header.split(", ") if 'rel="prev"' in link)
+        assert "cursor=" not in prev_link
 
     def test_link_header_includes_base_url(self) -> None:
         """Verify Link header includes the base URL."""

@@ -2,7 +2,8 @@
 Profile request models.
 """
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.experimental.missing_sentinel import MISSING
 
 from app.models.types import NormalizedEmail, Phone
 
@@ -73,44 +74,34 @@ class ProfileUpdate(BaseModel):
     Model for updating an existing profile.
     """
 
-    firstname: str | None = Field(
-        None,
+    firstname: str | MISSING = Field(
+        MISSING,
         min_length=1,
         max_length=100,
         description="First name",
         examples=["John"],
     )
-    lastname: str | None = Field(
-        None,
+    lastname: str | MISSING = Field(
+        MISSING,
         min_length=1,
         max_length=100,
         description="Last name",
         examples=["Doe"],
     )
-    email: NormalizedEmail | None = Field(
-        None,
+    email: NormalizedEmail | MISSING = Field(
+        MISSING,
         description="Email address (auto-lowercased)",
         examples=["user@example.com"],
     )
-    phone_number: Phone | None = Field(
-        None,
+    phone_number: Phone | MISSING = Field(
+        MISSING,
         description="Phone number",
         examples=["+358401234567"],
     )
-    marketing: bool | None = Field(
-        None,
+    marketing: bool | MISSING = Field(
+        MISSING,
         description="Marketing opt-in",
         examples=[False],
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def reject_explicit_nulls(cls, value: object) -> object:
-        """
-        Reject explicit nulls while allowing fields to be omitted.
-        """
-        if isinstance(value, dict) and any(field_value is None for field_value in value.values()):
-            raise ValueError("profile update fields cannot be null")
-        return value
 
     model_config = ConfigDict(extra="forbid")

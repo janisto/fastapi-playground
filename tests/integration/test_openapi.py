@@ -86,9 +86,25 @@ def test_health_contract_remains_json_only() -> None:
     """
     Verify the liveness endpoint does not advertise unsupported CBOR success responses.
     """
-    response = fastapi_app.openapi()["paths"]["/health"]["get"]["responses"]["200"]
+    responses = fastapi_app.openapi()["paths"]["/health"]["get"]["responses"]
 
-    assert set(response["content"]) == {"application/json"}
+    assert set(responses["200"]["content"]) == {"application/json"}
+    assert set(responses["406"]["content"]) == {
+        "application/problem+json",
+        "application/problem+cbor",
+    }
+
+
+def test_profile_update_schema_rejects_null_without_requiring_fields() -> None:
+    """
+    Verify PATCH fields are omissible but are not documented as nullable.
+    """
+    schema = fastapi_app.openapi()["components"]["schemas"]["ProfileUpdate"]
+
+    assert "required" not in schema
+    for field_schema in schema["properties"].values():
+        assert field_schema.get("type") != "null"
+        assert {variant.get("type") for variant in field_schema.get("anyOf", [])} <= {"string", "boolean"}
 
 
 def test_response_headers_match_runtime_contract() -> None:

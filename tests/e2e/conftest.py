@@ -57,16 +57,23 @@ def require_emulators() -> None:
 @pytest.fixture(autouse=True)
 def clear_emulator_data() -> Generator[None]:
     """
-    Clear Firestore emulator data after each test.
+    Clear Firestore emulator data before and after each test.
 
     Ensures test isolation by removing all documents.
     """
-    yield
-    with contextlib.suppress(httpx2.RequestError):
-        httpx2.delete(
-            f"http://{FIRESTORE_HOST}/emulator/v1/projects/{PROJECT_ID}/databases/(default)/documents",
-            timeout=5.0,
-        )
+
+    def clear() -> None:
+        with contextlib.suppress(httpx2.RequestError):
+            httpx2.delete(
+                f"http://{FIRESTORE_HOST}/emulator/v1/projects/{PROJECT_ID}/databases/(default)/documents",
+                timeout=5.0,
+            )
+
+    clear()
+    try:
+        yield
+    finally:
+        clear()
 
 
 @pytest.fixture

@@ -226,16 +226,12 @@ class TestProfileUpdate:
     Tests for ProfileUpdate model (partial updates).
     """
 
-    def test_all_fields_optional(self) -> None:
+    def test_all_fields_can_be_omitted(self) -> None:
         """
-        Verify all fields are optional for partial updates.
+        Verify all fields can be omitted for partial updates.
         """
         profile = ProfileUpdate()
-        assert profile.firstname is None
-        assert profile.lastname is None
-        assert profile.email is None
-        assert profile.phone_number is None
-        assert profile.marketing is None
+        assert profile.model_dump() == {}
 
     def test_partial_update(self) -> None:
         """
@@ -243,7 +239,7 @@ class TestProfileUpdate:
         """
         profile = ProfileUpdate(firstname="Jane")
         assert profile.firstname == "Jane"
-        assert profile.lastname is None
+        assert profile.model_dump() == {"firstname": "Jane"}
 
     def test_email_is_normalized(self) -> None:
         """
@@ -272,7 +268,7 @@ class TestProfileUpdate:
         """
         Verify null cannot silently become an omitted partial update.
         """
-        with pytest.raises(ValidationError, match="profile update fields cannot be null"):
+        with pytest.raises(ValidationError):
             ProfileUpdate.model_validate({field: None})
 
     def test_invalid_email_raises(self) -> None:

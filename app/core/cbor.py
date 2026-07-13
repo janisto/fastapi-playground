@@ -136,7 +136,12 @@ def _media_type_quality(accept_header: str, media_type: str, *, explicit_only: b
     return best_quality
 
 
-def negotiate_response_media_type(accept_header: str, *, problem: bool = False) -> str | None:
+def negotiate_response_media_type(
+    accept_header: str,
+    *,
+    problem: bool = False,
+    allow_cbor: bool = True,
+) -> str | None:
     """
     Select the preferred supported response media type.
 
@@ -146,10 +151,14 @@ def negotiate_response_media_type(accept_header: str, *, problem: bool = False) 
     if not accept_header:
         return PROBLEM_JSON if problem else JSON_MEDIA_TYPE
 
-    json_types = (PROBLEM_JSON, JSON_MEDIA_TYPE) if problem else (JSON_MEDIA_TYPE,)
-    cbor_types = (PROBLEM_CBOR, CBOR_MEDIA_TYPE) if problem else (CBOR_MEDIA_TYPE,)
+    json_types = (PROBLEM_JSON, JSON_MEDIA_TYPE)
+    cbor_types = (PROBLEM_CBOR, CBOR_MEDIA_TYPE)
     json_quality = max(_media_type_quality(accept_header, media_type) for media_type in json_types)
-    cbor_quality = max(_media_type_quality(accept_header, media_type, explicit_only=True) for media_type in cbor_types)
+    cbor_quality = (
+        max(_media_type_quality(accept_header, media_type, explicit_only=True) for media_type in cbor_types)
+        if allow_cbor
+        else 0.0
+    )
 
     if json_quality <= 0 and cbor_quality <= 0:
         return None
@@ -240,8 +249,9 @@ class NotAcceptableHTTPException(HTTPException):
     HTTPException for unsupported Accept headers.
     """
 
-    def __init__(self) -> None:
-        super().__init__(status_code=406, detail="Supported response formats: application/json, application/cbor")
+    def __init__(self, *supported_media_types: str) -> None:
+        supported = supported_media_types or (JSON_MEDIA_TYPE, CBOR_MEDIA_TYPE)
+        super().__init__(status_code=406, detail=f"Supported response formats: {', '.join(supported)}")
 
 
 class CBORRequest(StarletteRequest):

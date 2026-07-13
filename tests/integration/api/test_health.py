@@ -2,6 +2,8 @@
 Integration tests for health endpoint.
 """
 
+import cbor2
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -61,3 +63,26 @@ class TestHealthEndpoint:
         response = client.get("/health")
 
         assert response.status_code == 200
+
+    @pytest.mark.parametrize(
+        ("accept", "problem_media_type"),
+        [
+            ("application/cbor", "application/problem+cbor"),
+            ("application/xml", "application/problem+json"),
+        ],
+    )
+    def test_rejects_unsupported_success_media_types(
+        self,
+        client: TestClient,
+        accept: str,
+        problem_media_type: str,
+    ) -> None:
+        """
+        Verify the JSON-only health representation enforces Accept negotiation.
+        """
+        response = client.get("/health", headers={"Accept": accept})
+
+        assert response.status_code == 406
+        assert response.headers["content-type"] == problem_media_type
+        body = cbor2.loads(response.content) if problem_media_type == "application/problem+cbor" else response.json()
+        assert body["detail"] == "Supported response formats: application/json"

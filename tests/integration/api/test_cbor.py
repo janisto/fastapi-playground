@@ -247,3 +247,35 @@ class TestCBORErrorResponse:
         assert decoded["detail"] == "validation failed"
         assert "errors" in decoded
         assert "$schema" not in decoded
+
+    def test_problem_cbor_accept_reaches_domain_error_handler(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify a problem-only CBOR request receives the domain error rather than 406.
+        """
+        from app.exceptions import ProfileNotFoundError
+
+        mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
+
+        response = client.get(BASE_URL, headers={"Accept": "application/problem+cbor"})
+
+        assert response.status_code == 404
+        assert response.headers["content-type"] == "application/problem+cbor"
+        assert cbor2.loads(response.content)["title"] == "Profile not found"
+
+    def test_problem_json_accept_reaches_authentication_error_handler(
+        self,
+        client: TestClient,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify a problem-only JSON request receives the authentication error rather than 406.
+        """
+        response = client.get(BASE_URL, headers={"Accept": "application/problem+json"})
+
+        assert response.status_code == 401
+        assert response.headers["content-type"] == "application/problem+json"

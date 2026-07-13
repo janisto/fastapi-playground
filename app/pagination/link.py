@@ -27,7 +27,9 @@ def build_link_header(
     if next_cursor:
         params = {**query_params, "cursor": next_cursor}
         links.append(f'<{base_url}?{urlencode(params)}>; rel="next"')
-    if prev_cursor:
-        params = {**query_params, "cursor": prev_cursor}
+    if prev_cursor is not None:
+        params = dict(query_params)
+        if prev_cursor:
+            params["cursor"] = prev_cursor
         links.append(f'<{base_url}?{urlencode(params)}>; rel="prev"')
     return ", ".join(links)

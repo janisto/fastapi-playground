@@ -191,6 +191,37 @@ class TestItemsPagination:
         assert body["title"] == "Bad Request"
         assert body["detail"] == "cursor references unknown item"
 
+    def test_cursor_with_empty_value_returns_error(self, client: TestClient) -> None:
+        """
+        Verify an empty item cursor value returns 400 Bad Request.
+        """
+        import base64
+
+        cursor_value = base64.b64encode(b"item:").decode("ascii")
+        response = client.get("/v1/items", params={"cursor": cursor_value, "limit": 5})
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "cursor value cannot be empty"
+
+    def test_second_page_previous_link_returns_first_page(self, client: TestClient) -> None:
+        """
+        Verify the first previous-page link does not require an empty cursor sentinel.
+        """
+        import re
+
+        first = client.get("/v1/items", params={"limit": 5})
+        next_match = re.search(r'<([^>]+)>;\s*rel="next"', first.headers["link"])
+        assert next_match
+
+        second = client.get(next_match.group(1))
+        previous_match = re.search(r'<([^>]+)>;\s*rel="prev"', second.headers["link"])
+        assert previous_match
+        assert "cursor=" not in previous_match.group(1)
+
+        previous = client.get(previous_match.group(1))
+        assert previous.status_code == 200
+        assert previous.json()["items"][0]["id"] == "item-001"
+
 
 class TestItemsFiltering:
     """Tests for category filtering on /v1/items."""
