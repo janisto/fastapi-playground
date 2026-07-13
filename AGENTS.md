@@ -37,9 +37,10 @@ just check
 ```
 
 `just check` verifies both projects, including the exact Functions requirements export. `just update` upgrades the root
-and Functions lockfiles and regenerates `functions/requirements.txt`. Both project manifests pin the uv version so the
-deployment export is identical on developer machines, Linux CI, and the container builder; update both pins and the
-builder tag, then regenerate together.
+and Functions lockfiles and regenerates `functions/requirements.txt`. Both project manifests enforce the minimum
+supported uv version while allowing newer releases. The Docker builder stays exactly versioned for reproducible image
+builds. When a newer uv release changes the export, regenerate it and review the diff; update the minimum version only
+when the repository starts relying on that release.
 
 ## Project structure and boundaries
 

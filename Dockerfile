@@ -15,7 +15,7 @@
 #     --automatic-updates
 
 # Builder image: includes uv for dependency management
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.2-python3.14-trixie-slim
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.28-python3.14-trixie-slim
 # Runtime image: minimal Python image without uv (not needed at runtime)
 ARG RUNTIME_IMAGE=python:3.14-slim-trixie
 # Version for OCI labels (injected at build time)
