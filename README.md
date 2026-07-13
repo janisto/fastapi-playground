@@ -78,7 +78,7 @@ API response instance.
 ## Requirements
 
 - Python 3.14+
-- [uv](https://docs.astral.sh/uv/) package manager
+- [uv](https://docs.astral.sh/uv/) package manager (the reproducible tool version is pinned in both project manifests)
 - [just](https://github.com/casey/just) command runner
 - Firebase project with Authentication and Firestore enabled
 - [Firebase CLI](https://firebase.google.com/docs/cli) for emulators and Functions deployment

@@ -155,7 +155,8 @@ The `dad_joke` HTTP function uses:
 - private IAM invocation; unauthenticated internet requests cannot consume model quota.
 
 Firebase deployment uses `functions/requirements.txt`, which is an exact export of the runtime dependency graph in
-`functions/uv.lock`. Run `just update` to refresh both and `just check-functions-requirements` to detect drift.
+`functions/uv.lock`. Both project manifests pin the uv version so this generated file is reproducible across macOS and
+Linux. Run `just update` to refresh both and `just check-functions-requirements` to detect drift.
 
 ```bash
 cd functions
