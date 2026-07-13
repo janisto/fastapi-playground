@@ -346,6 +346,7 @@ GitHub Actions workflows in `.github/workflows/`:
 | Workflow | Description |
 |----------|-------------|
 | `app-ci.yml` | App and Functions quality checks plus app test coverage |
+| `app-lint.yml` | Fast Ruff linting and formatting feedback |
 | `labeler.yml` | Automatic PR labeling |
 | `labeler-manual.yml` | Manual labeling for historical PRs |
 | `dependabot-auto-merge.yml` | Auto-merge Dependabot minor/patch updates |

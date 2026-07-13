@@ -44,6 +44,11 @@ direct Functions dependency, update both `functions/pyproject.toml` and the expo
 `just sync-functions-requirements`. Both project manifests enforce the minimum supported uv version while allowing newer
 releases. The Docker builder stays exactly versioned for reproducible image builds.
 
+GitHub Actions are coupled to active repository rules. Do not edit, rename, consolidate, remove, or add path filters to
+workflows or jobs before inspecting the GitHub rulesets and understanding which status-check contexts are required.
+The current default-branch rules require both `ci` and `lint`; preserve those job IDs unless the ruleset is deliberately
+updated in the same change. A missing or skipped required context blocks every PR even when all remaining checks pass.
+
 ## Project structure and boundaries
 
 - `app/api/`: HTTP transport and route metadata
