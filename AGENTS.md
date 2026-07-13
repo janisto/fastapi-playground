@@ -38,7 +38,8 @@ just check
 
 `just check` verifies both projects, including the exact Functions requirements export. `just update` upgrades the root
 and Functions lockfiles and regenerates `functions/requirements.txt`. Both project manifests pin the uv version so the
-deployment export is identical on developer machines and Linux CI; update both pins and regenerate together.
+deployment export is identical on developer machines, Linux CI, and the container builder; update both pins and the
+builder tag, then regenerate together.
 
 ## Project structure and boundaries
 
