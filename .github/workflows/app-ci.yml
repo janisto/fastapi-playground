@@ -34,7 +34,7 @@ jobs:
         run: just install
 
       - name: Install Functions dependencies
-        run: uv sync --project functions --locked
+        run: just install-functions
 
       - name: Run linting checks
         run: just lint
