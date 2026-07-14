@@ -4,6 +4,7 @@ Integration tests for items endpoint.
 
 import cbor2
 from fastapi.testclient import TestClient
+from pytest_mock import MockerFixture
 
 from app.pagination import MAX_CURSOR_LENGTH
 
@@ -359,6 +360,23 @@ class TestItemsInvalidCursor:
             "/v1/items",
             params={"cursor": "x" * (MAX_CURSOR_LENGTH + 1)},
         )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "cursor exceeds maximum length"
+
+    def test_oversized_cursor_does_not_escape_application(self, mocker: MockerFixture) -> None:
+        """Verify a handled cursor error does not propagate as a server exception."""
+        mocker.patch("app.main.initialize_firebase")
+        mocker.patch("app.main.configure_logging")
+        mocker.patch("app.main.close_async_firestore_client")
+
+        from app.main import app
+
+        with TestClient(app, raise_server_exceptions=True) as strict_client:
+            response = strict_client.get(
+                "/v1/items",
+                params={"cursor": "x" * (MAX_CURSOR_LENGTH + 1)},
+            )
 
         assert response.status_code == 400
         assert response.json()["detail"] == "cursor exceeds maximum length"

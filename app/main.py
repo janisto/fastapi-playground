@@ -28,6 +28,7 @@ from app.middleware import (
     BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from app.pagination import InvalidCursorError
 
 
 @asynccontextmanager
@@ -69,6 +70,9 @@ populate_schema_cache(openapi_schema)
 
 # Register RFC 9457 Problem Details exception handler
 add_exception_handler(fastapi_app, exception_handler)
+# This expected non-HTTP exception needs a specific registration so Starlette
+# handles it inside ExceptionMiddleware instead of re-raising it as a server error.
+fastapi_app.add_exception_handler(InvalidCursorError, exception_handler)
 
 settings = get_settings()
 application: ASGIApp = BodySizeLimitMiddleware(fastapi_app)
