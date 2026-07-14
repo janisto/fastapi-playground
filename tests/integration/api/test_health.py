@@ -67,7 +67,7 @@ class TestHealthEndpoint:
     @pytest.mark.parametrize(
         ("accept", "problem_media_type"),
         [
-            ("application/cbor", "application/problem+cbor"),
+            ("application/cbor", "application/cbor"),
             ("application/xml", "application/problem+json"),
         ],
     )
@@ -84,5 +84,5 @@ class TestHealthEndpoint:
 
         assert response.status_code == 406
         assert response.headers["content-type"] == problem_media_type
-        body = cbor2.loads(response.content) if problem_media_type == "application/problem+cbor" else response.json()
+        body = cbor2.loads(response.content) if problem_media_type == "application/cbor" else response.json()
         assert body["detail"] == "Supported response formats: application/json"

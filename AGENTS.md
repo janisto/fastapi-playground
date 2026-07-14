@@ -115,15 +115,46 @@ transport exceptions. Log unexpected failures with safe structured context and r
 
 ### Representations and negotiation
 
-- JSON is the default response representation.
-- CBOR is returned only when explicitly requested through `Accept`.
-- Client quality weights are honored; JSON is the server preference on ties.
-- An explicit `Accept` value that allows neither supported representation returns 406.
-- Problem Details media types do not authorize a success representation. A problem-only `Accept` value must return 406
-  before dependencies or endpoint code execute, especially for mutations.
+- Follow [RFC 9110 proactive negotiation](https://www.rfc-editor.org/rfc/rfc9110.html#section-12.5.1). JSON is the
+  default and the server preference on ties. CBOR is an optional secondary representation and is selected only by an
+  exact, positive-quality `application/cbor` range; `*/*` and `application/*` never opt a client into binary output.
+  Combine repeated `Accept` field lines. Parse q-values with the RFC grammar: `0` or `1` with zero to three fractional
+  digits (only zeroes after `1`), with no exponent, sign, or omitted leading zero. The available representations define
+  no media-type parameters, so a range with any other non-empty parameter does not match. Recognize `q` regardless of
+  parameter order. RFC 9110 removed the older accept-extension grammar after `q`; do not reintroduce it.
+- For a success response with a body, honor quality values and exact exclusions. If every available representation is
+  unacceptable, return 406 before FastAPI parses the body, resolves dependencies, or executes the endpoint. The outer
+  request-size guard may already have inspected or buffered the body. This ordering prevents a POST or PATCH mutation
+  when its success representation cannot be consumed.
+- A 204 response has no representation. Ignore `Accept` for such operations instead of blocking a successful DELETE.
 - Request bodies use `Content-Type: application/json` or `application/cbor`; unsupported body types return 415.
-- Errors use `application/problem+json` or `application/problem+cbor`.
-- The global request-size guard returns 413 without reading the remaining unbounded body.
+  Match request base types case-insensitively and ignore `Content-Type` parameters such as `charset`; this is distinct
+  from representation parameters in `Accept`.
+- Preserve the original error status. Use RFC 9457 `application/problem+json` by default and use registered
+  `application/cbor` only when the client explicitly prefers CBOR. If no requested error representation is available,
+  fall back to JSON rather than masking the original 4xx or 5xx with another 406. RFC 9110 permits this, and
+  [RFC 9457 explicitly demonstrates it](https://www.rfc-editor.org/rfc/rfc9457.html#section-3).
+- Do not use `application/problem+cbor`: it is not registered or defined by RFC 9457. RFC 9290 defines the distinct
+  `application/concise-problem-details+cbor` format for constrained environments, with a different compact data model;
+  do not advertise it unless that specification is implemented in full.
+- The global request-size guard always returns 413 without reading the remaining unbounded body. It follows the same
+  best-effort error representation rule and never changes a size failure into 406.
+
+Use this response policy table as the source of truth:
+
+| Response class | Available success or error representation | `Accept` policy |
+|---|---|---|
+| Modeled `/v1/...` success with a body | `application/json`, `application/cbor` | Strict; JSON default and tie winner, CBOR exact opt-in, otherwise 406 before execution |
+| `/health` success | `application/json` | Strict; unsupported explicit values return 406 |
+| `/schemas/{Model}.json` success | `application/schema+json` | Strict; absent, `*/*`, and `application/*` work; `application/json` alone does not match |
+| 204 success | no representation | Ignore `Accept` |
+| Problem Details error | `application/problem+json`, or the same fields encoded as `application/cbor` | Best effort; explicit CBOR preference wins, otherwise JSON fallback while preserving status |
+| `/openapi.json`, `/api-docs`, `/api-redoc` | FastAPI-owned fixed JSON or HTML assets | Outside the application CBOR layer; do not infer a global negotiation promise from these routes |
+
+The `+json` structured syntax suffix describes a representation's underlying syntax; it does not make
+`application/json` match `application/schema+json` in an RFC 9110 media range. JSON Schema Draft 2020-12 recommends
+`application/schema+json` for retrievable schemas. Keep shared parsing and selection in
+`app/core/content_negotiation.py`; do not duplicate `Accept` parsing in routers or middleware.
 
 ### Problem Details and schema discovery
 

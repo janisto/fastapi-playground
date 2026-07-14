@@ -91,7 +91,7 @@ def problem_response(
         "headers": headers,
         "content": {
             "application/problem+json": {"schema": schema},
-            "application/problem+cbor": {"schema": schema},
+            "application/cbor": {"schema": schema},
         },
     }
 

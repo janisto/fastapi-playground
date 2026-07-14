@@ -66,12 +66,18 @@ API response instance.
 
 ### Content Negotiation
 
-- Responses default to `application/json`; request `application/cbor` explicitly with `Accept`.
-- JSON and CBOR request bodies are selected with `Content-Type`.
-- Quality weights are honored, with JSON preferred on ties; unsupported explicit response formats return 406.
-- `application/problem+json` and `application/problem+cbor` describe error representations, not successful ones. A
-  problem-only `Accept` value returns 406 before endpoint execution; request `application/json` or `application/cbor`
-  and errors use the corresponding Problem Details format.
+- API responses with a body default to `application/json`. CBOR is optional and selected only by an explicit
+  `Accept: application/cbor`; wildcards and equal quality values keep JSON.
+- An explicit `Accept` value that excludes every supported success representation returns 406 before a
+  representation-bearing endpoint executes. A 204 response has no representation, so `Accept` does not gate it.
+- Schema discovery returns only `application/schema+json`. Strict clients must accept that media type or a matching
+  wildcard; `application/json` does not match a distinct `+json` subtype.
+- Errors keep their original status. They use RFC 9457 `application/problem+json` by default, or registered
+  `application/cbor` when explicitly preferred. Unsupported error preferences fall back to JSON; the unregistered
+  `application/problem+cbor` media type is not implemented.
+- JSON and CBOR request bodies are selected independently with `Content-Type`.
+- `/openapi.json`, `/api-docs`, and `/api-redoc` are fixed FastAPI documentation assets outside optional CBOR
+  negotiation.
 
 ### Pagination
 

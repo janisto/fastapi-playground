@@ -78,7 +78,7 @@ def test_cbor_routes_document_success_and_problem_representations() -> None:
         }
         assert set(operation["responses"]["406"]["content"]) == {
             "application/problem+json",
-            "application/problem+cbor",
+            "application/cbor",
         }
 
 
@@ -91,7 +91,7 @@ def test_health_contract_remains_json_only() -> None:
     assert set(responses["200"]["content"]) == {"application/json"}
     assert set(responses["406"]["content"]) == {
         "application/problem+json",
-        "application/problem+cbor",
+        "application/cbor",
     }
 
 

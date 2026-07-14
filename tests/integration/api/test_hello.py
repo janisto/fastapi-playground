@@ -3,6 +3,7 @@ Integration tests for hello endpoint.
 """
 
 import cbor2
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -63,6 +64,83 @@ class TestHelloGet:
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/json"
+
+    def test_prefers_json_on_equal_quality(self, client: TestClient) -> None:
+        """
+        Verify the documented server preference resolves equal quality.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0.8, application/cbor;q=0.8"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_wildcard_does_not_opt_into_cbor(self, client: TestClient) -> None:
+        """
+        Verify a wildcard keeps JSON even when exact CBOR is also acceptable.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "*/*;q=1, application/cbor;q=0.9"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_parameterized_cbor_range_does_not_select_generic_cbor(self, client: TestClient) -> None:
+        """
+        Verify unsupported media parameters constrain the requested range.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0.1, application/cbor;profile=example"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_parameter_after_quality_still_constrains_cbor(self, client: TestClient) -> None:
+        """
+        Verify RFC 9110 removed the older accept-extension grammar.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0.1, application/cbor;q=0.9;example=one"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_exact_json_exclusion_overrides_wildcard(self, client: TestClient) -> None:
+        """
+        Verify a specific exclusion cannot be bypassed by a broader range.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0, */*;q=1"},
+        )
+
+        assert response.status_code == 406
+        assert response.headers["content-type"] == "application/problem+json"
+
+    @pytest.mark.parametrize("invalid_qvalue", [".5", "9e-1", "+0.5", "0.1234", "1.0000"])
+    def test_invalid_qvalue_does_not_influence_selection(
+        self,
+        client: TestClient,
+        invalid_qvalue: str,
+    ) -> None:
+        """
+        Verify non-RFC q-values are ignored instead of parsed as floats.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": f"application/json;q={invalid_qvalue}, application/cbor;q=0.4"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/cbor"
 
     def test_unsupported_accept_returns_406(self, client: TestClient) -> None:
         """

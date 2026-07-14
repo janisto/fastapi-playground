@@ -10,9 +10,11 @@ See: https://json-schema.org/draft/2020-12/json-schema-core.html
 from copy import deepcopy
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from app.core.cbor import NotAcceptableHTTPException
+from app.core.content_negotiation import SCHEMA_JSON_MEDIA_TYPE, negotiate_media_type
 from app.exceptions import SchemaNotFoundError
 
 router = APIRouter(prefix="/schemas", tags=["Schemas"])
@@ -85,7 +87,7 @@ def populate_schema_cache(openapi_schema: dict[str, Any]) -> None:
     include_in_schema=False,
     response_class=JSONResponse,
 )
-async def get_schema(schema_name: str) -> JSONResponse:
+async def get_schema(schema_name: str, request: Request) -> JSONResponse:
     """
     Retrieve a JSON Schema by name.
 
@@ -95,12 +97,22 @@ async def get_schema(schema_name: str) -> JSONResponse:
 
     The .json extension is optional and will be stripped if present.
     """
-    name = schema_name.removesuffix(".json")
+    accept = ",".join(request.headers.getlist("accept"))
+    if (
+        negotiate_media_type(
+            accept,
+            (SCHEMA_JSON_MEDIA_TYPE,),
+            default=SCHEMA_JSON_MEDIA_TYPE,
+        )
+        is None
+    ):
+        raise NotAcceptableHTTPException(SCHEMA_JSON_MEDIA_TYPE)
 
+    name = schema_name.removesuffix(".json")
     if name not in _schema_cache:
         raise SchemaNotFoundError(detail=f"Schema '{name}' not found")
 
     return JSONResponse(
         content=_schema_cache[name],
-        media_type="application/schema+json",
+        media_type=SCHEMA_JSON_MEDIA_TYPE,
     )

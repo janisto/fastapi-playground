@@ -4,7 +4,8 @@ Health check router.
 
 from fastapi import APIRouter, Request, Response
 
-from app.core.cbor import JSON_MEDIA_TYPE, NotAcceptableHTTPException, negotiate_response_media_type
+from app.core.cbor import NotAcceptableHTTPException
+from app.core.content_negotiation import JSON_MEDIA_TYPE, negotiate_api_media_type
 from app.core.openapi import problem_response, success_response
 from app.core.schema_links import build_described_by_link
 from app.models.health import HealthResponse
@@ -37,7 +38,8 @@ async def health_check(request: Request, response: Response) -> HealthResponse:
     Returns a simple status response without database or external service checks.
     Suitable for Kubernetes liveness probes and load balancer health checks.
     """
-    if negotiate_response_media_type(request.headers.get("accept", ""), allow_cbor=False) is None:
+    accept = ",".join(request.headers.getlist("accept"))
+    if negotiate_api_media_type(accept, allow_cbor=False) is None:
         raise NotAcceptableHTTPException(JSON_MEDIA_TYPE)
 
     schema_path = "/schemas/HealthResponse.json"

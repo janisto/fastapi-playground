@@ -7,15 +7,9 @@ import json
 import cbor2
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.core.cbor import (
-    CBOR_MEDIA_TYPE,
-    JSON_MEDIA_TYPE,
-    PROBLEM_CBOR,
-    PROBLEM_JSON,
-    negotiate_response_media_type,
-)
 from app.core.config import get_settings
 from app.core.constants import PROBLEM_SCHEMA_PATH
+from app.core.content_negotiation import CBOR_MEDIA_TYPE, negotiate_problem_media_type
 from app.core.schema_links import build_described_by_link
 
 
@@ -77,27 +71,18 @@ class BodySizeLimitMiddleware:
         await self.app(scope, replay_receive, send)
 
     async def _send_body_rejection(self, send: Send, scope: Scope) -> None:
-        headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
-        accept = headers.get("accept", "")
-        response_media_type = negotiate_response_media_type(accept, problem=True)
+        accept = ",".join(value.decode("latin1") for key, value in scope.get("headers", []) if key.lower() == b"accept")
+        response_media_type = negotiate_problem_media_type(accept)
+        status_code = 413
+        problem = {
+            "title": "Payload Too Large",
+            "status": status_code,
+            "detail": "Request body too large",
+        }
 
-        if response_media_type is None:
-            status_code = 406
-            problem = {
-                "title": "Not Acceptable",
-                "status": status_code,
-                "detail": f"Supported response formats: {JSON_MEDIA_TYPE}, {CBOR_MEDIA_TYPE}",
-            }
-            response_media_type = PROBLEM_JSON
-        else:
-            status_code = 413
-            problem = {
-                "title": "Payload Too Large",
-                "status": status_code,
-                "detail": "Request body too large",
-            }
-
-        payload = cbor2.dumps(problem) if response_media_type == PROBLEM_CBOR else json.dumps(problem).encode("utf-8")
+        payload = (
+            cbor2.dumps(problem) if response_media_type == CBOR_MEDIA_TYPE else json.dumps(problem).encode("utf-8")
+        )
 
         await send(
             {

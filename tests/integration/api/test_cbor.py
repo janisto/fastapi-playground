@@ -169,6 +169,28 @@ class TestCBORResponse:
         assert response.status_code == 200
         assert "application/json" in response.headers["content-type"]
 
+    def test_repeated_accept_fields_are_combined(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify repeated list-based Accept fields participate in one selection.
+        """
+        mock_profile_service.get_profile.return_value = make_profile()
+
+        response = client.get(
+            BASE_URL,
+            headers=[
+                ("Accept", "application/json;q=0.1"),
+                ("Accept", "application/cbor;q=1"),
+            ],
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/cbor"
+
     def test_delete_with_accept_cbor_returns_empty_body(
         self,
         client: TestClient,
@@ -194,7 +216,7 @@ class TestCBORResponse:
         ("accept", "content_type"),
         [
             ("application/problem+json", "application/problem+json"),
-            ("application/problem+cbor", "application/problem+cbor"),
+            ("application/problem+cbor", "application/problem+json"),
         ],
     )
     def test_problem_only_accept_rejects_success_representation(
@@ -212,8 +234,7 @@ class TestCBORResponse:
 
         assert response.status_code == 406
         assert response.headers["content-type"] == content_type
-        body = cbor2.loads(response.content) if content_type == "application/problem+cbor" else response.json()
-        assert body["title"] == "Not Acceptable"
+        assert response.json()["title"] == "Not Acceptable"
         mock_profile_service.get_profile.assert_not_awaited()
 
     @pytest.mark.parametrize(
@@ -221,7 +242,6 @@ class TestCBORResponse:
         [
             ("post", "application/problem+json", "create_profile"),
             ("patch", "application/problem+cbor", "update_profile"),
-            ("delete", "application/problem+json", "delete_profile"),
         ],
     )
     def test_problem_only_accept_cannot_mutate_profile(
@@ -246,6 +266,40 @@ class TestCBORResponse:
         assert response.status_code == 406
         getattr(mock_profile_service, service_method).assert_not_awaited()
 
+    def test_unacceptable_success_precedes_request_body_parsing(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify success negotiation rejects a mutation before JSON parsing.
+        """
+        response = client.post(
+            BASE_URL,
+            content=b"not-json",
+            headers={"Accept": "application/xml", "Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 406
+        assert response.headers["content-type"] == "application/problem+json"
+        mock_profile_service.create_profile.assert_not_awaited()
+
+    def test_no_content_success_ignores_accept(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify Accept does not gate a 204 response with no representation.
+        """
+        response = client.delete(BASE_URL, headers={"Accept": "application/xml"})
+
+        assert response.status_code == 204
+        assert response.content == b""
+        mock_profile_service.delete_profile.assert_awaited_once()
+
 
 class TestCBORErrorResponse:
     """Tests for CBOR error response negotiation."""
@@ -269,7 +323,7 @@ class TestCBORErrorResponse:
         )
 
         assert response.status_code == 404
-        assert response.headers["content-type"] == "application/problem+cbor"
+        assert response.headers["content-type"] == "application/cbor"
         decoded = cbor2.loads(response.content)
         assert decoded["title"] == "Profile not found"
         assert decoded["status"] == 404
@@ -298,7 +352,7 @@ class TestCBORErrorResponse:
         )
 
         assert response.status_code == 422
-        assert response.headers["content-type"] == "application/problem+cbor"
+        assert response.headers["content-type"] == "application/cbor"
         decoded = cbor2.loads(response.content)
         assert decoded["title"] == "Unprocessable Entity"
         assert decoded["detail"] == "validation failed"

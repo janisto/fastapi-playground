@@ -193,7 +193,7 @@ class TestBodySizeLimitCBORNegotiation:
                     headers={"Accept": "application/cbor"},
                 )
                 assert response.status_code == 413
-                assert response.headers.get("content-type") == "application/problem+cbor"
+                assert response.headers.get("content-type") == "application/cbor"
                 body = cbor2.loads(response.content)
                 assert body["title"] == "Payload Too Large"
                 assert body["status"] == 413
@@ -217,16 +217,37 @@ class TestBodySizeLimitCBORNegotiation:
                 body = response.json()
                 assert body["title"] == "Payload Too Large"
 
+    def test_413_combines_repeated_accept_fields(self) -> None:
+        """
+        Verify all lines of the list-based Accept field are negotiated.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/echo",
+                    content=b"x" * 100,
+                    headers=[
+                        ("Accept", "application/problem+json;q=0.1"),
+                        ("Accept", "application/cbor;q=1"),
+                    ],
+                )
+
+                assert response.status_code == 413
+                assert response.headers["content-type"] == "application/cbor"
+                assert cbor2.loads(response.content)["status"] == 413
+
     @pytest.mark.parametrize(
         "accept",
         [
             "application/xml",
-            "application/problem+json;q=0, application/problem+cbor;q=0",
+            "application/problem+json;q=0, application/cbor;q=0",
         ],
     )
-    def test_oversized_request_returns_406_when_no_problem_representation_is_acceptable(self, accept: str) -> None:
+    def test_oversized_request_preserves_413_when_accept_is_unsupported(self, accept: str) -> None:
         """
-        Verify request-size rejection honors an explicit unsupported Accept value.
+        Verify representation negotiation never masks request-size rejection.
         """
         with patch("app.middleware.body_limit.get_settings") as mock_settings:
             mock_settings.return_value.max_request_size_bytes = 10
@@ -238,14 +259,14 @@ class TestBodySizeLimitCBORNegotiation:
                     headers={"Accept": accept},
                 )
 
-                assert response.status_code == 406
+                assert response.status_code == 413
                 assert response.headers["content-type"] == "application/problem+json"
                 assert response.headers["Vary"] == "Accept"
                 assert response.headers["Link"] == '</schemas/ProblemResponse.json>; rel="describedBy"'
                 assert response.json() == {
-                    "title": "Not Acceptable",
-                    "status": 406,
-                    "detail": "Supported response formats: application/json, application/cbor",
+                    "title": "Payload Too Large",
+                    "status": 413,
+                    "detail": "Request body too large",
                 }
 
 
@@ -473,7 +494,7 @@ class TestBodySizeLimitWithChunkedTransfer:
 
     async def test_unsupported_accept_still_stops_oversized_stream(self) -> None:
         """
-        Verify 406 negotiation does not read more body data or invoke the app.
+        Verify 413 fallback does not read more body data or invoke the app.
         """
         with patch("app.middleware.body_limit.get_settings") as mock_settings:
             mock_settings.return_value.max_request_size_bytes = 50
@@ -497,6 +518,6 @@ class TestBodySizeLimitWithChunkedTransfer:
             response_start = next(
                 call.args[0] for call in send.call_args_list if call.args[0]["type"] == "http.response.start"
             )
-            assert response_start["status"] == 406
+            assert response_start["status"] == 413
             assert receive.call_count == 2
             downstream.assert_not_awaited()
