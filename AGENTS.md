@@ -51,6 +51,12 @@ direct Functions dependency, update both `functions/pyproject.toml` and the expo
 `just sync-functions-requirements`. Both project manifests enforce the minimum supported uv version while allowing newer
 releases. The Docker builder stays exactly versioned for reproducible image builds.
 
+Ruff enables all stable, non-preview rules and excludes only formatter conflicts, irrelevant ecosystems, and documented
+repository conventions. ty treats all rules as errors except checks its documentation identifies as false-positive-prone
+or non-runtime diagnostics. Both tools derive Python 3.14 from `project.requires-python`; ty targets Linux to match the
+deployed runtimes. A tool upgrade may introduce newly stable rules, so review each new diagnostic before adding an ignore
+and keep exceptions scoped to the narrowest file boundary.
+
 GitHub Actions are coupled to active repository rules. Do not edit, rename, consolidate, remove, or add path filters to
 workflows or jobs before inspecting the GitHub rulesets and understanding which status-check contexts are required.
 The current default-branch rules require both `ci` and `lint`; preserve those job IDs unless the ruleset is deliberately

@@ -4,7 +4,7 @@ Profile service with async Firestore operations.
 
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from google.cloud import firestore
 
@@ -52,7 +52,7 @@ class ProfileService:
     async def _create_in_transaction(  # pragma: no cover
         transaction: AsyncTransaction,
         doc_ref: AsyncDocumentReference,
-        data: dict,
+        data: dict[str, Any],
     ) -> None:
         # Tested via E2E tests with Firebase emulators; unit tests mock this method
         snapshot = await doc_ref.get(transaction=transaction)
@@ -107,8 +107,8 @@ class ProfileService:
     async def _update_in_transaction(  # pragma: no cover
         transaction: AsyncTransaction,
         doc_ref: AsyncDocumentReference,
-        updates: dict,
-    ) -> dict | None:
+        updates: dict[str, Any],
+    ) -> dict[str, Any] | None:
         # Tested via E2E tests with Firebase emulators; unit tests mock this method
         snapshot = await doc_ref.get(transaction=transaction)
         if not snapshot.exists:

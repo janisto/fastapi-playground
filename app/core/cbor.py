@@ -8,7 +8,7 @@ Content negotiation policy lives in app.core.content_negotiation.
 import json
 from collections.abc import Callable
 from datetime import UTC
-from typing import Any
+from typing import Any, override
 
 import cbor2
 from fastapi import HTTPException, Request, Response
@@ -110,6 +110,7 @@ class CBORRequest(StarletteRequest):
 
     _cbor_decoded: bool = False
 
+    @override
     async def body(self) -> bytes:
         """
         Get request body, decoding CBOR to JSON if necessary.
@@ -168,6 +169,7 @@ class CBORRoute(APIRoute):
         router = APIRouter(route_class=CBORRoute)
     """
 
+    @override
     def get_route_handler(self) -> Callable[..., Any]:
         """
         Return custom route handler with CBOR negotiation.

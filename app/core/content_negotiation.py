@@ -16,6 +16,8 @@ SCHEMA_JSON_MEDIA_TYPE = "application/schema+json"
 ALLOWED_CONTENT_TYPES = frozenset({JSON_MEDIA_TYPE, CBOR_MEDIA_TYPE})
 
 _QVALUE_PATTERN = re.compile(r"(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)\Z")
+_EXACT_MEDIA_RANGE_SPECIFICITY = 2
+_MEDIA_TYPE_PARTS = 2
 
 
 def normalize_media_type(media_type: str) -> str:
@@ -57,11 +59,11 @@ def _media_range_specificity(range_type: str, target: str, target_parts: list[st
     Return the RFC 9110 specificity of a matching media range.
     """
     if range_type == target:
-        return 2
+        return _EXACT_MEDIA_RANGE_SPECIFICITY
     if range_type == "*/*":
         return 0
     range_parts = range_type.split("/")
-    if len(range_parts) == 2 and range_parts[1] == "*" and range_parts[0] == target_parts[0]:
+    if len(range_parts) == _MEDIA_TYPE_PARTS and range_parts[1] == "*" and range_parts[0] == target_parts[0]:
         return 1
     return None
 
@@ -93,7 +95,7 @@ def _media_type_quality(accept_header: str, media_type: str, *, explicit_only: b
             continue
 
         specificity = _media_range_specificity(range_type, target, target_parts)
-        if specificity is None or (explicit_only and specificity < 2):
+        if specificity is None or (explicit_only and specificity < _EXACT_MEDIA_RANGE_SPECIFICITY):
             continue
         if specificity > best_specificity:
             best_specificity = specificity

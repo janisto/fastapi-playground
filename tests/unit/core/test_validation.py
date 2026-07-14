@@ -127,7 +127,7 @@ class TestIsSafeValidationValue:
         assert is_safe_validation_value("x" * 201) is False
 
     @pytest.mark.parametrize("value", [10**200, float("nan"), float("inf"), float("-inf")])
-    def test_rejects_unbounded_or_non_json_numbers(self, value: int | float) -> None:
+    def test_rejects_unbounded_or_non_json_numbers(self, value: float) -> None:
         """Numbers that can break the bounded JSON error contract are omitted."""
         assert is_safe_validation_value(value) is False
 

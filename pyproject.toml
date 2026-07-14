@@ -34,75 +34,61 @@ required-version = ">=0.11.28"
 line-length = 120
 
 [tool.ruff.lint]
-select = [
-    # === FOUNDATION ===
-    "E",      # pycodestyle errors
-    "F",      # Pyflakes
-    "W",      # pycodestyle warnings
-
-    # === TYPE ANNOTATIONS & MODERNIZATION ===
-    "ANN",    # flake8-annotations
-    "FAST",   # FastAPI-specific
-    "I",      # isort
-    "UP",     # pyupgrade
-
-    # === TIER 1: ESSENTIAL ===
-    "B",      # flake8-bugbear
-    "C4",     # flake8-comprehensions
-    "SIM",    # flake8-simplify
-    "RUF",    # Ruff-specific
-    "PIE",    # flake8-pie
-    "T20",    # flake8-print
-
-    # === TIER 2: QUALITY & SAFETY ===
-    "S",      # flake8-bandit (security)
-    "TRY",    # tryceratops (exceptions)
-    "PT",     # flake8-pytest-style
-    "ASYNC",  # flake8-async
-    "LOG",    # flake8-logging
-    "G",      # flake8-logging-format
-    "DTZ",    # flake8-datetimez
-
-    # === TIER 3: CLEAN CODE ===
-    "D213",   # Multi-line docstring summary on second line
-    "RET",    # flake8-return
-    "RSE",    # flake8-raise
-    "PERF",   # Perflint
-    "TC",     # flake8-type-checking
-    "A",      # flake8-builtins
-    "BLE",    # flake8-blind-except
-    "PGH",    # pygrep-hooks
-    "FURB",   # refurb
-
-    # === TIER 4: OPTIONAL ===
-    "C90",    # mccabe complexity
-    "N",      # pep8-naming
-    "FLY",    # flynt
-    "ISC",    # flake8-implicit-str-concat
-    "PLC",    # Pylint convention
-    "PLE",    # Pylint error
-    "PLW",    # Pylint warning
+select = ["ALL"]
+preview = false
+explicit-preview-rules = true
+extend-select = [
+    "D213",  # Repository convention: summary starts after the opening quotes
 ]
 
 ignore = [
-    "E501",     # Line too long (handled by formatter)
-    "ISC001",   # Conflicts with formatter
-    "TRY003",   # Long exception messages OK for HTTPException
-    "TRY300",   # try-consider-else (stylistic preference)
-    "TRY301",   # raise-within-try (acceptable pattern)
-    "PLR0913",  # Too many arguments (FastAPI DI pattern)
-    "PLR0912",  # Too many branches
-    "PLC0415",  # Import outside top-level (common in tests/lazy loading)
-    "PLW0603",  # Global statement (acceptable for singleton patterns)
-    "TC001",    # Typing-only first-party imports (adds complexity for minor gain)
-    "TC002",    # Typing-only third-party imports (adds complexity for minor gain)
-    "TC003",    # Typing-only stdlib imports (adds complexity for minor gain)
+    # Framework and ecosystem rules that do not apply to this repository.
+    "AIR",  # Airflow
+    "CPY",  # Copyright header policy
+    "DJ",   # Django
+    "FA",   # Future annotations are unnecessary on Python 3.14+
+    "INT",  # gettext
+    "NPY",  # NumPy
+    "PD",   # pandas
+
+    # Rules documented as incompatible with Ruff Formatter.
+    "COM812",
+    "COM819",
+    "D203",
+    "D206",
+    "D300",
+    "E111",
+    "E114",
+    "E117",
+    "Q",
+    "W191",
+
+    # Repository docstrings are useful but not mandatory for every public symbol.
+    "D1",
+    "D200",  # Keep the required multi-line docstring form
+    "D212",  # Prefer D213
+
+    # These exception rules add indirection without improving this API's errors.
+    "EM",
+    "TRY003",
+    "TRY300",
+    "TRY301",
+
+    # Runtime annotation imports are intentional for FastAPI and Pydantic.
+    "TC001",
+    "TC002",
+    "TC003",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
+    "ARG",      # Fixtures and mocks intentionally mirror callback signatures
+    "D",        # Production contracts, not test helpers, require docstring linting
+    "FBT",      # Test factories favor concise boolean controls
+    "PLC0415",  # Tests use local imports to exercise import-time behavior
     "S101",     # Allow assert in tests
     "S107",     # Allow hardcoded test tokens
+    "SLF001",   # Unit tests verify private state where it is the behavior boundary
     "PLR2004",  # Magic values OK in tests
     "PT013",    # Allow `from pytest import ...` style
     "N817",     # Allow short aliases like PS for ProfileService
@@ -110,10 +96,38 @@ ignore = [
     "S104",     # Testing 0.0.0.0 binding is intentional
 ]
 "functions/tests/**/*.py" = [
+    "ARG",
+    "D",
+    "FBT",
+    "INP001",   # Firebase Functions uses a deployable module, not a package
+    "PLC0415",
+    "PLR2004",
     "S101",     # Allow assert in tests
+    "SLF001",
+]
+"functions/main.py" = [
+    "INP001",   # Firebase deploys this module directly
+]
+"app/core/exception_handler.py" = [
+    "ARG001",   # Handler interfaces require context arguments that some handlers do not use
+]
+"app/core/validation.py" = [
+    "ARG001",   # fastapi-problem handler callback signature
+]
+"app/main.py" = [
+    "ARG001",   # ASGI lifespan callback signature
 ]
 "app/core/config.py" = [
     "S104",     # Binding to 0.0.0.0 is intentional for containers
+]
+"app/core/firebase.py" = [
+    "PLW0603",  # Explicit process-wide Firebase lifecycle state
+]
+"app/core/logging.py" = [
+    "PLW0603",  # Idempotent process-wide logging initialization
+]
+"app/models/profile/requests.py" = [
+    "FBT001",   # Pydantic field-validator callback receives the boolean positionally
 ]
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
@@ -137,16 +151,32 @@ max-complexity = 12
 [tool.ruff.lint.pep8-naming]
 classmethod-decorators = ["pydantic.validator", "pydantic.field_validator"]
 
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.pylint]
+max-args = 11
+
 [tool.ty.src]
-exclude = ["functions/"]
+include = ["app", "tests"]
+
+[tool.ty.analysis]
+strict-literal-narrowing = true
 
 [tool.ty.environment]
-# Multiple directories (priority order)
-root = ["."]
+python-platform = "linux"
 
 [tool.ty.rules]
-#unresolved-attribute = "ignore"
-#unresolved-import = "ignore"
+all = "error"
+# ty documents these rules as false-positive-prone or non-runtime diagnostics.
+division-by-zero = "ignore"
+possibly-missing-attribute = "ignore"
+possibly-missing-import = "ignore"
+possibly-unresolved-reference = "ignore"
+unsupported-dynamic-base = "ignore"
+
+[tool.ty.terminal]
+error-on-warning = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

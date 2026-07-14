@@ -6,6 +6,8 @@ import base64
 import binascii
 from dataclasses import dataclass
 
+_BASE64_BLOCK_SIZE = 4
+
 
 class InvalidCursorError(Exception):
     """
@@ -36,14 +38,15 @@ def decode_cursor(s: str) -> Cursor:
     """
     if not s:
         return Cursor(type="", value="")
-    padding = 4 - len(s) % 4
-    if padding != 4:
+    padding = _BASE64_BLOCK_SIZE - len(s) % _BASE64_BLOCK_SIZE
+    if padding != _BASE64_BLOCK_SIZE:
         s += "=" * padding
     try:
         decoded = base64.b64decode(s.encode("ascii"), altchars=b"-_", validate=True).decode()
     except (binascii.Error, UnicodeError) as e:
         raise InvalidCursorError("invalid cursor format") from e
-    parts = decoded.split(":", 1)
-    if len(parts) != 2:
-        raise InvalidCursorError("invalid cursor format")
-    return Cursor(type=parts[0], value=parts[1])
+    try:
+        cursor_type, value = decoded.split(":", maxsplit=1)
+    except ValueError as e:
+        raise InvalidCursorError("invalid cursor format") from e
+    return Cursor(type=cursor_type, value=value)

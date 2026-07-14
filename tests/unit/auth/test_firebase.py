@@ -190,7 +190,7 @@ class TestVerifyFirebaseToken:
 
         import app.auth.firebase as auth_mod
 
-        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict:
+        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict[str, object]:
             return {"email": "user@example.com"}
 
         monkeypatch.setattr(auth_mod.auth, "verify_id_token", _fake_verify)
@@ -210,7 +210,7 @@ class TestVerifyFirebaseToken:
 
         import app.auth.firebase as auth_mod
 
-        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict:
+        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict[str, object]:
             return {"uid": "user-123", "email": "user@example.com", "email_verified": False}
 
         monkeypatch.setattr(auth_mod.auth, "verify_id_token", _fake_verify)
@@ -259,7 +259,7 @@ class TestVerifyFirebaseTokenLogging:
 
         import app.auth.firebase as auth_mod
 
-        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict:
+        def _fake_verify(token: str, app: object = None, check_revoked: bool = False) -> dict[str, object]:
             return {"email": "user@example.com"}
 
         monkeypatch.setattr(auth_mod.auth, "verify_id_token", _fake_verify)

@@ -3,7 +3,7 @@ Test isolation for Genkit process-wide integrations.
 """
 
 import genkit._ai._aio as genkit_aio
-import genkit.plugins.google_cloud as google_cloud
+from genkit.plugins import google_cloud
 
 
 def _production_environment() -> bool:
