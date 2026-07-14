@@ -5,6 +5,7 @@ Integration tests for CBOR content negotiation.
 from unittest.mock import AsyncMock
 
 import cbor2
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.helpers.profiles import make_profile, make_profile_payload_dict
@@ -188,6 +189,33 @@ class TestCBORResponse:
 
         assert response.status_code == 204
         assert response.content == b""
+
+    @pytest.mark.parametrize(
+        ("accept", "content_type"),
+        [
+            ("application/problem+json", "application/problem+json"),
+            ("application/problem+cbor", "application/problem+cbor"),
+        ],
+    )
+    def test_problem_only_accept_rejects_success_representation(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+        accept: str,
+        content_type: str,
+    ) -> None:
+        """
+        Verify Problem Details media types do not authorize successful responses.
+        """
+        mock_profile_service.get_profile.return_value = make_profile()
+
+        response = client.get(BASE_URL, headers={"Accept": accept})
+
+        assert response.status_code == 406
+        assert response.headers["content-type"] == content_type
+        body = cbor2.loads(response.content) if content_type == "application/problem+cbor" else response.json()
+        assert body["title"] == "Not Acceptable"
 
 
 class TestCBORErrorResponse:

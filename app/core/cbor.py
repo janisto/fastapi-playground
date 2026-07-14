@@ -151,8 +151,8 @@ def negotiate_response_media_type(
     if not accept_header:
         return PROBLEM_JSON if problem else JSON_MEDIA_TYPE
 
-    json_types = (PROBLEM_JSON, JSON_MEDIA_TYPE)
-    cbor_types = (PROBLEM_CBOR, CBOR_MEDIA_TYPE)
+    json_types = (PROBLEM_JSON, JSON_MEDIA_TYPE) if problem else (JSON_MEDIA_TYPE,)
+    cbor_types = (PROBLEM_CBOR, CBOR_MEDIA_TYPE) if problem else (CBOR_MEDIA_TYPE,)
     json_quality = max(_media_type_quality(accept_header, media_type) for media_type in json_types)
     cbor_quality = (
         max(_media_type_quality(accept_header, media_type, explicit_only=True) for media_type in cbor_types)
@@ -342,8 +342,9 @@ class CBORRoute(APIRoute):
                     accept = value.decode("latin1")
                     break
 
-            negotiated_media_type = negotiate_response_media_type(accept)
-            if negotiated_media_type is None:
+            success_media_type = negotiate_response_media_type(accept)
+            problem_media_type = negotiate_response_media_type(accept, problem=True)
+            if success_media_type is None and problem_media_type is None:
                 raise NotAcceptableHTTPException
 
             cbor_request = CBORRequest(request.scope, request.receive)
@@ -355,10 +356,13 @@ class CBORRoute(APIRoute):
 
             response = await original_handler(cbor_request)
 
+            # Problem-only Accept values may reach dependency and domain errors,
+            # but they cannot authorize a successful representation.
+            if success_media_type is None:
+                raise NotAcceptableHTTPException
+
             response_content_type = response.media_type or ""
-            if negotiated_media_type == CBOR_MEDIA_TYPE and content_type_matches(
-                response_content_type, JSON_MEDIA_TYPE
-            ):
+            if success_media_type == CBOR_MEDIA_TYPE and content_type_matches(response_content_type, JSON_MEDIA_TYPE):
                 body = response.body
                 if body:
                     data = json.loads(bytes(body))

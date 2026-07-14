@@ -79,7 +79,7 @@ typing:
 
 # Check types in the independent Functions project
 [group('qa')]
-typing-functions:
+typing-functions: install-functions
     uv run ty check --python functions/.venv functions/main.py
 
 # Quality assurance: fix, format, type check, and test
