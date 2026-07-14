@@ -12,7 +12,8 @@ task-specific skills.
 ## Sources of truth
 
 - application and middleware: `app/main.py`, `app/core/config.py`, and affected `app/api/` modules;
-- public contracts: response models, `app/core/cbor.py`, `app/core/exception_handler.py`, and integration tests;
+- public contracts: response models, `app/core/content_negotiation.py`, `app/core/cbor.py`,
+  `app/core/exception_handler.py`, `app/core/schema_links.py`, `app/core/validation.py`, and integration tests;
 - persistence and authentication: `app/core/firebase.py`, `app/auth/firebase.py`, and `app/services/`;
 - commands and containers: `Justfile`, `Dockerfile`, `.env.example`, and `firebase.json`;
 - separate function project: `functions/main.py`, `functions/pyproject.toml`, and `functions/README.md`;

@@ -6,7 +6,8 @@ description: Maintain and verify fastapi-playground generated OpenAPI 3.1, FastA
 # OpenAPI contract maintenance
 
 Read `AGENTS.md`, `app/main.py`, `app/api/schemas.py`, and the affected routers, models, exception handling, and contract
-tests before changing the public API.
+tests before changing the public API. When media types or `Accept` behavior changes, also read
+`app/core/content_negotiation.py` and `app/core/cbor.py`.
 
 ## Architecture
 

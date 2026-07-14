@@ -34,12 +34,15 @@ Enable the relevant APIs for your deployment:
 - `artifactregistry.googleapis.com` for the FastAPI image and function build artifacts;
 - `cloudbuild.googleapis.com` for Firebase's function source build;
 - `logging.googleapis.com` for build and runtime logs;
+- `cloudtrace.googleapis.com` for Genkit trace export;
+- `monitoring.googleapis.com` for Genkit metric export;
 - `secretmanager.googleapis.com` only when injecting managed secrets.
 
 Grant the runtime service account the minimum roles required by the deployed component:
 
-- FastAPI: `roles/datastore.user` and normally `roles/logging.logWriter`;
-- `dad_joke` function: `roles/aiplatform.user` and normally `roles/logging.logWriter`;
+- FastAPI: `roles/datastore.user`; Cloud Run captures the service's structured stdout without a Logging API client;
+- `dad_joke` function: `roles/aiplatform.user`, `roles/logging.logWriter`, `roles/cloudtrace.agent`, and
+  `roles/monitoring.metricWriter` for the configured Genkit telemetry exporters;
 - intended `dad_joke` callers: `roles/run.invoker` on the function's backing Cloud Run service;
 - Secret Manager consumers: `roles/secretmanager.secretAccessor` for only the required secrets.
 
@@ -108,6 +111,8 @@ CORS_ORIGINS=["https://app.example.com"]
 Install and run the FastAPI app from the repository root:
 
 ```bash
+cp .env.example .env
+# Set FIREBASE_PROJECT_ID in .env
 just install
 just serve
 ```
@@ -142,6 +147,8 @@ and security headers through the deployed service.
 
 Production deployment is already managed by existing Google Cloud configuration outside this repository. Do not use
 local container commands or examples in this guide to replace its build, image, or rollout conventions.
+The Dockerfile produces a standalone, locally runnable image containing the operating system and Python runtime. It is
+not a scratch-based application image, so do not combine it with Cloud Run `--base-image` or `--automatic-updates`.
 
 ## Deploy the Firebase function
 
@@ -152,13 +159,14 @@ The `dad_joke` HTTP function uses:
 - `MIN_INSTANCES` default `0` and `MAX_INSTANCES` default `2`;
 - Genkit with the `global` Vertex AI endpoint and auto-updating `gemini-pro-latest` alias configured in
   `functions/main.py`;
-- GCP trace and metric export outside local development.
+- GCP log, trace, and metric export outside local development;
 - private IAM invocation; unauthenticated internet requests cannot consume model quota.
 
 The alias tracks Google's current Gemini Pro model, avoiding a hard dependency on a dated model ID. It can also change
 model behavior, latency, and cost without a repository deployment. Keep structured output validation and Function tests
 in place, monitor production behavior and spend, and verify alias availability and quota before deployment. See the
-[Genkit Google GenAI model documentation](https://genkit.dev/docs/integrations/google-genai/#models).
+[Genkit Python model documentation](https://genkit.dev/docs/python/models/) and
+[Python Vertex AI plugin documentation](https://genkit.dev/docs/python/integrations/vertex-ai/).
 
 Firebase deployment uses the intentionally lean `functions/requirements.txt`, which pins only the direct runtime
 packages to versions from `functions/uv.lock`; the deployment installer resolves their transitive dependencies. Run
@@ -209,7 +217,8 @@ uses `requirements.txt` for Python deployments, consistent with the current
 
 The FastAPI service writes structured JSON to stdout. `fastapi-request-observability` adds request IDs, one access
 record per request, route metadata, and incoming W3C Trace Context correlation. It does not create spans. The Functions
-project separately configures Genkit GCP telemetry.
+project separately configures Genkit GCP telemetry. Its default configuration redacts model inputs and outputs from
+telemetry.
 
 Production checklist:
 

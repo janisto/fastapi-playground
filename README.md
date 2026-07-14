@@ -10,7 +10,7 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 
 - Layered middleware architecture with security headers, CORS, request IDs, and structured access logs via [`fastapi-request-observability`](https://pypi.org/project/fastapi-request-observability/)
 - Request-scoped logging with incoming [W3C Trace Context](https://www.w3.org/TR/trace-context/) correlation metadata
-- [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) for all error responses with field-level validation errors
+- [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) for FastAPI error responses, including field-level validation errors
 - JSON and CBOR request/response content negotiation using `Content-Type` and `Accept`
 - Cursor-based pagination with [RFC 8288 Link](https://datatracker.ietf.org/doc/html/rfc8288) headers
 - [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) documentation with Swagger UI and ReDoc
@@ -97,6 +97,8 @@ API response instance.
 ```bash
 git clone <repository-url>
 cd fastapi-playground
+cp .env.example .env
+# Set FIREBASE_PROJECT_ID in .env
 just install        # Install dependencies via uv
 just serve          # Start dev server at http://127.0.0.1:8080
 ```
@@ -176,8 +178,11 @@ app/
     logging.py         # Structured JSON logging configuration
     firebase.py        # Firebase Admin SDK and async Firestore client
     exception_handler.py  # RFC 9457 Problem Details
-    cbor.py            # CBOR content negotiation
+    content_negotiation.py  # RFC 9110 media-type selection
+    cbor.py            # CBOR request and response adaptation
     openapi.py         # Reusable response contract metadata
+    schema_links.py    # RFC 8288 schema links
+    validation.py      # Validation error formatting and redaction
   exceptions/          # Domain exceptions using fastapi-problem
     profile.py         # ProfileNotFoundError, ProfileAlreadyExistsError
   middleware/          # ASGI middleware stack
@@ -311,24 +316,18 @@ using another local path.
 # Build and push to Artifact Registry
 gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest
 
-# Deploy with automatic base image updates
+# Deploy the repository-built standalone image
 gcloud run deploy fastapi-playground \
   --image REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest \
   --platform managed \
-  --region REGION \
-  --base-image python314 \
-  --automatic-updates
-
-# Deploy from source with automatic base image updates
-gcloud run deploy fastapi-playground \
-  --source . \
-  --platform managed \
-  --region REGION \
-  --base-image python314 \
-  --automatic-updates
+  --region REGION
 ```
 
-The `--base-image` and `--automatic-updates` flags enable [automatic base image updates](https://cloud.google.com/run/docs/configuring/services/automatic-base-image-updates), allowing Google to apply security patches to the OS and runtime without rebuilding or redeploying.
+The repository Dockerfile produces a standalone image containing the operating system and Python runtime. Do not
+combine that image with `--base-image` or `--automatic-updates`: [Cloud Run automatic base image updates](https://cloud.google.com/run/docs/configuring/services/automatic-base-image-updates)
+require either a scratch-based application image or a different buildpack source-deployment flow. Adopting either
+would change the established build and image convention and requires separate verification. Rebuild the standalone
+image to pick up operating-system, Python, and dependency updates.
 
 The image trusts Cloud Run's forwarded proxy headers so application URLs and HTTPS-only security headers reflect the
 original client request after Cloud Run terminates TLS. Request logs correlate an incoming valid `traceparent`; the
@@ -342,7 +341,7 @@ For detailed infrastructure setup, see [GCP.md](GCP.md).
 cd functions
 uv venv --python 3.14 venv
 uv pip install --python venv/bin/python -r requirements.txt
-firebase deploy --only functions
+firebase deploy --only functions --project PROJECT_ID
 ```
 
 The model-backed function is private. Grant intended callers `roles/run.invoker` on its backing Cloud Run service and

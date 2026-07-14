@@ -103,6 +103,9 @@ Cloud Run terminates TLS before proxying HTTP to the container. The image runtim
 the application sees the original HTTPS scheme for HSTS and URL behavior. Preserve the established image, build, and
 deployment conventions. Change them only when a replacement is materially better and verified against both the
 repository and active deployment behavior.
+The Dockerfile produces a standalone image containing the operating system and Python runtime. Do not combine it with
+Cloud Run `--base-image` or `--automatic-updates`; those require a scratch-based application image or a different
+buildpack source-deployment flow.
 
 ## HTTP contract
 

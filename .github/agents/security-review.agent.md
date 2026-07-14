@@ -15,8 +15,11 @@ Before analysis, read these files:
 4. `app/middleware/body_limit.py` - Request body size limiting
 5. `app/core/logging.py` and observability middleware wiring in `app/main.py` - Structured logging with trace correlation
 6. `app/core/config.py` - Configuration and secrets handling
-7. `app/core/exception_handler.py` - Error handling and RFC 9457 Problem Details
-8. `app/api/health.py`, `app/api/hello.py`, `app/api/items.py`, `app/api/profile.py` - Endpoint definitions
+7. `app/core/content_negotiation.py`, `app/core/cbor.py`, `app/core/exception_handler.py`,
+   `app/core/schema_links.py`, and `app/core/validation.py` - Negotiation, CBOR, Problem Details, schema links, and
+   validation-error redaction
+8. `app/api/health.py`, `app/api/hello.py`, `app/api/items.py`, `app/api/profile.py`, and `app/api/schemas.py` - Endpoint
+   definitions
 9. `app/services/profile/service.py` - Business logic
 10. `app/dependencies.py` - Shared dependencies and DI aliases
 11. `app/exceptions/profile.py` - Domain exception definitions
@@ -38,9 +41,9 @@ Before analysis, read these files:
       intended callers
 
 ### 2. Input Validation & Data Sanitization
-- [ ] All inputs validated via Pydantic models with strict types
+- [ ] Request bodies, path parameters, and query parameters use appropriate Pydantic or FastAPI validation and constraints
 - [ ] Path parameters have proper type constraints
-- [ ] Query parameters validated with `Query()` annotations
+- [ ] FastAPI query parameters use `Query()` or equivalent constraints; the Function topic is validated with `JokeTopic`
 - [ ] Request body limits enforced (check `body_limit.py` middleware)
 - [ ] If file uploads are introduced, type, size, and content are validated
 - [ ] Firestore document paths and query values are derived from validated inputs
@@ -52,6 +55,8 @@ Cache-Control: no-store
 Content-Security-Policy: frame-ancestors 'none'
 Cross-Origin-Opener-Policy: same-origin
 Cross-Origin-Resource-Policy: same-origin
+Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+Vary: Accept
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
@@ -107,7 +112,8 @@ forwarded headers and that a deployed HTTPS `/health` response includes HSTS; do
 - [ ] Bulk operations validate all resource access
 
 ### 10. Dependency Security
-- [ ] Root and Functions dependencies are current (`just update`) and both lockfiles resolve
+- [ ] Root and Functions lockfiles match their manifests and resolve (`uv lock --check` and
+      `uv lock --project functions --check`)
 - [ ] Vulnerability-scanning evidence is reported when available; freshness alone is not treated as proof
 - [ ] Runtime dependencies exclude test-only packages
 - [ ] `functions/requirements.txt` pins only direct runtime packages from `functions/uv.lock`

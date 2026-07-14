@@ -5,7 +5,8 @@ description: Write or review fastapi-playground tests using pytest, FastAPI Test
 
 # Pytest testing
 
-Read `AGENTS.md`, the implementation under test, `tests/conftest.py`, and neighboring tests before choosing a boundary.
+Read `AGENTS.md`, the implementation under test, the relevant suite's `conftest.py`, and neighboring tests before
+choosing a boundary. Fixtures are scoped under `tests/unit/`, `tests/integration/`, `tests/e2e/`, and `functions/tests/`.
 
 ## Choose the narrowest useful test
 
