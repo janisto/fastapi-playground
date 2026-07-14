@@ -13,7 +13,7 @@ from firebase_functions import https_fn, logger, options, params
 from genkit import Genkit, GenkitError
 from genkit.plugins.google_cloud import add_gcp_telemetry
 from genkit.plugins.google_genai import VertexAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Configure structlog for JSON output in Cloud Run/Functions (Genkit uses structlog internally)
 # This ensures Genkit's logs appear as structured jsonPayload in Cloud Logging
@@ -41,6 +41,7 @@ add_gcp_telemetry(force_dev_export=False)
 
 VERTEX_AI_LOCATION = "global"
 GEMINI_MODEL = "vertexai/gemini-pro-latest"
+MAX_JOKE_LINE_LENGTH = 500
 
 genkit = Genkit(
     plugins=[VertexAI(location=VERTEX_AI_LOCATION)],
@@ -95,13 +96,52 @@ class JokeStyle(StrEnum):
 
 class GeneratedJoke(BaseModel):
     """
-    LLM output schema (strictly enforced by Genkit).
+    LLM output schema enforced at the application boundary.
 
     The model MUST return JSON matching this exact structure.
     """
 
-    setup: str = Field(description="The question or setup line")
-    punchline: str = Field(description="The punchline or answer")
+    setup: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The question or setup line",
+    )
+    punchline: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The punchline or answer",
+    )
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class InvalidGeneratedJokeError(RuntimeError):
+    """
+    Raised when Genkit does not return the configured output model.
+    """
+
+
+def _is_invalid_generated_output(error: BaseException) -> bool:
+    """
+    Return whether an error or its wrapped cause represents invalid model output.
+    """
+    current: BaseException | None = error
+    while current is not None:
+        if isinstance(current, (InvalidGeneratedJokeError, ValidationError)):
+            return True
+        current = current.__cause__
+    return False
+
+
+def _generation_failure_status(error: GenkitError | InvalidGeneratedJokeError | ValidationError) -> str:
+    """
+    Map generation failures to the stable public error code.
+    """
+    if _is_invalid_generated_output(error):
+        return "INVALID_MODEL_OUTPUT"
+    if isinstance(error, GenkitError):
+        return error.status
+    return "INVALID_MODEL_OUTPUT"
 
 
 class DadJoke(BaseModel):
@@ -109,14 +149,26 @@ class DadJoke(BaseModel):
     API response schema - final output to the client.
     """
 
-    setup: str = Field(description="The question or setup line", examples=["Why don't eggs tell jokes?"])
-    punchline: str = Field(description="The punchline or answer", examples=["They'd crack each other up!"])
+    setup: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The question or setup line",
+        examples=["Why don't eggs tell jokes?"],
+    )
+    punchline: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The punchline or answer",
+        examples=["They'd crack each other up!"],
+    )
     topic: JokeTopic | None = Field(
         default=None,
         description="The topic of the joke, if specified",
         examples=["food"],
     )
     style: JokeStyle = Field(description="The joke style used", examples=["pun"])
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
 # Style definitions - single source of truth for prompt generation
@@ -161,6 +213,8 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
         },
     )
     generated = result.output
+    if not isinstance(generated, GeneratedJoke):
+        raise InvalidGeneratedJokeError
     return DadJoke(
         setup=generated.setup,
         punchline=generated.punchline,
@@ -187,10 +241,24 @@ def _handle_dad_joke(request: https_fn.Request) -> https_fn.Response:
             content_type="application/json",
         )
 
+    topic_param = request.args.get("topic")
     try:
-        topic_param = request.args.get("topic")
         topic = JokeTopic(topic_param.lower()) if topic_param else None
+    except ValueError:
+        valid_topics = [topic.value for topic in JokeTopic]
+        logger.warn("Invalid topic requested")
+        return https_fn.Response(
+            json.dumps(
+                {
+                    "error": "INVALID_ARGUMENT",
+                    "message": f"Invalid topic. Valid: {valid_topics}",
+                }
+            ),
+            status=400,
+            content_type="application/json",
+        )
 
+    try:
         joke_flow = cast("Callable[[JokeTopic | None], Coroutine[object, object, DadJoke]]", generate_dad_joke)
         joke = run_async(joke_flow(topic))
 
@@ -204,28 +272,15 @@ def _handle_dad_joke(request: https_fn.Request) -> https_fn.Response:
             content_type="application/json",
         )
 
-    except ValueError:
-        valid_topics = [t.value for t in JokeTopic]
-        logger.warn("Invalid topic requested")
-        return https_fn.Response(
-            json.dumps(
-                {
-                    "error": "INVALID_ARGUMENT",
-                    "message": f"Invalid topic. Valid: {valid_topics}",
-                }
-            ),
-            status=400,
-            content_type="application/json",
-        )
-
-    except GenkitError as error:
+    except (GenkitError, InvalidGeneratedJokeError, ValidationError) as error:
+        generation_status = _generation_failure_status(error)
         logger.error(
-            "Genkit error generating joke",
-            genkit_status=error.status,
+            "Joke generation failed",
+            generation_status=generation_status,
             exception_type=type(error).__name__,
         )
         return https_fn.Response(
-            json.dumps({"error": error.status, "message": "Failed to generate joke"}),
+            json.dumps({"error": generation_status, "message": "Failed to generate joke"}),
             status=503,
             content_type="application/json",
         )

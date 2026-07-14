@@ -103,7 +103,7 @@ class TestAppConfiguration:
         """
         Verify request context wraps GCP access logging.
         """
-        from app.main import access_log_middleware, app, security_headers_middleware
+        from app.main import access_log_middleware, app, security_headers_middleware, settings
 
         assert isinstance(app, RequestContextMiddleware)
         assert isinstance(security_headers_middleware, SecurityHeadersMiddleware)
@@ -111,6 +111,7 @@ class TestAppConfiguration:
         access_config = access_log_middleware.config
         assert access_config.preset is LoggingPreset.GCP
         assert access_config.logger.name == "http.access"
+        assert security_headers_middleware._hsts is settings.is_production
 
 
 class TestRouterConfiguration:

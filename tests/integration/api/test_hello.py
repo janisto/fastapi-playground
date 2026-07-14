@@ -156,19 +156,17 @@ class TestHelloGet:
 class TestHelloPost:
     """Tests for POST /hello/."""
 
-    def test_returns_201_created(self, client: TestClient) -> None:
-        """Verify POST /hello/ returns 201 Created."""
+    def test_returns_200_ok(self, client: TestClient) -> None:
+        """Verify POST /hello/ returns 200 for a computed representation."""
         response = client.post("/v1/hello", json={"name": "Alice"})
 
-        assert response.status_code == 201
+        assert response.status_code == 200
 
     def test_no_location_header_for_transient_resource(self, client: TestClient) -> None:
         """
         Verify POST /hello/ omits Location header for transient greeting.
 
-        Per RFC 9110, Location header should only point to a retrievable resource.
-        Since POST /hello creates a transient greeting (not persisted), no Location
-        header is appropriate.
+        The endpoint computes a representation without creating a retrievable resource.
         """
         response = client.post("/v1/hello", json={"name": "Alice"})
 
@@ -223,7 +221,7 @@ class TestHelloPost:
             headers={"Content-Type": "application/cbor"},
         )
 
-        assert response.status_code == 201
+        assert response.status_code == 200
         body = response.json()
         assert body["message"] == "Hello, Alice!"
 
@@ -240,7 +238,7 @@ class TestHelloPost:
             },
         )
 
-        assert response.status_code == 201
+        assert response.status_code == 200
         assert response.headers["content-type"] == "application/cbor"
         decoded = cbor2.loads(response.content)
         assert decoded["message"] == "Hello, Alice!"

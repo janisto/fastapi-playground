@@ -7,8 +7,6 @@ Headers follow OWASP REST Security Cheat Sheet recommendations.
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.core.config import get_settings
-
 # Permissions-Policy disables browser features not needed by REST APIs
 _DEFAULT_PERMISSIONS_POLICY = (
     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
@@ -47,7 +45,6 @@ class SecurityHeadersMiddleware:
         permissions_policy: str = _DEFAULT_PERMISSIONS_POLICY,
     ) -> None:
         self.app = app
-        self._settings = get_settings()
         self._hsts = hsts
         self._hsts_include_subdomains = hsts_include_subdomains
         self._hsts_preload = hsts_preload
@@ -95,7 +92,7 @@ class SecurityHeadersMiddleware:
 
         headers.setdefault("X-Content-Type-Options", "nosniff")
 
-        if self._hsts and scope.get("scheme") == "https" and not self._settings.debug:
+        if self._hsts and scope.get("scheme") == "https":
             parts = ["max-age=31536000"]
             if self._hsts_include_subdomains:
                 parts.append("includeSubDomains")

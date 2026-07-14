@@ -23,7 +23,7 @@ def configure_logging() -> None:
     settings = get_settings()
     root = logging.getLogger()
     root.handlers.clear()
-    root.setLevel(logging.DEBUG if settings.debug else logging.INFO)
+    root.setLevel(settings.log_level)
 
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(JSONFormatter(LoggingPreset.GCP, include_source=True))

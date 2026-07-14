@@ -6,6 +6,7 @@ import re
 from typing import cast
 
 from app.main import fastapi_app
+from app.pagination import MAX_CURSOR_LENGTH
 
 EXPECTED_OPERATIONS = {
     ("get", "/health", "health_get"),
@@ -64,16 +65,15 @@ def test_cbor_routes_document_success_and_problem_representations() -> None:
     Verify the contract advertises each representation implemented at runtime.
     """
     schema = fastapi_app.openapi()
-    for path, method in [
-        ("/v1/hello", "get"),
-        ("/v1/hello", "post"),
-        ("/v1/items", "get"),
-        ("/v1/profile", "get"),
-        ("/v1/profile", "post"),
-        ("/v1/profile", "patch"),
+    for path, method, success_status in [
+        ("/v1/hello", "get", "200"),
+        ("/v1/hello", "post", "200"),
+        ("/v1/items", "get", "200"),
+        ("/v1/profile", "get", "200"),
+        ("/v1/profile", "post", "201"),
+        ("/v1/profile", "patch", "200"),
     ]:
         operation = schema["paths"][path][method]
-        success_status = "201" if method == "post" else "200"
         assert set(operation["responses"][success_status]["content"]) == {
             "application/json",
             "application/cbor",
@@ -158,17 +158,28 @@ def test_exact_route_specific_error_statuses_are_documented() -> None:
     assert "400" in schema["/v1/items"]["get"]["responses"]
     assert "409" in schema["/v1/profile"]["post"]["responses"]
     assert "404" in schema["/v1/profile"]["get"]["responses"]
-    for path in ("/v1/hello", "/v1/items", "/v1/profile"):
+    for path in ("/v1/hello", "/v1/items"):
         for operation in schema[path].values():
             assert {"400", "406", "413", "415", "500"} <= set(operation["responses"])
+    for method in ("get", "post", "patch"):
+        assert {"400", "406", "413", "415", "500"} <= set(schema["/v1/profile"][method]["responses"])
 
     assert "422" not in schema["/v1/hello"]["get"]["responses"]
     assert "422" in schema["/v1/hello"]["post"]["responses"]
     assert "422" in schema["/v1/items"]["get"]["responses"]
     assert "422" not in schema["/v1/profile"]["get"]["responses"]
     assert "422" not in schema["/v1/profile"]["delete"]["responses"]
+    assert "406" not in schema["/v1/profile"]["delete"]["responses"]
     assert "422" in schema["/v1/profile"]["post"]["responses"]
     assert "422" in schema["/v1/profile"]["patch"]["responses"]
+
+
+def test_cursor_parameter_documents_decoder_limit() -> None:
+    """Verify OpenAPI exposes the cursor bound enforced by the 400 decoder path."""
+    parameters = fastapi_app.openapi()["paths"]["/v1/items"]["get"]["parameters"]
+    cursor = next(parameter for parameter in parameters if parameter["name"] == "cursor")
+
+    assert cursor["schema"]["maxLength"] == MAX_CURSOR_LENGTH
 
 
 def test_all_local_schema_references_resolve() -> None:

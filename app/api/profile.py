@@ -17,13 +17,19 @@ from app.models.profile import Profile, ProfileCreate, ProfileUpdate
 
 logger = logging.getLogger(__name__)
 PROFILE_SCHEMA_PATH = "/schemas/Profile.json"
+_PROFILE_BASE_ERROR_RESPONSES = {
+    status_code: response
+    for status_code, response in COMMON_CBOR_ERROR_RESPONSES.items()
+    if status_code != status.HTTP_406_NOT_ACCEPTABLE
+}
+_PROFILE_NEGOTIATION_ERROR_RESPONSE = COMMON_CBOR_ERROR_RESPONSES[status.HTTP_406_NOT_ACCEPTABLE]
 
 router = APIRouter(
     prefix=f"{API_V1_PREFIX}/profile",
     tags=["Profile"],
     route_class=CBORRoute,
     responses={
-        **COMMON_CBOR_ERROR_RESPONSES,
+        **_PROFILE_BASE_ERROR_RESPONSES,
         401: problem_response("Unauthorized", authenticate=True),
         503: problem_response("Authentication service unavailable", retry_after=True),
     },
@@ -46,6 +52,7 @@ def _profile_response(response: Response, profile: Profile) -> Profile:
     operation_id="profile_create",
     responses={
         201: success_response("Profile created successfully", "Profile", location=True),
+        406: _PROFILE_NEGOTIATION_ERROR_RESPONSE,
         409: problem_response("Profile already exists"),
         422: problem_response("Validation error", model=ValidationProblemResponse),
     },
@@ -83,6 +90,7 @@ async def create_profile(
     operation_id="profile_get",
     responses={
         200: success_response("Profile retrieved successfully", "Profile"),
+        406: _PROFILE_NEGOTIATION_ERROR_RESPONSE,
         404: problem_response("Profile not found"),
     },
 )
@@ -117,6 +125,7 @@ async def get_profile(
     operation_id="profile_update",
     responses={
         200: success_response("Profile updated successfully", "Profile"),
+        406: _PROFILE_NEGOTIATION_ERROR_RESPONSE,
         404: problem_response("Profile not found"),
         422: problem_response("Validation error", model=ValidationProblemResponse),
     },

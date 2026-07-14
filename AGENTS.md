@@ -244,6 +244,10 @@ Document response headers that runtime code emits, including `X-Request-ID`, `Li
 `MAX_REQUEST_SIZE_BYTES` must be positive. Invalid JSON-array syntax in `CORS_ORIGINS` is a configuration error, not a
 literal origin fallback.
 
+`ENVIRONMENT` is the single source for production-only security behavior: production enables HSTS and strips 5xx
+Problem Details extensions. `LOG_LEVEL` controls only application log verbosity. Do not reintroduce a general debug
+switch that couples logging, response disclosure, and transport security.
+
 Use Application Default Credentials or Secret Manager in deployed environments. Service-account files remain ignored.
 Do not commit project IDs, numbers, account emails, URLs, registry paths, revision IDs, digests, credentials, or token
 values to public docs or configuration examples.
@@ -255,6 +259,11 @@ successful call can consume Vertex AI quota. Preserve `invoker="private"`; inten
 the backing Cloud Run service and must send an ID token. Keep model output strictly validated and return sanitized 503
 or 500 responses. Logs may include stable status or exception type, never prompts, generated output, exception strings,
 credentials, or user data.
+
+Do not rely on Genkit's `output_schema` alone: verify `result.output` is the expected Pydantic model because missing or
+non-model parsed output can otherwise cross the application boundary. Treat schema and output-type failures as the
+sanitized, retryable `INVALID_MODEL_OUTPUT` 503. Keep topic parsing in its own narrow exception boundary so downstream
+`ValueError` failures remain generic 500 responses rather than being misreported as client input errors.
 
 The Function deploy region remains `europe-west4`; model inference uses the `global` Vertex AI endpoint and the
 auto-updating `gemini-pro-latest` alias. Keep deployment region and model location distinct. An alias avoids stale model

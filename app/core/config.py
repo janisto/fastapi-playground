@@ -57,7 +57,10 @@ class Settings(BaseSettings):
     environment: Literal["development", "test", "production"] = Field(
         default="production", description="Environment name"
     )
-    debug: bool = Field(default=False, description="Debug mode")
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO",
+        description="Application log level",
+    )
 
     # Firebase
     firebase_project_id: str = Field(..., min_length=1, description="Firebase project ID")
@@ -92,6 +95,13 @@ class Settings(BaseSettings):
         Parse CORS origins from JSON array or comma-separated string.
         """
         return parse_cors_origins(value)
+
+    @property
+    def is_production(self) -> bool:
+        """
+        Return whether production-only security behavior must be enabled.
+        """
+        return self.environment == "production"
 
     model_config = SettingsConfigDict(
         env_file=".env",

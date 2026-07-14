@@ -3,7 +3,7 @@ Hello router demonstrating REST API guidelines.
 
 This router provides example endpoints showing:
 - GET with no parameters (200)
-- POST with validation (201 Created, Location header)
+- POST with validation (200)
 - CBOR content negotiation via CBORRoute
 - Validation errors (422 with structured format)
 """
@@ -49,26 +49,23 @@ async def get_greeting(response: Response) -> Greeting:
 
 @router.post(
     "",
-    status_code=status.HTTP_201_CREATED,
-    summary="Create personalized greeting",
-    description="Creates a personalized greeting for the given name.",
+    status_code=status.HTTP_200_OK,
+    summary="Generate personalized greeting",
+    description="Generates and returns a personalized greeting for the given name.",
     operation_id="hello_create",
     responses={
-        201: success_response("Greeting created successfully", "Greeting"),
+        200: success_response("Greeting generated successfully", "Greeting"),
         422: problem_response("Validation error", model=ValidationProblemResponse),
     },
 )
-async def create_greeting(greeting_request: GreetingRequest, response: Response) -> Greeting:
+async def generate_greeting(greeting_request: GreetingRequest, response: Response) -> Greeting:
     """
-    Create a personalized greeting.
+    Generate a personalized greeting.
 
     Demonstrates POST endpoint with:
     - Request body validation
-    - 201 Created status code
+    - 200 OK status code for a computed, non-persistent response
     - Validation errors (422) for invalid input
-
-    Note: No Location header since this creates a transient greeting,
-    not a persistent resource retrievable at a URI.
     """
     greeting_word = GREETINGS[greeting_request.language]
     message = f"{greeting_word}, {greeting_request.name}!"

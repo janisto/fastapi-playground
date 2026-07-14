@@ -21,7 +21,7 @@ AUTH_HOST = "127.0.0.1:7010"
 PROJECT_ID = "demo-test"
 
 os.environ["ENVIRONMENT"] = "test"
-os.environ["DEBUG"] = "false"
+os.environ["LOG_LEVEL"] = "INFO"
 os.environ["FIRESTORE_EMULATOR_HOST"] = FIRESTORE_HOST
 os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = AUTH_HOST
 os.environ["FIREBASE_PROJECT_ID"] = PROJECT_ID

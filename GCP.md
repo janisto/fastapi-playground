@@ -90,7 +90,7 @@ These settings are defined in `app/core/config.py`:
 | `FIRESTORE_DATABASE` | No | `(default)` | Optional named Firestore database |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Local only | unset | Explicit credential-file path; omit on Cloud Run |
 | `ENVIRONMENT` | No | `production` | `development`, `test`, or `production` |
-| `DEBUG` | No | `false` | Debug logging and development behavior |
+| `LOG_LEVEL` | No | `INFO` | Application log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
 | `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Maximum request-body size |
 | `CORS_ORIGINS` | Browser clients only | empty | JSON array or comma-separated allowed origins |
 
@@ -101,7 +101,7 @@ Example Cloud Run values:
 ```dotenv
 FIREBASE_PROJECT_ID=your-project-id
 ENVIRONMENT=production
-DEBUG=false
+LOG_LEVEL=INFO
 FIRESTORE_DATABASE=(default)
 CORS_ORIGINS=["https://app.example.com"]
 ```
@@ -222,7 +222,8 @@ telemetry.
 
 Production checklist:
 
-- keep `DEBUG=false`;
+- keep `ENVIRONMENT=production` so production-only error redaction and HSTS remain enabled;
+- use `LOG_LEVEL=INFO` unless a temporary, explicitly reviewed verbosity change is needed;
 - terminate TLS at Cloud Run and verify HSTS on HTTPS responses;
 - keep the model-backed function private and grant `roles/run.invoker` only to intended callers;
 - configure explicit `CORS_ORIGINS` for browser clients;

@@ -47,7 +47,7 @@ def test_configures_gcp_json_formatter(mocker: MockerFixture) -> None:
     """
     Verify application logs use the package's GCP formatter.
     """
-    mocker.patch("app.core.logging.get_settings", return_value=SimpleNamespace(debug=False))
+    mocker.patch("app.core.logging.get_settings", return_value=SimpleNamespace(log_level="INFO"))
 
     configure_logging()
 
@@ -60,11 +60,11 @@ def test_configures_gcp_json_formatter(mocker: MockerFixture) -> None:
     assert formatter.include_source is True
 
 
-def test_uses_debug_level_when_enabled(mocker: MockerFixture) -> None:
+def test_uses_configured_log_level(mocker: MockerFixture) -> None:
     """
-    Verify debug settings control the application log level.
+    Verify the explicit setting controls the application log level.
     """
-    mocker.patch("app.core.logging.get_settings", return_value=SimpleNamespace(debug=True))
+    mocker.patch("app.core.logging.get_settings", return_value=SimpleNamespace(log_level="DEBUG"))
 
     configure_logging()
 
@@ -76,7 +76,7 @@ def test_disables_uvicorn_access_logger(mocker: MockerFixture) -> None:
     """
     Verify Uvicorn does not duplicate package access records.
     """
-    mocker.patch("app.core.logging.get_settings", return_value=SimpleNamespace(debug=False))
+    mocker.patch("app.core.logging.get_settings", return_value=SimpleNamespace(log_level="INFO"))
 
     configure_logging()
 
@@ -92,7 +92,7 @@ def test_configuration_is_idempotent(mocker: MockerFixture) -> None:
     """
     mock_get_settings = mocker.patch(
         "app.core.logging.get_settings",
-        return_value=SimpleNamespace(debug=False),
+        return_value=SimpleNamespace(log_level="INFO"),
     )
 
     configure_logging()

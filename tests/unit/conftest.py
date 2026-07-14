@@ -11,7 +11,7 @@ from collections.abc import Generator
 import pytest
 
 os.environ["ENVIRONMENT"] = "test"
-os.environ["DEBUG"] = "false"
+os.environ["LOG_LEVEL"] = "INFO"
 os.environ["FIREBASE_PROJECT_ID"] = "test-project"
 os.environ["CORS_ORIGINS"] = ""
 

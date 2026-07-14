@@ -2,9 +2,6 @@
 Unit tests for security headers middleware.
 """
 
-from typing import Any, cast
-from unittest.mock import patch
-
 import pytest
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -115,58 +112,14 @@ class TestSecurityHeaders:
             assert "strict-transport-security" not in response.headers
 
 
-class TestHSTSDefaultSettings:
-    """
-    Tests for HSTS with default production settings.
-
-    These tests verify that HSTS is correctly applied when using default
-    configuration (debug=False), ensuring production deployments are secure.
-    """
-
-    def test_hsts_enabled_with_default_settings(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """
-        Verify HSTS is applied on HTTPS with default settings (debug=False).
-
-        This test ensures the security fix for debug defaulting to False is
-        working correctly and HSTS will be applied in production.
-        """
-        from app.core.config import Settings
-
-        monkeypatch.delenv("DEBUG", raising=False)
-
-        settings = cast("Any", Settings)(_env_file=None)
-        assert settings.debug is False, "debug must default to False for production safety"
-
-        async def ping(request: Request) -> PlainTextResponse:
-            return PlainTextResponse("pong")
-
-        app = build_starlette_app(
-            routes=[("/ping", ping, ["GET"])],
-            middleware=[(SecurityHeadersMiddleware, {"hsts": True, "hsts_include_subdomains": True})],
-        )
-
-        with (
-            patch("app.middleware.security.get_settings", return_value=settings),
-            TestClient(app, base_url="https://testserver") as client,
-        ):
-            response = client.get("/ping")
-            hsts = response.headers.get("strict-transport-security")
-            assert hsts is not None, "HSTS must be set with default production settings"
-            assert "max-age=31536000" in hsts
-            assert "includeSubDomains" in hsts
-
-
 class TestHSTSHeader:
     """
     Tests for HSTS header behavior.
     """
 
-    def test_hsts_on_https_in_production(self) -> None:
+    def test_hsts_on_https_when_enabled(self) -> None:
         """
-        Verify HSTS header is set for HTTPS in production mode (debug=False).
-
-        This is critical for security - HSTS must be applied in production
-        to prevent HTTPS downgrade attacks.
+        Verify HSTS header is set for HTTPS when enabled.
         """
 
         async def ping(request: Request) -> PlainTextResponse:
@@ -182,19 +135,16 @@ class TestHSTSHeader:
             ],
         )
 
-        # Patch settings to non-debug mode
-        with patch("app.middleware.security.get_settings") as mock_settings:
-            mock_settings.return_value.debug = False
-            with TestClient(app, base_url="https://testserver") as client:
-                response = client.get("/ping")
-                hsts = response.headers.get("strict-transport-security")
-                assert hsts is not None, "HSTS header must be set for HTTPS in production"
-                assert "max-age=31536000" in hsts
-                assert "includeSubDomains" in hsts
+        with TestClient(app, base_url="https://testserver") as client:
+            response = client.get("/ping")
+            hsts = response.headers.get("strict-transport-security")
+            assert hsts is not None
+            assert "max-age=31536000" in hsts
+            assert "includeSubDomains" in hsts
 
-    def test_no_hsts_in_debug_mode(self) -> None:
+    def test_no_hsts_when_disabled(self) -> None:
         """
-        Verify HSTS header is not set in debug mode.
+        Verify HSTS header is not set when disabled.
         """
 
         async def ping(request: Request) -> PlainTextResponse:
@@ -202,14 +152,12 @@ class TestHSTSHeader:
 
         app = build_starlette_app(
             routes=[("/ping", ping, ["GET"])],
-            middleware=[(SecurityHeadersMiddleware, {"hsts": True})],
+            middleware=[(SecurityHeadersMiddleware, {"hsts": False})],
         )
 
-        with patch("app.middleware.security.get_settings") as mock_settings:
-            mock_settings.return_value.debug = True
-            with TestClient(app, base_url="https://testserver") as client:
-                response = client.get("/ping")
-                assert "strict-transport-security" not in response.headers
+        with TestClient(app, base_url="https://testserver") as client:
+            response = client.get("/ping")
+            assert "strict-transport-security" not in response.headers
 
     def test_hsts_without_include_subdomains(self) -> None:
         """
@@ -229,14 +177,12 @@ class TestHSTSHeader:
             ],
         )
 
-        with patch("app.middleware.security.get_settings") as mock_settings:
-            mock_settings.return_value.debug = False
-            with TestClient(app, base_url="https://testserver") as client:
-                response = client.get("/ping")
-                hsts = response.headers.get("strict-transport-security")
-                assert hsts is not None
-                assert hsts == "max-age=31536000"
-                assert "includeSubDomains" not in hsts
+        with TestClient(app, base_url="https://testserver") as client:
+            response = client.get("/ping")
+            hsts = response.headers.get("strict-transport-security")
+            assert hsts is not None
+            assert hsts == "max-age=31536000"
+            assert "includeSubDomains" not in hsts
 
     def test_hsts_with_preload(self) -> None:
         """
@@ -256,15 +202,13 @@ class TestHSTSHeader:
             ],
         )
 
-        with patch("app.middleware.security.get_settings") as mock_settings:
-            mock_settings.return_value.debug = False
-            with TestClient(app, base_url="https://testserver") as client:
-                response = client.get("/ping")
-                hsts = response.headers.get("strict-transport-security")
-                assert hsts is not None
-                assert "max-age=31536000" in hsts
-                assert "includeSubDomains" in hsts
-                assert "preload" in hsts
+        with TestClient(app, base_url="https://testserver") as client:
+            response = client.get("/ping")
+            hsts = response.headers.get("strict-transport-security")
+            assert hsts is not None
+            assert "max-age=31536000" in hsts
+            assert "includeSubDomains" in hsts
+            assert "preload" in hsts
 
 
 class TestCrossOriginOpenerPolicyHeader:

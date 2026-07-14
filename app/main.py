@@ -94,7 +94,7 @@ access_log_middleware = AccessLogMiddleware(
 )
 security_headers_middleware = SecurityHeadersMiddleware(
     access_log_middleware,
-    hsts=True,
+    hsts=settings.is_production,
     hsts_include_subdomains=True,
     hsts_preload=False,
 )

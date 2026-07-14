@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.pagination import Cursor, InvalidCursorError, decode_cursor
+from app.pagination import MAX_CURSOR_LENGTH, Cursor, InvalidCursorError, decode_cursor
 
 
 class TestCursor:
@@ -60,6 +60,11 @@ class TestDecodeCursor:
         """Test decoding invalid base64 raises InvalidCursorError."""
         with pytest.raises(InvalidCursorError, match="invalid cursor format"):
             decode_cursor("!!!invalid!!!")
+
+    def test_decode_oversized_cursor(self) -> None:
+        """Oversized cursors use the same malformed-cursor error boundary."""
+        with pytest.raises(InvalidCursorError, match="cursor exceeds maximum length"):
+            decode_cursor("x" * (MAX_CURSOR_LENGTH + 1))
 
     def test_decode_missing_separator(self) -> None:
         """Test decoding cursor without type:value separator raises error."""

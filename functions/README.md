@@ -24,8 +24,10 @@ Example response:
 }
 ```
 
-Other HTTP methods return 405 without invoking the model. An invalid topic returns 400. Genkit or Vertex AI failures
-return 503, and unexpected failures return a generic 500.
+Other HTTP methods return 405 without invoking the model. An invalid topic returns 400. Genkit, Vertex AI, or invalid
+model-output failures return a sanitized 503, and unexpected failures return a generic 500. Generated setup and
+punchline values must be non-blank strings no longer than 500 characters; missing, non-object, or additional output is
+rejected before constructing the public response.
 The function is configured for 512 MiB memory. Its `TIMEOUT_SEC`, `MIN_INSTANCES`, and `MAX_INSTANCES` parameters
 default to 120, 0, and 2 respectively.
 

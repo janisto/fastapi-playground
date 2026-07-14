@@ -63,16 +63,16 @@ X-Frame-Options: DENY
 Referrer-Policy: strict-origin-when-cross-origin
 ```
 
-HSTS applies only to HTTPS responses outside debug mode. CSP is intentionally omitted from `/api-docs`, `/api-redoc`,
-and `/openapi.json`; other security headers must remain. Content type varies between JSON, CBOR, schema documents, and
-HTML documentation.
+HSTS applies only to HTTPS responses when `ENVIRONMENT=production`. CSP is intentionally omitted from `/api-docs`,
+`/api-redoc`, and `/openapi.json`; other security headers must remain. Content type varies between JSON, CBOR, schema
+documents, and HTML documentation.
 
 Cloud Run terminates TLS before proxying HTTP to the container. Verify the image runtime trusts the platform's
 forwarded headers and that a deployed HTTPS `/health` response includes HSTS; do not infer this from local plain HTTP.
 
 ### 4. Error Handling & Information Leakage
 - [ ] Error responses use generic messages (e.g., "Unauthorized" not token details)
-- [ ] Stack traces never exposed in production (`debug=False`)
+- [ ] Stack traces never exposed in production (`ENVIRONMENT=production`)
 - [ ] Internal exception details logged but not returned to clients
 - [ ] 404 vs 403 responses don't leak resource existence
 - [ ] Validation errors redact sensitive input values while retaining public field locations

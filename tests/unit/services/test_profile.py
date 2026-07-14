@@ -2,8 +2,10 @@
 Unit tests for ProfileService.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import Any, cast
+from unittest.mock import Mock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -11,6 +13,7 @@ from pytest_mock import MockerFixture
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
 from app.models.profile import ProfileCreate, ProfileUpdate
 from app.services.profile import ProfileService
+from app.services.profile.service import _log_profile_audit_event
 from tests.mocks.firestore import FakeAsyncClient
 
 
@@ -128,12 +131,12 @@ def mock_transactional_methods(mocker: MockerFixture, fake_db: FakeAsyncClient) 
     async def fake_delete_in_transaction(
         transaction: object,
         doc_ref: object,
-    ) -> dict[str, Any] | None:
+    ) -> bool:
         doc_id = getattr(doc_ref, "id", None)
         if not doc_id or doc_id not in fake_db._store:
-            return None
-        data = fake_db._store.pop(doc_id)
-        return data
+            return False
+        fake_db._store.pop(doc_id)
+        return True
 
     mocker.patch.object(ProfileService, "_create_in_transaction", staticmethod(fake_create_in_transaction))
     mocker.patch.object(ProfileService, "_update_in_transaction", staticmethod(fake_update_in_transaction))
@@ -141,11 +144,11 @@ def mock_transactional_methods(mocker: MockerFixture, fake_db: FakeAsyncClient) 
 
 
 @pytest.fixture(autouse=True)
-def mock_audit_log(mocker: MockerFixture) -> None:
+def mock_audit_log(mocker: MockerFixture) -> Mock:
     """
     Mock audit logging to avoid side effects.
     """
-    mocker.patch("app.services.profile.service._log_profile_audit_event")
+    return mocker.patch("app.services.profile.service._log_profile_audit_event")
 
 
 class TestProfileServiceGetProfile:
@@ -234,7 +237,7 @@ class TestProfileServiceCreateProfile:
     Tests for ProfileService.create_profile().
     """
 
-    async def test_creates_profile_successfully(self, fake_db: FakeAsyncClient) -> None:
+    async def test_creates_profile_successfully(self, fake_db: FakeAsyncClient, mock_audit_log: Mock) -> None:
         """
         Verify create_profile stores data and returns Profile.
         """
@@ -247,6 +250,7 @@ class TestProfileServiceCreateProfile:
         assert profile.first_name == "John"
         assert profile.email == "john@example.com"
         assert "new-user" in fake_db._store
+        mock_audit_log.assert_called_once_with("create", "new-user")
 
     async def test_sets_timestamps(self, fake_db: FakeAsyncClient) -> None:
         """
@@ -261,7 +265,11 @@ class TestProfileServiceCreateProfile:
         assert profile.updated_at is not None
         assert profile.created_at == profile.updated_at
 
-    async def test_raises_already_exists_when_duplicate(self, fake_db: FakeAsyncClient) -> None:
+    async def test_raises_already_exists_when_duplicate(
+        self,
+        fake_db: FakeAsyncClient,
+        mock_audit_log: Mock,
+    ) -> None:
         """
         Verify create_profile raises ProfileAlreadyExistsError for duplicates.
         """
@@ -274,6 +282,7 @@ class TestProfileServiceCreateProfile:
             await service.create_profile("existing-user", profile_create)
 
         assert "already exists" in str(exc_info.value.detail).lower()
+        mock_audit_log.assert_not_called()
 
     async def test_stores_all_fields(self, fake_db: FakeAsyncClient) -> None:
         """
@@ -316,7 +325,7 @@ class TestProfileServiceUpdateProfile:
     Tests for ProfileService.update_profile().
     """
 
-    async def test_updates_single_field(self, fake_db: FakeAsyncClient) -> None:
+    async def test_updates_single_field(self, fake_db: FakeAsyncClient, mock_audit_log: Mock) -> None:
         """
         Verify update_profile updates a single field.
         """
@@ -328,6 +337,7 @@ class TestProfileServiceUpdateProfile:
 
         assert profile.first_name == "Updated"
         assert fake_db._store["user-123"]["first_name"] == "Updated"
+        mock_audit_log.assert_called_once_with("update", "user-123")
 
     async def test_updates_multiple_fields(self, fake_db: FakeAsyncClient) -> None:
         """
@@ -364,7 +374,11 @@ class TestProfileServiceUpdateProfile:
 
         assert profile.updated_at > original_time
 
-    async def test_raises_not_found_when_missing(self, fake_db: FakeAsyncClient) -> None:
+    async def test_raises_not_found_when_missing(
+        self,
+        fake_db: FakeAsyncClient,
+        mock_audit_log: Mock,
+    ) -> None:
         """
         Verify update_profile raises ProfileNotFoundError when profile missing.
         """
@@ -376,8 +390,13 @@ class TestProfileServiceUpdateProfile:
             await service.update_profile("nonexistent", profile_update)
 
         assert "not found" in str(exc_info.value.detail).lower()
+        mock_audit_log.assert_not_called()
 
-    async def test_returns_unchanged_profile_when_no_updates(self, fake_db: FakeAsyncClient) -> None:
+    async def test_returns_unchanged_profile_when_no_updates(
+        self,
+        fake_db: FakeAsyncClient,
+        mock_audit_log: Mock,
+    ) -> None:
         """
         Verify update_profile returns unchanged profile when no fields provided.
         """
@@ -389,6 +408,7 @@ class TestProfileServiceUpdateProfile:
         profile = await service.update_profile("user-123", profile_update)
 
         assert profile.first_name == original_data["first_name"]
+        mock_audit_log.assert_not_called()
 
 
 class TestProfileServiceDeleteProfile:
@@ -396,7 +416,7 @@ class TestProfileServiceDeleteProfile:
     Tests for ProfileService.delete_profile().
     """
 
-    async def test_deletes_profile_successfully(self, fake_db: FakeAsyncClient) -> None:
+    async def test_deletes_profile_successfully(self, fake_db: FakeAsyncClient, mock_audit_log: Mock) -> None:
         """
         Verify delete_profile removes document from store.
         """
@@ -407,8 +427,13 @@ class TestProfileServiceDeleteProfile:
 
         assert "user-123" not in fake_db._store
         assert result is None
+        mock_audit_log.assert_called_once_with("delete", "user-123")
 
-    async def test_raises_not_found_when_missing(self, fake_db: FakeAsyncClient) -> None:
+    async def test_raises_not_found_when_missing(
+        self,
+        fake_db: FakeAsyncClient,
+        mock_audit_log: Mock,
+    ) -> None:
         """
         Verify delete_profile raises ProfileNotFoundError when profile missing.
         """
@@ -418,6 +443,28 @@ class TestProfileServiceDeleteProfile:
             await service.delete_profile("nonexistent")
 
         assert "not found" in str(exc_info.value.detail).lower()
+        mock_audit_log.assert_not_called()
+
+
+def test_profile_audit_event_contains_only_stable_identifiers(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """
+    Verify successful mutation audits are structured without profile data.
+    """
+    with caplog.at_level(logging.INFO, logger="app.services.profile.service"):
+        _log_profile_audit_event("update", "user-123")
+
+    records = [record for record in caplog.records if record.name == "app.services.profile.service"]
+    assert len(records) == 1
+    assert records[0].getMessage() == "Audit event"
+    assert vars(records[0])["audit"] == {
+        "action": "update",
+        "user_id": "user-123",
+        "resource_type": "profile",
+        "resource_id": "user-123",
+        "result": "success",
+    }
 
 
 class TestProfileServiceInit:

@@ -5,6 +5,8 @@ Integration tests for items endpoint.
 import cbor2
 from fastapi.testclient import TestClient
 
+from app.pagination import MAX_CURSOR_LENGTH
+
 ITEM_FIELD_NAMES = {
     "id",
     "name",
@@ -350,6 +352,16 @@ class TestItemsInvalidCursor:
         assert response.status_code == 400
         body = response.json()
         assert body["title"] == "Bad Request"
+
+    def test_oversized_cursor_returns_400(self, client: TestClient) -> None:
+        """Verify cursor length violations remain malformed parameters, not 422 validation errors."""
+        response = client.get(
+            "/v1/items",
+            params={"cursor": "x" * (MAX_CURSOR_LENGTH + 1)},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "cursor exceeds maximum length"
 
     def test_invalid_cursor_cbor_returns_cbor_problem(self, client: TestClient) -> None:
         """Verify invalid cursor with Accept: application/cbor returns CBOR error."""

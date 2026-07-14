@@ -4,15 +4,6 @@
 # Uses ghcr.io/astral-sh/uv images which include both Python and uv pre-installed.
 # See: https://docs.astral.sh/uv/guides/integration/docker/
 # Example: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
-#
-# Cloud Run automatic base image updates:
-# Deploy with automatic base image updates so Google can patch the base without a rebuild:
-#   gcloud run deploy fastapi-playground \
-#     --image REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest \
-#     --platform managed \
-#     --region REGION \
-#     --base-image python314 \
-#     --automatic-updates
 
 # Builder image: includes uv for dependency management
 ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.28-python3.14-trixie-slim

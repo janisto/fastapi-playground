@@ -32,6 +32,7 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 | Method | Purpose | Success Status |
 |--------|---------|----------------|
 | GET | Retrieve resource(s) | 200 OK |
+| POST | Process input and return a computed representation | 200 OK |
 | POST | Create a resource | 201 Created; persistent resources include a Location header |
 | PATCH | Partial update | 200 OK |
 | DELETE | Remove a resource | 204 No Content |
@@ -125,8 +126,8 @@ cp .env.example .env
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Server listen port | `8080` |
-| `ENVIRONMENT` | Environment label | `production` |
-| `DEBUG` | Enable debug mode | `false` |
+| `ENVIRONMENT` | Runtime mode; `production` enables HSTS and strips 5xx response extensions | `production` |
+| `LOG_LEVEL` | Application log verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`) | `INFO` |
 | `FIREBASE_PROJECT_ID` | Firebase/GCP project ID | - |
 | `FIRESTORE_DATABASE` | Firestore database ID | `(default)` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Service account JSON path (local dev) | - |
@@ -226,7 +227,7 @@ All routes use paths without trailing slashes (`redirect_slashes=False`).
 |--------|------|------|-------------|
 | GET | `/health` | No | Health check probe |
 | GET | `/v1/hello` | No | Default greeting |
-| POST | `/v1/hello` | No | Personalized greeting |
+| POST | `/v1/hello` | No | Generate a personalized greeting (200 OK) |
 | GET | `/v1/items` | No | List items with pagination |
 | POST | `/v1/profile` | Yes | Create user profile |
 | GET | `/v1/profile` | Yes | Get user profile |

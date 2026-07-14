@@ -486,6 +486,19 @@ class TestDeleteProfile:
         assert response.content == b""
         mock_profile_service.delete_profile.assert_awaited_once()
 
+    def test_ignores_accept_for_bodyless_success(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """Verify Accept does not block a successful response with no representation."""
+        response = client.delete(BASE_URL, headers={"Accept": "application/xml"})
+
+        assert response.status_code == 204
+        assert response.content == b""
+        mock_profile_service.delete_profile.assert_awaited_once()
+
     def test_returns_404_when_not_found(
         self,
         client: TestClient,

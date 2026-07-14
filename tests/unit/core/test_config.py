@@ -32,7 +32,7 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     env_vars = [
         "ENVIRONMENT",
-        "DEBUG",
+        "LOG_LEVEL",
         "FIREBASE_PROJECT_ID",
         "GOOGLE_APPLICATION_CREDENTIALS",
         "FIRESTORE_DATABASE",
@@ -162,18 +162,25 @@ class TestSettings:
 
         assert settings.environment == "production"
 
-    def test_default_debug(self) -> None:
+    def test_default_log_level(self) -> None:
         """
-        Verify debug mode defaults to False for production safety.
-
-        Debug must default to False to ensure:
-        - HSTS headers are applied in production
-        - Log levels are appropriate (INFO, not DEBUG)
-        - No stack traces are exposed to clients
+        Verify logging defaults to the production-safe INFO level.
         """
         settings = _create_settings()
 
-        assert settings.debug is False
+        assert settings.log_level == "INFO"
+
+    @pytest.mark.parametrize(
+        ("environment", "expected"),
+        [("production", True), ("development", False), ("test", False)],
+    )
+    def test_is_production(self, environment: str, expected: bool) -> None:
+        """
+        Verify one environment decision controls production-only safeguards.
+        """
+        settings = _create_settings(environment=environment)
+
+        assert settings.is_production is expected
 
     def test_firebase_project_id_is_required(self) -> None:
         """
@@ -214,15 +221,15 @@ class TestSettingsFromEnv:
 
         assert settings.environment == "development"
 
-    def test_debug_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_log_level_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Verify debug is loaded from env var.
+        Verify the application log level is loaded from the environment.
         """
-        monkeypatch.setenv("DEBUG", "false")
+        monkeypatch.setenv("LOG_LEVEL", "DEBUG")
 
         settings = _create_settings()
 
-        assert settings.debug is False
+        assert settings.log_level == "DEBUG"
 
     def test_firebase_project_id_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -317,6 +324,13 @@ class TestSettingsFromEnv:
     def test_invalid_environment_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Unknown environment names cannot disable production safeguards silently."""
         monkeypatch.setenv("ENVIRONMENT", "prodution")
+
+        with pytest.raises(ValidationError):
+            _create_settings()
+
+    def test_invalid_log_level_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unknown log levels cannot silently change production logging."""
+        monkeypatch.setenv("LOG_LEVEL", "VERBOSE")
 
         with pytest.raises(ValidationError):
             _create_settings()

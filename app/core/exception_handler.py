@@ -149,7 +149,7 @@ exception_handler = new_exception_handler(
             StripExtrasPostHook(
                 mandatory_fields=["title", "status", "detail", "errors"],
                 include=[500, 502, 503, 504],
-                enabled=settings.environment == "production",
+                enabled=settings.is_production,
                 logger=logger,
             ),
         ),

@@ -7,6 +7,7 @@ import binascii
 from dataclasses import dataclass
 
 _BASE64_BLOCK_SIZE = 4
+MAX_CURSOR_LENGTH = 2048
 
 
 class InvalidCursorError(Exception):
@@ -36,6 +37,8 @@ def decode_cursor(encoded_cursor: str) -> Cursor:
     """
     Decode URL-safe base64 cursor.
     """
+    if len(encoded_cursor) > MAX_CURSOR_LENGTH:
+        raise InvalidCursorError("cursor exceeds maximum length")
     if not encoded_cursor:
         return Cursor(cursor_type="", value="")
     padding = _BASE64_BLOCK_SIZE - len(encoded_cursor) % _BASE64_BLOCK_SIZE
