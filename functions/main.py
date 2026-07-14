@@ -13,7 +13,7 @@ from firebase_functions import https_fn, logger, options, params
 from genkit import Genkit, GenkitError
 from genkit.plugins.google_cloud import add_gcp_telemetry
 from genkit.plugins.google_genai import VertexAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Configure structlog for JSON output in Cloud Run/Functions (Genkit uses structlog internally)
 # This ensures Genkit's logs appear as structured jsonPayload in Cloud Logging
@@ -39,9 +39,13 @@ initialize_app()
 # Export Genkit telemetry to Cloud Trace and Cloud Monitoring (GCP only, not local dev)
 add_gcp_telemetry(force_dev_export=False)
 
-ai = Genkit(
-    plugins=[VertexAI(location="europe-west4")],
-    model="vertexai/gemini-3-pro-preview",
+VERTEX_AI_LOCATION = "global"
+GEMINI_MODEL = "vertexai/gemini-pro-latest"
+MAX_JOKE_LINE_LENGTH = 500
+
+genkit = Genkit(
+    plugins=[VertexAI(location=VERTEX_AI_LOCATION)],
+    model=GEMINI_MODEL,
 )
 
 _loop = asyncio.new_event_loop()
@@ -92,13 +96,52 @@ class JokeStyle(StrEnum):
 
 class GeneratedJoke(BaseModel):
     """
-    LLM output schema (strictly enforced by Genkit).
+    LLM output schema enforced at the application boundary.
 
     The model MUST return JSON matching this exact structure.
     """
 
-    setup: str = Field(description="The question or setup line")
-    punchline: str = Field(description="The punchline or answer")
+    setup: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The question or setup line",
+    )
+    punchline: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The punchline or answer",
+    )
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class InvalidGeneratedJokeError(RuntimeError):
+    """
+    Raised when Genkit does not return the configured output model.
+    """
+
+
+def _is_invalid_generated_output(error: BaseException) -> bool:
+    """
+    Return whether an error or its wrapped cause represents invalid model output.
+    """
+    current: BaseException | None = error
+    while current is not None:
+        if isinstance(current, (InvalidGeneratedJokeError, ValidationError)):
+            return True
+        current = current.__cause__
+    return False
+
+
+def _generation_failure_status(error: GenkitError | InvalidGeneratedJokeError | ValidationError) -> str:
+    """
+    Map generation failures to the stable public error code.
+    """
+    if _is_invalid_generated_output(error):
+        return "INVALID_MODEL_OUTPUT"
+    if isinstance(error, GenkitError):
+        return error.status
+    return "INVALID_MODEL_OUTPUT"
 
 
 class DadJoke(BaseModel):
@@ -106,14 +149,26 @@ class DadJoke(BaseModel):
     API response schema - final output to the client.
     """
 
-    setup: str = Field(description="The question or setup line", examples=["Why don't eggs tell jokes?"])
-    punchline: str = Field(description="The punchline or answer", examples=["They'd crack each other up!"])
+    setup: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The question or setup line",
+        examples=["Why don't eggs tell jokes?"],
+    )
+    punchline: str = Field(
+        min_length=1,
+        max_length=MAX_JOKE_LINE_LENGTH,
+        description="The punchline or answer",
+        examples=["They'd crack each other up!"],
+    )
     topic: JokeTopic | None = Field(
         default=None,
         description="The topic of the joke, if specified",
         examples=["food"],
     )
     style: JokeStyle = Field(description="The joke style used", examples=["pun"])
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
 # Style definitions - single source of truth for prompt generation
@@ -130,13 +185,13 @@ def build_system_prompt(style: JokeStyle) -> str:
     """
     Build system prompt for a specific joke style.
     """
-    style_desc = STYLE_DEFINITIONS[style]
+    style_description = STYLE_DEFINITIONS[style]
     return f"""You are a dad joke generator. Generate family-friendly jokes that elicit eye-rolls and groans.
 
-Use this style: {style.value} - {style_desc}"""
+Use this style: {style.value} - {style_description}"""
 
 
-@ai.flow()
+@genkit.flow()
 async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     """
     Generate a dad joke using Gemini.
@@ -147,7 +202,7 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     style = random.choice(list(JokeStyle))  # noqa: S311
     user_prompt = f"Generate a dad joke about {topic.value}." if topic else "Generate a dad joke."
 
-    result = await ai.generate(
+    result = await genkit.generate(
         system=build_system_prompt(style),
         prompt=user_prompt,
         output_schema=GeneratedJoke,
@@ -158,6 +213,8 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
         },
     )
     generated = result.output
+    if not isinstance(generated, GeneratedJoke):
+        raise InvalidGeneratedJokeError
     return DadJoke(
         setup=generated.setup,
         punchline=generated.punchline,
@@ -166,8 +223,7 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     )
 
 
-@https_fn.on_request()
-def dad_joke(req: https_fn.Request) -> https_fn.Response:
+def _handle_dad_joke(request: https_fn.Request) -> https_fn.Response:
     """
     HTTP endpoint that returns a dad joke.
 
@@ -177,29 +233,20 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
     Returns:
         JSON with setup, punchline, topic, and style fields.
     """
-    try:
-        topic_param = req.args.get("topic")
-        topic = JokeTopic(topic_param.lower()) if topic_param else None
-
-        joke_flow = cast("Callable[[JokeTopic | None], Coroutine[object, object, DadJoke]]", generate_dad_joke)
-        joke = run_async(joke_flow(topic))
-
-        logger.info(
-            "Generated dad joke",
-            topic=topic.value if topic else None,
-            style=joke.style.value,
-            setup=joke.setup,
-            punchline=joke.punchline,
-        )
-
+    if request.method != "GET":
         return https_fn.Response(
-            joke.model_dump_json(),
+            json.dumps({"error": "METHOD_NOT_ALLOWED", "message": "Use GET"}),
+            status=405,
+            headers={"Allow": "GET"},
             content_type="application/json",
         )
 
+    topic_param = request.args.get("topic")
+    try:
+        topic = JokeTopic(topic_param.lower()) if topic_param else None
     except ValueError:
-        valid_topics = [t.value for t in JokeTopic]
-        logger.warn("Invalid topic requested", topic=topic_param, valid_topics=valid_topics)
+        valid_topics = [topic.value for topic in JokeTopic]
+        logger.warn("Invalid topic requested")
         return https_fn.Response(
             json.dumps(
                 {
@@ -211,23 +258,45 @@ def dad_joke(req: https_fn.Request) -> https_fn.Response:
             content_type="application/json",
         )
 
-    except GenkitError as e:
+    try:
+        joke_flow = cast("Callable[[JokeTopic | None], Coroutine[object, object, DadJoke]]", generate_dad_joke)
+        joke = run_async(joke_flow(topic))
+
+        logger.info(
+            "Generated dad joke",
+            topic_provided=topic is not None,
+        )
+
+        return https_fn.Response(
+            joke.model_dump_json(),
+            content_type="application/json",
+        )
+
+    except (GenkitError, InvalidGeneratedJokeError, ValidationError) as error:
+        generation_status = _generation_failure_status(error)
         logger.error(
-            "Genkit error generating joke",
-            error=e,
-            genkit_status=e.status,
-            genkit_message=str(e),
+            "Joke generation failed",
+            generation_status=generation_status,
+            exception_type=type(error).__name__,
         )
         return https_fn.Response(
-            json.dumps({"error": e.status, "message": "Failed to generate joke"}),
+            json.dumps({"error": generation_status, "message": "Failed to generate joke"}),
             status=503,
             content_type="application/json",
         )
 
-    except Exception as e:  # noqa: BLE001
-        logger.error("Unexpected error generating joke", error=e)
+    except Exception as error:  # noqa: BLE001
+        logger.error("Unexpected error generating joke", exception_type=type(error).__name__)
         return https_fn.Response(
             json.dumps({"error": "INTERNAL", "message": "An unexpected error occurred"}),
             status=500,
             content_type="application/json",
         )
+
+
+@https_fn.on_request(invoker="private")
+def dad_joke(request: https_fn.Request) -> https_fn.Response:
+    """
+    Serve the private dad-joke HTTP function.
+    """
+    return _handle_dad_joke(request)

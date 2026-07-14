@@ -3,6 +3,7 @@ Profile request models.
 """
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.experimental.missing_sentinel import MISSING
 
 from app.models.types import NormalizedEmail, Phone
 
@@ -12,14 +13,14 @@ class ProfileBase(BaseModel):
     Base profile model with common fields.
     """
 
-    firstname: str = Field(
+    first_name: str = Field(
         ...,
         min_length=1,
         max_length=100,
         description="First name",
         examples=["John"],
     )
-    lastname: str = Field(
+    last_name: str = Field(
         ...,
         min_length=1,
         max_length=100,
@@ -59,13 +60,13 @@ class ProfileCreate(ProfileBase):
 
     @field_validator("terms", mode="after")
     @classmethod
-    def terms_must_be_accepted(cls, v: bool) -> bool:
+    def terms_must_be_accepted(cls, value: bool) -> bool:
         """
         Enforce terms acceptance on profile creation.
         """
-        if not v:
+        if not value:
             raise ValueError("terms must be accepted")
-        return v
+        return value
 
 
 class ProfileUpdate(BaseModel):
@@ -73,32 +74,32 @@ class ProfileUpdate(BaseModel):
     Model for updating an existing profile.
     """
 
-    firstname: str | None = Field(
-        None,
+    first_name: str | MISSING = Field(
+        MISSING,
         min_length=1,
         max_length=100,
         description="First name",
         examples=["John"],
     )
-    lastname: str | None = Field(
-        None,
+    last_name: str | MISSING = Field(
+        MISSING,
         min_length=1,
         max_length=100,
         description="Last name",
         examples=["Doe"],
     )
-    email: NormalizedEmail | None = Field(
-        None,
+    email: NormalizedEmail | MISSING = Field(
+        MISSING,
         description="Email address (auto-lowercased)",
         examples=["user@example.com"],
     )
-    phone_number: Phone | None = Field(
-        None,
+    phone_number: Phone | MISSING = Field(
+        MISSING,
         description="Phone number",
         examples=["+358401234567"],
     )
-    marketing: bool | None = Field(
-        None,
+    marketing: bool | MISSING = Field(
+        MISSING,
         description="Marketing opt-in",
         examples=[False],
     )

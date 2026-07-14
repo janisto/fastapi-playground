@@ -3,6 +3,7 @@ Integration tests for hello endpoint.
 """
 
 import cbor2
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -22,13 +23,12 @@ class TestHelloGet:
         body = response.json()
         assert body["message"] == "Hello, World!"
 
-    def test_returns_schema_url(self, client: TestClient) -> None:
-        """Verify GET /hello/ returns $schema URL."""
+    def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
+        """Verify GET /hello/ keeps schema metadata out of the representation."""
         response = client.get("/v1/hello")
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/Greeting.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """Verify GET /hello/ returns Link header with describedBy."""
@@ -53,35 +53,131 @@ class TestHelloGet:
         decoded = cbor2.loads(response.content)
         assert decoded["message"] == "Hello, World!"
 
+    def test_prefers_higher_quality_json(self, client: TestClient) -> None:
+        """
+        Verify representation selection honors client quality weights.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=1, application/cbor;q=0.5"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_prefers_json_on_equal_quality(self, client: TestClient) -> None:
+        """
+        Verify the documented server preference resolves equal quality.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0.8, application/cbor;q=0.8"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_wildcard_does_not_opt_into_cbor(self, client: TestClient) -> None:
+        """
+        Verify a wildcard keeps JSON even when exact CBOR is also acceptable.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "*/*;q=1, application/cbor;q=0.9"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_parameterized_cbor_range_does_not_select_generic_cbor(self, client: TestClient) -> None:
+        """
+        Verify unsupported media parameters constrain the requested range.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0.1, application/cbor;profile=example"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_parameter_after_quality_still_constrains_cbor(self, client: TestClient) -> None:
+        """
+        Verify RFC 9110 removed the older accept-extension grammar.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0.1, application/cbor;q=0.9;example=one"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+    def test_exact_json_exclusion_overrides_wildcard(self, client: TestClient) -> None:
+        """
+        Verify a specific exclusion cannot be bypassed by a broader range.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": "application/json;q=0, */*;q=1"},
+        )
+
+        assert response.status_code == 406
+        assert response.headers["content-type"] == "application/problem+json"
+
+    @pytest.mark.parametrize("invalid_qvalue", [".5", "9e-1", "+0.5", "0.1234", "1.0000"])
+    def test_invalid_qvalue_does_not_influence_selection(
+        self,
+        client: TestClient,
+        invalid_qvalue: str,
+    ) -> None:
+        """
+        Verify non-RFC q-values are ignored instead of parsed as floats.
+        """
+        response = client.get(
+            "/v1/hello",
+            headers={"Accept": f"application/json;q={invalid_qvalue}, application/cbor;q=0.4"},
+        )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/cbor"
+
+    def test_unsupported_accept_returns_406(self, client: TestClient) -> None:
+        """
+        Verify an explicit unsupported representation is not silently ignored.
+        """
+        response = client.get("/v1/hello", headers={"Accept": "text/csv"})
+
+        assert response.status_code == 406
+        assert response.headers["content-type"] == "application/problem+json"
+        assert response.json()["title"] == "Not Acceptable"
+
 
 class TestHelloPost:
     """Tests for POST /hello/."""
 
-    def test_returns_201_created(self, client: TestClient) -> None:
-        """Verify POST /hello/ returns 201 Created."""
+    def test_returns_200_ok(self, client: TestClient) -> None:
+        """Verify POST /hello/ returns 200 for a computed representation."""
         response = client.post("/v1/hello", json={"name": "Alice"})
 
-        assert response.status_code == 201
+        assert response.status_code == 200
 
     def test_no_location_header_for_transient_resource(self, client: TestClient) -> None:
         """
         Verify POST /hello/ omits Location header for transient greeting.
 
-        Per RFC 9110, Location header should only point to a retrievable resource.
-        Since POST /hello creates a transient greeting (not persisted), no Location
-        header is appropriate.
+        The endpoint computes a representation without creating a retrievable resource.
         """
         response = client.post("/v1/hello", json={"name": "Alice"})
 
         assert response.headers.get("location") is None
 
-    def test_returns_schema_url(self, client: TestClient) -> None:
-        """Verify POST /hello/ returns $schema URL."""
+    def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
+        """Verify POST /hello/ keeps schema metadata out of the representation."""
         response = client.post("/v1/hello", json={"name": "Alice"})
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/Greeting.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
         """Verify POST /hello/ returns Link header with describedBy."""
@@ -125,7 +221,7 @@ class TestHelloPost:
             headers={"Content-Type": "application/cbor"},
         )
 
-        assert response.status_code == 201
+        assert response.status_code == 200
         body = response.json()
         assert body["message"] == "Hello, Alice!"
 
@@ -142,7 +238,7 @@ class TestHelloPost:
             },
         )
 
-        assert response.status_code == 201
+        assert response.status_code == 200
         assert response.headers["content-type"] == "application/cbor"
         decoded = cbor2.loads(response.content)
         assert decoded["message"] == "Hello, Alice!"
@@ -200,7 +296,7 @@ class TestHelloValidation:
         assert body["status"] == 422
         assert body["detail"] == "validation failed"
         assert "errors" in body
-        assert "$schema" in body
+        assert "$schema" not in body
         error = body["errors"][0]
         assert "location" in error
         assert "message" in error

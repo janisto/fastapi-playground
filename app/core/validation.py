@@ -2,6 +2,7 @@
 Custom validation error handler for structured error format.
 """
 
+import math
 from collections.abc import Sequence
 from typing import Any
 
@@ -9,8 +10,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi_problem.handler import ExceptionHandler
 from rfc9457 import Problem
 from starlette.requests import Request
-
-from app.core.constants import ERROR_SCHEMA_PATH
 
 SENSITIVE_FIELD_NAMES = frozenset(
     {
@@ -26,6 +25,12 @@ SENSITIVE_FIELD_NAMES = frozenset(
         "private_key",
     }
 )
+_SENSITIVE_FIELD_MARKERS = tuple(name.replace("_", "") for name in SENSITIVE_FIELD_NAMES)
+_MIN_SENSITIVE_COMPOSITE_MARKER_LENGTH = 5
+_SENSITIVE_COMPOSITE_MARKERS = tuple(
+    marker for marker in _SENSITIVE_FIELD_MARKERS if len(marker) >= _MIN_SENSITIVE_COMPOSITE_MARKER_LENGTH
+)
+_MAX_EXPOSED_VALUE_LENGTH = 200
 
 
 def loc_to_dot_notation(loc: Sequence[str | int]) -> str:
@@ -51,11 +56,37 @@ def is_sensitive_field(loc: Sequence[str | int]) -> bool:
     """
     Check if any segment of the location path is a sensitive field.
     """
-    return any(isinstance(segment, str) and segment.lower() in SENSITIVE_FIELD_NAMES for segment in loc)
+    for segment in loc:
+        if not isinstance(segment, str):
+            continue
+        normalized = "".join(character for character in segment.lower() if character.isalnum())
+        if normalized in _SENSITIVE_FIELD_MARKERS or any(
+            marker in normalized for marker in _SENSITIVE_COMPOSITE_MARKERS
+        ):
+            return True
+    return False
+
+
+def is_safe_validation_value(value: object) -> bool:
+    """
+    Return whether a validation value is safe to echo to the caller.
+
+    Container values are omitted because Pydantic can attach the complete
+    request body to a missing-field error.
+    """
+    if isinstance(value, str):
+        return len(value) <= _MAX_EXPOSED_VALUE_LENGTH
+    if value is None or isinstance(value, bool):
+        return True
+    if isinstance(value, int):
+        return len(str(value)) <= _MAX_EXPOSED_VALUE_LENGTH
+    if isinstance(value, float):
+        return math.isfinite(value)
+    return False
 
 
 def validation_error_handler(
-    eh: ExceptionHandler,
+    exception_handler: ExceptionHandler,
     request: Request,
     exc: RequestValidationError,
 ) -> Problem:
@@ -63,12 +94,11 @@ def validation_error_handler(
     Custom validation handler producing structured error format.
 
     Per RFC 9457, when type is omitted it defaults to "about:blank", and title
-    SHOULD match the HTTP status phrase. The response includes $schema for
-    JSON Schema discoverability.
+    SHOULD match the HTTP status phrase. A response Link header provides
+    schema discoverability.
 
     Response format:
     {
-        "$schema": "http://example.com/schemas/ErrorModel.json",
         "title": "Unprocessable Entity",
         "status": 422,
         "detail": "validation failed",
@@ -82,18 +112,12 @@ def validation_error_handler(
             "location": loc_to_dot_notation(loc),
             "message": error["msg"],
         }
-        if "input" in error and not is_sensitive_field(loc):
+        if "input" in error and not is_sensitive_field(loc) and is_safe_validation_value(error["input"]):
             error_detail["value"] = error["input"]
         errors.append(error_detail)
-
-    # Build absolute $schema URL from request base URL
-    schema_url = str(request.base_url).rstrip("/") + ERROR_SCHEMA_PATH
-
-    # Note: $schema is passed via **kwargs to Problem.extras, not as a named parameter
-    extras: dict[str, Any] = {"$schema": schema_url, "errors": errors}
     return Problem(
         title="Unprocessable Entity",
         detail="validation failed",
         status=422,
-        **extras,
+        errors=errors,
     )

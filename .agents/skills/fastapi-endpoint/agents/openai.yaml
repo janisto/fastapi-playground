@@ -1,0 +1,4 @@
+interface:
+  display_name: "FastAPI Endpoint"
+  short_description: "Build project-standard FastAPI endpoints"
+  default_prompt: "Use $fastapi-endpoint to implement a FastAPI endpoint with the repository routing, validation, response, observability, OpenAPI, and test conventions."

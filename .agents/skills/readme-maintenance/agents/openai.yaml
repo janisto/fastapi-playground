@@ -1,0 +1,4 @@
+interface:
+  display_name: "README Maintenance"
+  short_description: "Keep the project README accurate and concise"
+  default_prompt: "Use $readme-maintenance to audit README.md against the current repository and update stale claims."

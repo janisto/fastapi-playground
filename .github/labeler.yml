@@ -20,6 +20,8 @@ functions:
 documentation:
   - changed-files:
       - any-glob-to-any-file:
+          - '.agents/**/*.md'
+          - 'AGENTS.md'
           - 'functions/README.md'
           - 'README.md'
           - 'GCP.md'

@@ -3,7 +3,7 @@ Unit tests for Firebase initialization and configuration.
 """
 
 from collections.abc import Generator
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -13,7 +13,7 @@ from app.core.firebase import (
     close_async_firestore_client,
     get_async_firestore_client,
     get_firebase_app,
-    get_firestore_client,
+    initialize_firebase,
 )
 
 
@@ -23,17 +23,14 @@ def reset_global_state() -> Generator[None]:
     Reset global Firebase state before and after each test.
     """
     original_app = firebase_mod._firebase_app
-    original_client = firebase_mod._firestore_client
     original_async_client = firebase_mod._async_firestore_client
 
     firebase_mod._firebase_app = None
-    firebase_mod._firestore_client = None
     firebase_mod._async_firestore_client = None
 
     yield
 
     firebase_mod._firebase_app = original_app
-    firebase_mod._firestore_client = original_client
     firebase_mod._async_firestore_client = original_async_client
 
 
@@ -61,28 +58,72 @@ class TestGetFirebaseApp:
         assert result is mock_app
 
 
-class TestGetFirestoreClient:
+class TestInitializeFirebase:
     """
-    Tests for get_firestore_client function.
+    Tests for initialize_firebase.
     """
 
-    def test_raises_when_not_initialized(self) -> None:
+    def test_adc_initialization_uses_configured_project(self, mocker: MockerFixture) -> None:
         """
-        Verify RuntimeError is raised when Firestore client is not available.
+        Verify the Firebase app project does not depend on the active gcloud default.
         """
-        with pytest.raises(RuntimeError, match="Firestore client is not available"):
-            get_firestore_client()
+        app = MagicMock()
+        initialize_app = mocker.patch("app.core.firebase.firebase_admin.initialize_app", return_value=app)
+        mocker.patch(
+            "app.core.firebase.get_settings",
+            return_value=MagicMock(firebase_project_id="configured-project", google_application_credentials=None),
+        )
 
-    def test_returns_client_when_initialized(self) -> None:
-        """
-        Verify client is returned when Firestore is initialized.
-        """
-        mock_client = MagicMock()
-        firebase_mod._firestore_client = mock_client
+        initialize_firebase()
 
-        result = get_firestore_client()
+        initialize_app.assert_called_once_with(options={"projectId": "configured-project"})
+        assert firebase_mod._firebase_app is app
 
-        assert result is mock_client
+    def test_explicit_credentials_use_configured_project(self, mocker: MockerFixture) -> None:
+        """
+        Verify service-account initialization retains the configured project boundary.
+        """
+        credential = MagicMock()
+        app = MagicMock()
+        certificate = mocker.patch("app.core.firebase.credentials.Certificate", return_value=credential)
+        initialize_app = mocker.patch("app.core.firebase.firebase_admin.initialize_app", return_value=app)
+        mocker.patch(
+            "app.core.firebase.get_settings",
+            return_value=MagicMock(
+                firebase_project_id="configured-project",
+                google_application_credentials="/credentials/service-account.json",
+            ),
+        )
+
+        initialize_firebase()
+
+        certificate.assert_called_once_with("/credentials/service-account.json")
+        initialize_app.assert_called_once_with(credential, {"projectId": "configured-project"})
+        assert firebase_mod._firebase_app is app
+
+    def test_existing_app_is_not_reinitialized(self, mocker: MockerFixture) -> None:
+        """
+        Verify repeated startup calls preserve the existing Firebase app.
+        """
+        firebase_mod._firebase_app = MagicMock()
+        initialize_app = mocker.patch("app.core.firebase.firebase_admin.initialize_app")
+
+        initialize_firebase()
+
+        initialize_app.assert_not_called()
+
+    def test_initialization_failure_is_reraised(self, mocker: MockerFixture) -> None:
+        """
+        Verify startup fails rather than running with an unusable Firebase app.
+        """
+        mocker.patch(
+            "app.core.firebase.get_settings",
+            return_value=MagicMock(firebase_project_id="configured-project", google_application_credentials=None),
+        )
+        mocker.patch("app.core.firebase.firebase_admin.initialize_app", side_effect=RuntimeError("ADC unavailable"))
+
+        with pytest.raises(RuntimeError, match="ADC unavailable"):
+            initialize_firebase()
 
 
 class TestGetAsyncFirestoreClient:
@@ -145,24 +186,24 @@ class TestCloseAsyncFirestoreClient:
     Tests for close_async_firestore_client function.
     """
 
-    async def test_closes_client_when_exists(self) -> None:
+    def test_closes_client_when_exists(self) -> None:
         """
         Verify client is closed and reset to None.
         """
-        mock_client = AsyncMock()
+        mock_client = MagicMock()
         firebase_mod._async_firestore_client = mock_client
 
-        await close_async_firestore_client()
+        close_async_firestore_client()
 
-        mock_client.close.assert_awaited_once()
+        mock_client.close.assert_called_once_with()
         assert firebase_mod._async_firestore_client is None
 
-    async def test_does_nothing_when_no_client(self) -> None:
+    def test_does_nothing_when_no_client(self) -> None:
         """
         Verify no error when client is None.
         """
         firebase_mod._async_firestore_client = None
 
-        await close_async_firestore_client()
+        close_async_firestore_client()
 
         assert firebase_mod._async_firestore_client is None

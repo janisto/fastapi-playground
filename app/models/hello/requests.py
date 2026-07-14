@@ -20,7 +20,7 @@ GREETINGS: dict[SupportedLanguage, str] = {
 
 class GreetingRequest(BaseModel):
     """
-    Request model for creating a personalized greeting.
+    Request model for generating a personalized greeting.
     """
 
     model_config = ConfigDict(extra="forbid")

@@ -1,6 +1,6 @@
 ---
 name: security-review
-description: Comprehensive FastAPI security audit based on OWASP best practices
+description: Read-only FastAPI and Firebase security audit based on OWASP API Security guidance
 ---
 # Task: REST API Security Review
 
@@ -13,57 +13,78 @@ Before analysis, read these files:
 2. `app/auth/firebase.py` - Firebase authentication implementation
 3. `app/middleware/security.py` - Security headers middleware
 4. `app/middleware/body_limit.py` - Request body size limiting
-5. `app/middleware/logging.py` - Structured logging with trace correlation
+5. `app/core/logging.py` and observability middleware wiring in `app/main.py` - Structured logging with trace correlation
 6. `app/core/config.py` - Configuration and secrets handling
-7. `app/core/exception_handler.py` - Error handling and RFC 9457 Problem Details
-8. `app/api/health.py`, `app/api/hello.py`, `app/api/items.py`, `app/api/profile.py` - Endpoint definitions
+7. `app/core/content_negotiation.py`, `app/core/cbor.py`, `app/core/exception_handler.py`,
+   `app/core/schema_links.py`, and `app/core/validation.py` - Negotiation, CBOR, Problem Details, schema links, and
+   validation-error redaction
+8. `app/api/health.py`, `app/api/hello.py`, `app/api/items.py`, `app/api/profile.py`, and `app/api/schemas.py` - Endpoint
+   definitions
 9. `app/services/profile/service.py` - Business logic
 10. `app/dependencies.py` - Shared dependencies and DI aliases
 11. `app/exceptions/profile.py` - Domain exception definitions
+12. `firebase.json`, `firestore.rules`, `storage.rules` - Emulator, deployment, and data-access policy
+13. `pyproject.toml`, `uv.lock`, `functions/pyproject.toml`, `functions/uv.lock` - Dependency boundaries
+14. `Dockerfile` and `.github/workflows/` - Build and automation security
+15. `functions/main.py` - Vertex AI function, error handling, logging, and runtime limits
 
 ## Security Review Checklist
 
 ### 1. Authentication & Authorization
-- [ ] All endpoints require authentication via `Depends(verify_firebase_token)` or equivalent
+- [ ] Public endpoints (`/health`, `/v1/hello`, `/v1/items`, schema and documentation routes) expose no protected data
+- [ ] Profile endpoints require the `CurrentUser` dependency backed by `verify_firebase_token`
 - [ ] Authorization checks verify user permissions before resource access
-- [ ] Token validation handles all error cases (expired, revoked, invalid)
+- [ ] Token validation distinguishes credential failures (401) from Firebase dependency failures (503)
 - [ ] `WWW-Authenticate: Bearer` header included in 401 responses
-- [ ] No sensitive operations allowed without verified email (if applicable)
-- [ ] OAuth2/Bearer scheme properly documented for OpenAPI
+- [ ] HTTP Bearer scheme properly documented for OpenAPI
+- [ ] The model-backed `dad_joke` function remains GET-only and private, with `roles/run.invoker` granted only to
+      intended callers
 
 ### 2. Input Validation & Data Sanitization
-- [ ] All inputs validated via Pydantic models with strict types
+- [ ] Request bodies, path parameters, and query parameters use appropriate Pydantic or FastAPI validation and constraints
 - [ ] Path parameters have proper type constraints
-- [ ] Query parameters validated with `Query()` annotations
+- [ ] FastAPI query parameters use `Query()` or equivalent constraints; the Function topic is validated with `JokeTopic`
 - [ ] Request body limits enforced (check `body_limit.py` middleware)
-- [ ] File uploads validated for type, size, and content
-- [ ] No raw string interpolation in database queries (prevent injection)
+- [ ] If file uploads are introduced, type, size, and content are validated
+- [ ] Firestore document paths and query values are derived from validated inputs
 
 ### 3. Security Headers (OWASP Recommended)
-Verify these headers are set in `SecurityHeadersMiddleware`:
+Verify the configured behavior in `SecurityHeadersMiddleware`:
 ```http
 Cache-Control: no-store
-Content-Security-Policy: default-src 'none'
-Content-Type: application/json
+Content-Security-Policy: frame-ancestors 'none'
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Resource-Policy: same-origin
+Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+Vary: Accept
 Strict-Transport-Security: max-age=31536000; includeSubDomains
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
-Referrer-Policy: no-referrer
+Referrer-Policy: strict-origin-when-cross-origin
 ```
+
+HSTS applies only to HTTPS responses when `ENVIRONMENT=production`. CSP is intentionally omitted from `/api-docs`,
+`/api-redoc`, and `/openapi.json`; other security headers must remain. Content type varies between JSON, CBOR, schema
+documents, and HTML documentation.
+
+Cloud Run terminates TLS before proxying HTTP to the container. Verify the image runtime trusts the platform's
+forwarded headers and that a deployed HTTPS `/health` response includes HSTS; do not infer this from local plain HTTP.
 
 ### 4. Error Handling & Information Leakage
 - [ ] Error responses use generic messages (e.g., "Unauthorized" not token details)
-- [ ] Stack traces never exposed in production (`debug=False`)
+- [ ] Stack traces never exposed in production (`ENVIRONMENT=production`)
 - [ ] Internal exception details logged but not returned to clients
 - [ ] 404 vs 403 responses don't leak resource existence
-- [ ] Validation errors don't expose internal field names or structure
+- [ ] Validation errors redact sensitive input values while retaining public field locations
+- [ ] Missing-field errors cannot reflect a complete request body, and compound secret field names remain redacted
 
 ### 5. Logging & Monitoring
-- [ ] Authentication failures logged with context (IP, endpoint, timestamp)
+- [ ] Authentication failures use appropriate warning/exception records without token or profile data
 - [ ] Sensitive data (tokens, passwords, PII) never logged
 - [ ] Security events use appropriate log levels (WARNING/ERROR)
-- [ ] Request correlation IDs present for traceability
-- [ ] Suspicious patterns (brute force, scanning) would be detectable
+- [ ] Request IDs and access records include status and route metadata for correlation
+- [ ] Trace fields represent incoming correlation only; the middleware does not claim to create spans
+- [ ] External alerting requirements are reported separately from code findings
 
 ### 6. Secrets & Configuration
 - [ ] No hardcoded secrets, API keys, or credentials in code
@@ -79,7 +100,7 @@ Referrer-Policy: no-referrer
 - [ ] Methods and headers properly restricted
 
 ### 8. Rate Limiting & DoS Protection
-- [ ] Rate limiting configured (if applicable)
+- [ ] Absence of application rate limiting is documented as a deployment control, not automatically reported as a vulnerability
 - [ ] Request body size limits enforced
 - [ ] Timeouts configured for external service calls
 - [ ] Pagination limits on list endpoints
@@ -87,13 +108,15 @@ Referrer-Policy: no-referrer
 ### 9. Insecure Direct Object References (IDOR)
 - [ ] Users can only access resources they own
 - [ ] Resource ownership verified before read/update/delete
-- [ ] UUIDs or non-sequential IDs used where appropriate
+- [ ] Resource identifiers do not substitute for ownership checks
 - [ ] Bulk operations validate all resource access
 
 ### 10. Dependency Security
-- [ ] Dependencies up to date (`uv lock --upgrade`)
-- [ ] No known vulnerabilities in dependencies
-- [ ] Minimal dependency footprint
+- [ ] Root and Functions lockfiles match their manifests and resolve (`uv lock --check` and
+      `uv lock --project functions --check`)
+- [ ] Vulnerability-scanning evidence is reported when available; freshness alone is not treated as proof
+- [ ] Runtime dependencies exclude test-only packages
+- [ ] `functions/requirements.txt` pins only direct runtime packages from `functions/uv.lock`
 
 ## Output Format
 
@@ -119,3 +142,6 @@ For each finding include:
 - **Issue**: Clear description of the vulnerability
 - **Risk**: Potential impact if exploited
 - **Recommendation**: Specific remediation steps
+
+If a severity has no findings, state `None`. Separate confirmed vulnerabilities from deployment or monitoring controls
+that cannot be proven from the repository.

@@ -10,7 +10,7 @@ class TestProblemResponse:
     Tests for ProblemResponse model.
 
     Per RFC 9457, the 'type' field defaults to 'about:blank' when not present,
-    so we omit it from the model. The $schema field provides JSON Schema reference.
+    so we omit it from the model.
     """
 
     def test_basic_problem(self) -> None:
@@ -21,51 +21,18 @@ class TestProblemResponse:
         assert problem.title == "Not Found"
         assert problem.status == 404
         assert problem.detail == "Profile not found"
-        assert problem.schema_url is None
-
-    def test_problem_with_schema(self) -> None:
-        """
-        Verify problem response with $schema URL.
-        """
-        problem = ProblemResponse(
-            title="Not Found",
-            status=404,
-            detail="Profile not found",
-            schema_url="http://example.com/schemas/ErrorModel.json",
-        )
-        assert problem.schema_url == "http://example.com/schemas/ErrorModel.json"
 
     def test_serialization(self) -> None:
         """
-        Verify problem response serializes correctly with alias.
+        Verify problem response serializes correctly.
         """
         problem = ProblemResponse(title="Not Found", status=404, detail="Profile not found")
         data = problem.model_dump()
-        # With serialize_by_alias=True, $schema alias is used by default
         assert data == {
-            "$schema": None,
             "title": "Not Found",
             "status": 404,
             "detail": "Profile not found",
         }
-
-    def test_serialization_by_alias(self) -> None:
-        """
-        Verify problem response serializes with $schema alias by default.
-
-        With serialize_by_alias=True in model_config, aliases are used
-        automatically without needing by_alias=True parameter.
-        """
-        problem = ProblemResponse(
-            title="Not Found",
-            status=404,
-            detail="Profile not found",
-            schema_url="http://example.com/schemas/ErrorModel.json",
-        )
-        # No need for by_alias=True - serialize_by_alias=True is set in model_config
-        data = problem.model_dump()
-        assert "$schema" in data
-        assert data["$schema"] == "http://example.com/schemas/ErrorModel.json"
 
     def test_json_serialization(self) -> None:
         """
@@ -124,24 +91,12 @@ class TestValidationProblemResponse:
         assert len(problem.errors) == 1
         assert problem.errors[0].location == "body.email"
 
-    def test_validation_problem_with_schema(self) -> None:
-        """
-        Verify validation problem with $schema URL.
-        """
-        problem = ValidationProblemResponse(
-            schema_url="http://example.com/schemas/ErrorModel.json",
-            errors=[],
-        )
-        assert problem.schema_url == "http://example.com/schemas/ErrorModel.json"
-
     def test_serialization(self) -> None:
         """
-        Verify validation problem response serializes correctly with alias.
+        Verify validation problem response serializes correctly.
         """
         problem = ValidationProblemResponse(errors=[])
         data = problem.model_dump()
-        # With serialize_by_alias=True, $schema alias is used by default
-        assert "$schema" in data
         assert "errors" in data
         assert isinstance(data["errors"], list)
         assert data["title"] == "Unprocessable Entity"

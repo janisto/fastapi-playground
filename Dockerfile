@@ -4,18 +4,9 @@
 # Uses ghcr.io/astral-sh/uv images which include both Python and uv pre-installed.
 # See: https://docs.astral.sh/uv/guides/integration/docker/
 # Example: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
-#
-# Cloud Run automatic base image updates:
-# Deploy with automatic base image updates so Google can patch the base without a rebuild:
-#   gcloud run deploy fastapi-playground \
-#     --image REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest \
-#     --platform managed \
-#     --region REGION \
-#     --base-image python314 \
-#     --automatic-updates
 
 # Builder image: includes uv for dependency management
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:python3.14-trixie-slim
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.28-python3.14-trixie-slim
 # Runtime image: minimal Python image without uv (not needed at runtime)
 ARG RUNTIME_IMAGE=python:3.14-slim-trixie
 # Version for OCI labels (injected at build time)
@@ -90,4 +81,4 @@ EXPOSE 8080
 
 # Run the application (exec form with sh -c for proper signal handling and $PORT expansion)
 # --no-server-header: Hide server fingerprinting (OWASP recommendation)
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --no-server-header"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*' --no-server-header --no-access-log"]

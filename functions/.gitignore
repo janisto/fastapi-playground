@@ -6,6 +6,9 @@ venv/
 .venv/
 *.local
 
+# Genkit local runtime discovery
+.genkit/
+
 # Environment variables
 .env
 .env.*

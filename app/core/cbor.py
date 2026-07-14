@@ -2,142 +2,31 @@
 CBOR serialization support (RFC 8949).
 
 Provides bidirectional CBOR support with automatic content negotiation.
-Content negotiation follows RFC 9110 (HTTP Semantics):
-- Media types are case-insensitive (Section 8.3.1)
-- Content codings are case-insensitive (Section 8.4.1)
-- Accept header parsing handles quality values (Section 12.5.1)
+Content negotiation policy lives in app.core.content_negotiation.
 """
 
 import json
 from collections.abc import Callable
 from datetime import UTC
-from typing import Any
+from typing import Any, override
 
 import cbor2
 from fastapi import HTTPException, Request, Response
 from fastapi.routing import APIRoute
+from fastapi.utils import is_body_allowed_for_status_code
 from fastapi_problem.error import BadRequestProblem, StatusProblem
 from starlette.requests import Request as StarletteRequest
 
-CBOR_MEDIA_TYPE = "application/cbor"
-JSON_MEDIA_TYPE = "application/json"
-PROBLEM_CBOR = "application/problem+cbor"
-PROBLEM_JSON = "application/problem+json"
-# Lowercase set for case-insensitive comparison
-ALLOWED_CONTENT_TYPES = frozenset({JSON_MEDIA_TYPE, CBOR_MEDIA_TYPE})
-
-
-def normalize_media_type(media_type: str) -> str:
-    """
-    Normalize a media type for comparison per RFC 9110 Section 8.3.1.
-
-    Media types are case-insensitive. This extracts the type/subtype portion,
-    strips parameters (like charset), and converts to lowercase.
-    """
-    # Split off parameters (e.g., "application/json; charset=utf-8" -> "application/json")
-    base_type = media_type.split(";", maxsplit=1)[0].strip()
-    return base_type.lower()
-
-
-def _parse_qvalue(params: list[str]) -> float:
-    """
-    Parse quality value from media type parameters. Returns 1.0 if not specified.
-    """
-    for raw_param in params:
-        param = raw_param.strip()
-        if param.lower().startswith("q="):
-            try:
-                return float(param[2:])
-            except ValueError:
-                return 1.0
-    return 1.0
-
-
-def _matches_media_range(range_type: str, target: str, target_parts: list[str], *, explicit_only: bool) -> bool:
-    """
-    Check if a media range matches the target media type.
-    """
-    # Exact match
-    if range_type == target:
-        return True
-
-    # Wildcard matches (skip if explicit_only)
-    if explicit_only:
-        return False
-
-    # Wildcard */*
-    if range_type == "*/*":
-        return True
-
-    # Type wildcard (e.g., application/*)
-    range_parts = range_type.split("/")
-    return len(range_parts) == 2 and range_parts[1] == "*" and range_parts[0] == target_parts[0]
-
-
-def accepts_media_type(accept_header: str, media_type: str, *, explicit_only: bool = False) -> bool:
-    """
-    Check if Accept header includes specified media type per RFC 9110 Section 12.5.1.
-
-    Handles:
-    - Case-insensitive comparison
-    - Quality values (q=0 means not acceptable)
-    - Multiple media types separated by commas
-    - Wildcard matching (*/* and type/*) unless explicit_only=True
-
-    Args:
-        accept_header: The Accept header value
-        media_type: The media type to check for
-        explicit_only: If True, wildcards (*/* and type/*) are not matched.
-            Use this when checking for non-default content types like CBOR
-            that should only be returned when explicitly requested.
-
-    Note: Does not implement full precedence algorithm for wildcards vs specific types.
-    Returns True if the media type is acceptable (q > 0).
-    """
-    if not accept_header:
-        return False
-
-    target = normalize_media_type(media_type)
-    target_parts = target.split("/")
-
-    for raw_item in accept_header.split(","):
-        item = raw_item.strip()
-        if not item:
-            continue
-
-        # Split media type from parameters
-        parts = item.split(";")
-        range_type = normalize_media_type(parts[0])
-
-        # Skip if q=0 (not acceptable)
-        if _parse_qvalue(parts[1:]) == 0:
-            continue
-
-        # Skip malformed media ranges
-        if "/" not in range_type:
-            continue
-
-        if _matches_media_range(range_type, target, target_parts, explicit_only=explicit_only):
-            return True
-
-    return False
-
-
-def content_type_matches(content_type: str, media_type: str) -> bool:
-    """
-    Check if Content-Type matches specified media type per RFC 9110 Section 8.3.1.
-
-    Media types are case-insensitive.
-    """
-    return normalize_media_type(content_type) == normalize_media_type(media_type)
-
-
-def content_type_is_allowed(content_type: str, allowed: frozenset[str]) -> bool:
-    """
-    Check if Content-Type is in allowed set (case-insensitive).
-    """
-    normalized = normalize_media_type(content_type)
-    return normalized in allowed
+from app.core.content_negotiation import (
+    ALLOWED_CONTENT_TYPES,
+    CBOR_MEDIA_TYPE,
+    JSON_MEDIA_TYPE,
+    content_type_is_allowed,
+    content_type_matches,
+    negotiate_api_media_type,
+    negotiate_problem_media_type,
+    normalize_media_type,
+)
 
 
 class CBORDecodeError(Exception):
@@ -191,6 +80,25 @@ class UnsupportedMediaTypeHTTPException(HTTPException):
         super().__init__(status_code=415, detail=detail)
 
 
+class NotAcceptableProblem(StatusProblem):
+    """
+    Returned when none of the requested response formats are supported.
+    """
+
+    title = "Not Acceptable"
+    status = 406
+
+
+class NotAcceptableHTTPException(HTTPException):
+    """
+    HTTPException for unsupported Accept headers.
+    """
+
+    def __init__(self, *supported_media_types: str) -> None:
+        supported = supported_media_types or (JSON_MEDIA_TYPE, CBOR_MEDIA_TYPE)
+        super().__init__(status_code=406, detail=f"Supported response formats: {', '.join(supported)}")
+
+
 class CBORRequest(StarletteRequest):
     """
     Request that decodes CBOR bodies to JSON for Pydantic validation.
@@ -202,6 +110,7 @@ class CBORRequest(StarletteRequest):
 
     _cbor_decoded: bool = False
 
+    @override
     async def body(self) -> bytes:
         """
         Get request body, decoding CBOR to JSON if necessary.
@@ -260,6 +169,7 @@ class CBORRoute(APIRoute):
         router = APIRouter(route_class=CBORRoute)
     """
 
+    @override
     def get_route_handler(self) -> Callable[..., Any]:
         """
         Return custom route handler with CBOR negotiation.
@@ -269,15 +179,15 @@ class CBORRoute(APIRoute):
         2. Convert outgoing JSON responses to CBOR if Accept header requests it
         """
         original_handler = super().get_route_handler()
+        has_success_representation = self.status_code is None or is_body_allowed_for_status_code(self.status_code)
 
         async def custom_handler(request: Request) -> Response:
-            # Capture Accept header from scope directly before body processing
-            # (body processing may modify scope headers for CBOR->JSON conversion)
-            accept = ""
-            for key, value in request.scope.get("headers", []):
-                if key == b"accept":
-                    accept = value.decode("latin1")
-                    break
+            # RFC 9110 list-based fields can be split across multiple field lines.
+            accept = ",".join(request.headers.getlist("accept"))
+
+            success_media_type = negotiate_api_media_type(accept) if has_success_representation else None
+            if has_success_representation and success_media_type is None:
+                raise NotAcceptableHTTPException
 
             cbor_request = CBORRequest(request.scope, request.receive)
 
@@ -289,9 +199,7 @@ class CBORRoute(APIRoute):
             response = await original_handler(cbor_request)
 
             response_content_type = response.media_type or ""
-            if accepts_media_type(accept, CBOR_MEDIA_TYPE, explicit_only=True) and content_type_matches(
-                response_content_type, JSON_MEDIA_TYPE
-            ):
+            if success_media_type == CBOR_MEDIA_TYPE and content_type_matches(response_content_type, JSON_MEDIA_TYPE):
                 body = response.body
                 if body:
                     data = json.loads(bytes(body))
@@ -306,32 +214,22 @@ class CBORRoute(APIRoute):
                         status_code=response.status_code,
                         headers=headers,
                         media_type=CBOR_MEDIA_TYPE,
+                        background=response.background,
                     )
             return response
 
         return custom_handler
 
 
-class CBORResponse(Response):
-    """
-    Response with CBOR serialization.
-    """
-
-    media_type = CBOR_MEDIA_TYPE
-
-    def render(self, content: object) -> bytes:
-        """
-        Serialize content as CBOR with datetime as epoch timestamps.
-        """
-        return cbor2.dumps(content, datetime_as_timestamp=True, timezone=UTC)
-
-
 class CBORProblemPostHook:
     """
     Post-hook to serialize Problem Details as CBOR when client accepts it.
 
-    Accepts both application/cbor and application/problem+cbor per RFC 9457
-    content negotiation patterns. Must be registered last in post_hooks.
+    Uses application/cbor only when the client explicitly prefers CBOR.
+
+    RFC 9457 does not define application/problem+cbor. The registered RFC 9290
+    concise CBOR format has a different data model and is not implemented here.
+    Must be registered last in post_hooks.
     """
 
     def __call__(
@@ -344,17 +242,12 @@ class CBORProblemPostHook:
         Serialize error response as CBOR if client accepts it.
 
         Modifies response body and content-type header when Accept header
-        includes application/cbor or application/problem+cbor
-        (per RFC 9110 content negotiation).
+        explicitly prefers application/cbor.
         """
-        accept = request.headers.get("accept", "")
-        # Accept both application/cbor and application/problem+cbor for Problem Details
-        # This follows the same pattern as application/problem+json vs application/json
-        if accepts_media_type(accept, CBOR_MEDIA_TYPE, explicit_only=True) or accepts_media_type(
-            accept, PROBLEM_CBOR, explicit_only=True
-        ):
+        accept = ",".join(request.headers.getlist("accept"))
+        if negotiate_problem_media_type(accept) == CBOR_MEDIA_TYPE:
             cbor_body = cbor2.dumps(content)
             response.body = cbor_body
-            response.headers["content-type"] = PROBLEM_CBOR
+            response.headers["content-type"] = CBOR_MEDIA_TYPE
             response.headers["content-length"] = str(len(cbor_body))
         return content, response

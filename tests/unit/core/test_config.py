@@ -2,9 +2,11 @@
 Unit tests for configuration settings.
 """
 
+import os
 from typing import Any, cast
 
 import pytest
+from pydantic import ValidationError
 
 from app.core.config import Settings, get_settings, parse_cors_origins
 
@@ -16,6 +18,8 @@ def _create_settings(**kwargs: Any) -> Settings:  # noqa: ANN401
     The _env_file parameter is supported by pydantic-settings at runtime
     but not exposed in the type hints, hence the cast.
     """
+    if "firebase_project_id" not in kwargs and "FIREBASE_PROJECT_ID" not in os.environ:
+        kwargs["firebase_project_id"] = "test-project"
     return cast("Any", Settings)(_env_file=None, **kwargs)
 
 
@@ -28,16 +32,10 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     env_vars = [
         "ENVIRONMENT",
-        "DEBUG",
-        "HOST",
-        "PORT",
+        "LOG_LEVEL",
         "FIREBASE_PROJECT_ID",
         "GOOGLE_APPLICATION_CREDENTIALS",
-        "FIREBASE_PROJECT_NUMBER",
         "FIRESTORE_DATABASE",
-        "APP_ENVIRONMENT",
-        "APP_URL",
-        "SECRET_MANAGER_ENABLED",
         "MAX_REQUEST_SIZE_BYTES",
         "CORS_ORIGINS",
     ]
@@ -45,7 +43,7 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(var, raising=False)
 
 
-class TestParseCorsOrigins:
+class TestParseCORSOrigins:
     """
     Tests for parse_cors_origins function.
     """
@@ -100,6 +98,21 @@ class TestParseCorsOrigins:
 
         assert result == origins
 
+    @pytest.mark.parametrize("value", ['["https://example.com", 42]', ["https://example.com", 42]])
+    def test_rejects_non_string_array_entries(self, value: object) -> None:
+        """
+        Verify malformed origin arrays cannot be silently stringified.
+        """
+        with pytest.raises(ValueError, match="entries must be strings"):
+            parse_cors_origins(value)
+
+    def test_rejects_non_string_input(self) -> None:
+        """
+        Verify programmatic settings input uses the same strict contract.
+        """
+        with pytest.raises(TypeError, match="string or array"):
+            parse_cors_origins(42)
+
     def test_single_value_without_comma(self) -> None:
         """
         Verify single value without comma is parsed correctly.
@@ -116,27 +129,24 @@ class TestParseCorsOrigins:
 
         assert result == ["http://localhost:3000", "https://example.com"]
 
-    def test_invalid_json_falls_back_to_comma_separated(self) -> None:
+    def test_invalid_json_is_rejected(self) -> None:
         """
-        Verify invalid JSON starting with [ falls back to comma parsing.
+        Verify invalid JSON starting with an array marker is rejected.
         """
-        result = parse_cors_origins("[invalid json")
+        with pytest.raises(ValueError, match="valid JSON array"):
+            parse_cors_origins("[invalid json")
 
-        assert result == ["[invalid json"]
-
-    def test_valid_json_non_list_falls_back_to_comma_separated(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_valid_json_non_list_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Verify valid JSON that is not a list falls back to comma parsing.
+        Verify valid JSON that is not a list is rejected.
 
         This edge case covers when JSON parses successfully but isn't a list.
         """
         # Mock json.loads to return a dict instead of list to test the branch
         monkeypatch.setattr("app.core.config.json.loads", lambda x: {"key": "value"})
 
-        result = parse_cors_origins("[fake json that returns dict]")
-
-        # Falls through to comma-separated parsing since parsed isn't a list
-        assert result == ["[fake json that returns dict]"]
+        with pytest.raises(ValueError, match="must be an array"):
+            parse_cors_origins("[fake json that returns dict]")
 
 
 class TestSettings:
@@ -152,42 +162,32 @@ class TestSettings:
 
         assert settings.environment == "production"
 
-    def test_default_debug(self) -> None:
+    def test_default_log_level(self) -> None:
         """
-        Verify debug mode defaults to False for production safety.
-
-        Debug must default to False to ensure:
-        - HSTS headers are applied in production
-        - Log levels are appropriate (INFO, not DEBUG)
-        - No stack traces are exposed to clients
+        Verify logging defaults to the production-safe INFO level.
         """
         settings = _create_settings()
 
-        assert settings.debug is False
+        assert settings.log_level == "INFO"
 
-    def test_default_host(self) -> None:
+    @pytest.mark.parametrize(
+        ("environment", "expected"),
+        [("production", True), ("development", False), ("test", False)],
+    )
+    def test_is_production(self, environment: str, expected: bool) -> None:
         """
-        Verify default host.
+        Verify one environment decision controls production-only safeguards.
         """
-        settings = _create_settings()
+        settings = _create_settings(environment=environment)
 
-        assert settings.host == "0.0.0.0"
+        assert settings.is_production is expected
 
-    def test_default_port(self) -> None:
+    def test_firebase_project_id_is_required(self) -> None:
         """
-        Verify default port.
+        Verify startup configuration fails without a Firebase project ID.
         """
-        settings = _create_settings()
-
-        assert settings.port == 8080
-
-    def test_default_firebase_project_id(self) -> None:
-        """
-        Verify default Firebase project ID.
-        """
-        settings = _create_settings()
-
-        assert settings.firebase_project_id == "test-project"
+        with pytest.raises(ValidationError):
+            cast("Any", Settings)(_env_file=None)
 
     def test_default_max_request_size(self) -> None:
         """
@@ -205,14 +205,6 @@ class TestSettings:
 
         assert settings.cors_origins == []
 
-    def test_default_secret_manager_enabled(self) -> None:
-        """
-        Verify Secret Manager is enabled by default.
-        """
-        settings = _create_settings()
-
-        assert settings.secret_manager_enabled is True
-
 
 class TestSettingsFromEnv:
     """
@@ -229,25 +221,15 @@ class TestSettingsFromEnv:
 
         assert settings.environment == "development"
 
-    def test_debug_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_log_level_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
-        Verify debug is loaded from env var.
+        Verify the application log level is loaded from the environment.
         """
-        monkeypatch.setenv("DEBUG", "false")
+        monkeypatch.setenv("LOG_LEVEL", "DEBUG")
 
         settings = _create_settings()
 
-        assert settings.debug is False
-
-    def test_port_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """
-        Verify port is loaded from env var.
-        """
-        monkeypatch.setenv("PORT", "9000")
-
-        settings = _create_settings()
-
-        assert settings.port == 9000
+        assert settings.log_level == "DEBUG"
 
     def test_firebase_project_id_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -333,11 +315,30 @@ class TestSettingsFromEnv:
         """
         Verify env vars are case insensitive.
         """
-        monkeypatch.setenv("environment", "staging")
+        monkeypatch.setenv("environment", "test")
 
         settings = _create_settings()
 
-        assert settings.environment == "staging"
+        assert settings.environment == "test"
+
+    def test_invalid_environment_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unknown environment names cannot disable production safeguards silently."""
+        monkeypatch.setenv("ENVIRONMENT", "prodution")
+
+        with pytest.raises(ValidationError):
+            _create_settings()
+
+    def test_invalid_log_level_is_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unknown log levels cannot silently change production logging."""
+        monkeypatch.setenv("LOG_LEVEL", "VERBOSE")
+
+        with pytest.raises(ValidationError):
+            _create_settings()
+
+    def test_non_positive_request_size_is_rejected(self) -> None:
+        """Request size limits must be strictly positive."""
+        with pytest.raises(ValidationError):
+            _create_settings(max_request_size_bytes=0)
 
 
 class TestSettingsIgnoreExtra:
@@ -361,20 +362,22 @@ class TestGetSettings:
     Tests for get_settings function.
     """
 
-    def test_returns_settings_instance(self) -> None:
+    def test_returns_settings_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Verify get_settings returns Settings instance.
         """
+        monkeypatch.setenv("FIREBASE_PROJECT_ID", "cache-test-project")
         get_settings.cache_clear()
 
         settings = get_settings()
 
         assert isinstance(settings, Settings)
 
-    def test_returns_cached_instance(self) -> None:
+    def test_returns_cached_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Verify get_settings returns the same cached instance.
         """
+        monkeypatch.setenv("FIREBASE_PROJECT_ID", "cache-test-project")
         get_settings.cache_clear()
 
         settings1 = get_settings()
@@ -382,10 +385,11 @@ class TestGetSettings:
 
         assert settings1 is settings2
 
-    def test_cache_clear_creates_new_instance(self) -> None:
+    def test_cache_clear_creates_new_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
         Verify cache_clear creates a new settings instance.
         """
+        monkeypatch.setenv("FIREBASE_PROJECT_ID", "cache-test-project")
         get_settings.cache_clear()
         settings1 = get_settings()
 
@@ -408,14 +412,6 @@ class TestSettingsOptionalFields:
 
         assert settings.google_application_credentials is None
 
-    def test_firebase_project_number_default_none(self) -> None:
-        """
-        Verify Firebase project number defaults to None.
-        """
-        settings = _create_settings()
-
-        assert settings.firebase_project_number is None
-
     def test_firestore_database_default_none(self) -> None:
         """
         Verify Firestore database defaults to None (uses default database).
@@ -423,33 +419,3 @@ class TestSettingsOptionalFields:
         settings = _create_settings()
 
         assert settings.firestore_database is None
-
-    def test_app_environment_default_none(self) -> None:
-        """
-        Verify app environment defaults to None.
-        """
-        settings = _create_settings()
-
-        assert settings.app_environment is None
-
-    def test_app_url_default_none(self) -> None:
-        """
-        Verify app URL defaults to None.
-        """
-        settings = _create_settings()
-
-        assert settings.app_url is None
-
-    def test_optional_fields_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """
-        Verify optional fields can be set from env.
-        """
-        monkeypatch.setenv("APP_ENVIRONMENT", "production")
-        monkeypatch.setenv("APP_URL", "https://api.example.com")
-        monkeypatch.setenv("FIREBASE_PROJECT_NUMBER", "123456789")
-
-        settings = _create_settings()
-
-        assert settings.app_environment == "production"
-        assert settings.app_url == "https://api.example.com"
-        assert settings.firebase_project_number == "123456789"

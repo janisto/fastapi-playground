@@ -3,7 +3,11 @@ Cursor encoding/decoding for pagination.
 """
 
 import base64
+import binascii
 from dataclasses import dataclass
+
+_BASE64_BLOCK_SIZE = 4
+MAX_CURSOR_LENGTH = 2048
 
 
 class InvalidCursorError(Exception):
@@ -12,37 +16,40 @@ class InvalidCursorError(Exception):
     """
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Cursor:
     """
     Pagination cursor with type and value.
     """
 
-    type: str
+    cursor_type: str
     value: str
 
     def encode(self) -> str:
         """
         Encode as URL-safe base64 without padding.
         """
-        data = f"{self.type}:{self.value}"
+        data = f"{self.cursor_type}:{self.value}"
         return base64.urlsafe_b64encode(data.encode()).rstrip(b"=").decode()
 
 
-def decode_cursor(s: str) -> Cursor:
+def decode_cursor(encoded_cursor: str) -> Cursor:
     """
     Decode URL-safe base64 cursor.
     """
-    if not s:
-        return Cursor(type="", value="")
-    padding = 4 - len(s) % 4
-    if padding != 4:
-        s += "=" * padding
+    if len(encoded_cursor) > MAX_CURSOR_LENGTH:
+        raise InvalidCursorError("cursor exceeds maximum length")
+    if not encoded_cursor:
+        return Cursor(cursor_type="", value="")
+    padding = _BASE64_BLOCK_SIZE - len(encoded_cursor) % _BASE64_BLOCK_SIZE
+    if padding != _BASE64_BLOCK_SIZE:
+        encoded_cursor += "=" * padding
     try:
-        decoded = base64.urlsafe_b64decode(s.encode()).decode()
-    except Exception as e:
+        decoded = base64.b64decode(encoded_cursor.encode("ascii"), altchars=b"-_", validate=True).decode()
+    except (binascii.Error, UnicodeError) as e:
         raise InvalidCursorError("invalid cursor format") from e
-    parts = decoded.split(":", 1)
-    if len(parts) != 2:
-        raise InvalidCursorError("invalid cursor format")
-    return Cursor(type=parts[0], value=parts[1])
+    try:
+        cursor_type, value = decoded.split(":", maxsplit=1)
+    except ValueError as e:
+        raise InvalidCursorError("invalid cursor format") from e
+    return Cursor(cursor_type=cursor_type, value=value)

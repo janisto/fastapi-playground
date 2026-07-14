@@ -8,10 +8,10 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 
 ## Features
 
-- Layered middleware architecture with security headers, CORS, request IDs, and structured access logs
-- Request-scoped logging with Google Cloud Trace correlation via [W3C Trace Context](https://www.w3.org/TR/trace-context/) `traceparent` header
-- [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) for all error responses with field-level validation errors
-- Content negotiation supporting [JSON (RFC 8259)](https://datatracker.ietf.org/doc/html/rfc8259) and [CBOR (RFC 8949)](https://datatracker.ietf.org/doc/html/rfc8949) formats via `Accept` header
+- Layered middleware architecture with security headers, CORS, request IDs, and structured access logs via [`fastapi-request-observability`](https://pypi.org/project/fastapi-request-observability/)
+- Request-scoped logging with incoming [W3C Trace Context](https://www.w3.org/TR/trace-context/) correlation metadata
+- [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) for FastAPI error responses, including field-level validation errors
+- JSON and CBOR request/response content negotiation using `Content-Type` and `Accept`
 - Cursor-based pagination with [RFC 8288 Link](https://datatracker.ietf.org/doc/html/rfc8288) headers
 - [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) documentation with Swagger UI and ReDoc
 - Firebase Authentication with ID token verification and revocation checks
@@ -22,16 +22,18 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 
 ### URI Design
 
-- Use plural nouns for collections (`/items/`, not `/item/`)
+- Use plural nouns for collections (`/items`, not `/item`)
 - Avoid verbs in URIs; let HTTP methods convey the action
 - Return resources directly without wrapper envelopes
+- Use `snake_case` consistently for public JSON and CBOR properties, request parameters, and persisted Firestore fields
 
 ### HTTP Methods & Status Codes
 
 | Method | Purpose | Success Status |
 |--------|---------|----------------|
 | GET | Retrieve resource(s) | 200 OK |
-| POST | Create a resource | 201 Created + Location header |
+| POST | Process input and return a computed representation | 200 OK |
+| POST | Create a resource | 201 Created; persistent resources include a Location header |
 | PATCH | Partial update | 200 OK |
 | DELETE | Remove a resource | 204 No Content |
 
@@ -41,7 +43,6 @@ Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.
 
 ```json
 {
-  "type": "about:blank",
   "title": "Not Found",
   "status": 404,
   "detail": "Profile not found"
@@ -52,21 +53,33 @@ Validation errors (422) include detailed field locations:
 
 ```json
 {
-  "type": "about:blank",
-  "title": "Validation Error",
+  "title": "Unprocessable Entity",
   "status": 422,
-  "detail": "Request validation failed",
+  "detail": "validation failed",
   "errors": [
     {"location": "body.email", "message": "value is not a valid email address", "value": "invalid"}
   ]
 }
 ```
 
+Modeled responses advertise their standalone JSON Schema through an RFC 8288
+`Link: </schemas/Model.json>; rel="describedBy"` header. `$schema` belongs to the schema document itself, not to each
+API response instance.
+
 ### Content Negotiation
 
-- Default: `application/json`
-- Alternate: `application/cbor`
-- Format selected via `Accept` header
+- API responses with a body default to `application/json`. CBOR is optional and selected only by an explicit
+  `Accept: application/cbor`; wildcards and equal quality values keep JSON.
+- An explicit `Accept` value that excludes every supported success representation returns 406 before a
+  representation-bearing endpoint executes. A 204 response has no representation, so `Accept` does not gate it.
+- Schema discovery returns only `application/schema+json`. Strict clients must accept that media type or a matching
+  wildcard; `application/json` does not match a distinct `+json` subtype.
+- Errors keep their original status. They use RFC 9457 `application/problem+json` by default, or registered
+  `application/cbor` when explicitly preferred. Unsupported error preferences fall back to JSON; the unregistered
+  `application/problem+cbor` media type is not implemented.
+- JSON and CBOR request bodies are selected independently with `Content-Type`.
+- `/openapi.json`, `/api-docs`, and `/api-redoc` are fixed FastAPI documentation assets outside optional CBOR
+  negotiation.
 
 ### Pagination
 
@@ -76,15 +89,18 @@ Validation errors (422) include detailed field locations:
 ## Requirements
 
 - Python 3.14+
-- [uv](https://docs.astral.sh/uv/) package manager
+- [uv](https://docs.astral.sh/uv/) package manager (the minimum supported version is enforced in both project manifests)
 - [just](https://github.com/casey/just) command runner
 - Firebase project with Authentication and Firestore enabled
+- [Firebase CLI](https://firebase.google.com/docs/cli) for emulators and Functions deployment
 
 ## Quick Start
 
 ```bash
 git clone <repository-url>
 cd fastapi-playground
+cp .env.example .env
+# Set FIREBASE_PROJECT_ID in .env
 just install        # Install dependencies via uv
 just serve          # Start dev server at http://127.0.0.1:8080
 ```
@@ -110,22 +126,48 @@ cp .env.example .env
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Server listen port | `8080` |
-| `HOST` | Host address to bind to | `0.0.0.0` |
-| `ENVIRONMENT` | Environment label | `production` |
-| `DEBUG` | Enable debug mode | `false` |
+| `ENVIRONMENT` | Runtime mode; `production` enables HSTS and strips 5xx response extensions | `production` |
+| `LOG_LEVEL` | Application log verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`) | `INFO` |
 | `FIREBASE_PROJECT_ID` | Firebase/GCP project ID | - |
-| `FIREBASE_PROJECT_NUMBER` | Numeric project number (optional) | - |
 | `FIRESTORE_DATABASE` | Firestore database ID | `(default)` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Service account JSON path (local dev) | - |
-| `CORS_ORIGINS` | Comma-separated allowed origins | - |
+| `CORS_ORIGINS` | JSON array or comma-separated allowed origins | - |
 | `MAX_REQUEST_SIZE_BYTES` | Request body size limit | `1000000` |
+
+### Firebase and Cloud Logging MCP clients
+
+The workspace MCP configurations in `.vscode/mcp.json` and `.codex/config.toml` use the Firebase CLI server and the
+managed Cloud Logging server. Firebase uses the credentials available to the Firebase CLI. Cloud Logging reads the
+quota project and a short-lived Application Default Credentials access token from the shell environment.
+
+First align the gcloud default project and the Application Default Credentials quota project:
+
+```bash
+gcloud config set project PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project PROJECT_ID
+```
+
+For zsh, add these public, secret-free definitions to `~/.zshrc`:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="PROJECT_ID"
+export GOOGLE_CLOUD_ACCESS_TOKEN="$(gcloud auth application-default print-access-token)"
+```
+
+Run `source ~/.zshrc`, then restart VS Code or Codex so the client inherits the variables. The access token is
+short-lived; opening a new shell regenerates it, while a long-running client must be restarted after a refresh. Never
+commit the expanded token. Keep this convenience setup to a trusted workstation because child processes inherit the
+token. See [GCP.md](GCP.md) for IAM and troubleshooting details.
 
 ## Project Layout
 
 ```
+.agents/skills/        Five portable project workflows with Codex UI metadata
+.github/agents/       Evidence-based security review profile for GitHub Copilot
 app/
-  main.py              # FastAPI app factory and lifespan manager
-  dependencies.py      # Dependency injection (CurrentUser, ProfileServiceDep)
+  main.py              # FastAPI composition, lifespan, and outer ASGI middleware
+  dependencies.py      # Dependency injection (CurrentUser, ProfileServiceDependency)
   api/                 # API route handlers
     health.py          # Health check endpoint
     hello.py           # Hello greeting endpoints
@@ -135,19 +177,22 @@ app/
     firebase.py        # Token verification, FirebaseUser
   core/                # Configuration and infrastructure
     config.py          # Settings class (pydantic-settings)
+    logging.py         # Structured JSON logging configuration
     firebase.py        # Firebase Admin SDK and async Firestore client
     exception_handler.py  # RFC 9457 Problem Details
-    cbor.py            # CBOR content negotiation
+    content_negotiation.py  # RFC 9110 media-type selection
+    cbor.py            # CBOR request and response adaptation
+    openapi.py         # Reusable response contract metadata
+    schema_links.py    # RFC 8288 schema links
+    validation.py      # Validation error formatting and redaction
   exceptions/          # Domain exceptions using fastapi-problem
-    base.py            # Base exception classes
     profile.py         # ProfileNotFoundError, ProfileAlreadyExistsError
   middleware/          # ASGI middleware stack
     body_limit.py      # Request size guard (413 on oversized)
-    logging.py         # JSON logging with trace correlation
     security.py        # Security headers (HSTS, X-Frame-Options)
   models/              # Pydantic schemas
     error.py           # ProblemResponse schema
-    types.py           # Shared types (NormalizedEmail, Phone, UtcDatetime)
+    types.py           # Shared types (NormalizedEmail, Phone, UTCDateTime)
     health/            # Health response models
     hello/             # Hello response models
     items/             # Items response models
@@ -164,9 +209,15 @@ tests/
   e2e/                 # Firebase emulator tests (local only)
   helpers/             # Shared test utilities
 functions/             # Firebase Cloud Functions (Python 3.14)
-  main.py              # HTTPS callable example
+  main.py              # HTTP dad-joke function
   pyproject.toml       # Functions-specific dependencies
+  tests/               # Isolated function contract tests
 ```
+
+Repository guidance follows the canonical [AGENTS.md format](https://github.com/agentsmd/agents.md). Portable skills
+use the canonical [Agent Skills specification and documentation](https://github.com/agentskills/agentskills), with the
+detailed [format specification](https://agentskills.io/specification), under `.agents/skills/`. See
+[AGENTS.md](AGENTS.md) for the working rules and current skill catalog.
 
 ## Routes
 
@@ -176,12 +227,13 @@ All routes use paths without trailing slashes (`redirect_slashes=False`).
 |--------|------|------|-------------|
 | GET | `/health` | No | Health check probe |
 | GET | `/v1/hello` | No | Default greeting |
-| POST | `/v1/hello` | No | Personalized greeting |
+| POST | `/v1/hello` | No | Generate a personalized greeting (200 OK) |
 | GET | `/v1/items` | No | List items with pagination |
 | POST | `/v1/profile` | Yes | Create user profile |
 | GET | `/v1/profile` | Yes | Get user profile |
 | PATCH | `/v1/profile` | Yes | Update user profile |
 | DELETE | `/v1/profile` | Yes | Delete user profile |
+| GET | `/schemas/{schema_name}` | No | Retrieve a generated JSON Schema |
 
 Protected routes require `Authorization: Bearer <Firebase ID token>` header.
 
@@ -190,12 +242,16 @@ Protected routes require `Authorization: Bearer <Firebase ID token>` header.
 ### Build and Test
 
 ```bash
-just lint            # Run Ruff check + format
-just typing          # Run ty type checker
-just test            # Run unit + integration tests
-just test-unit       # Unit tests only
-just test-integration  # Integration tests only
-just cov             # Run tests with coverage report
+just lint               # Check Ruff linting and formatting
+just typing             # Type-check the FastAPI app
+just typing-functions   # Type-check the separate Functions project
+just test-functions     # Run isolated Functions tests
+just test               # Run unit + integration tests
+just test-unit          # Run unit tests only
+just test-integration   # Run integration tests only
+just test-e2e           # Run emulator E2E tests, or skip when emulators are absent
+just test-all           # Run every test tier
+just cov                # Generate HTML and JSON coverage reports
 ```
 
 ### Justfile Commands
@@ -204,11 +260,15 @@ just cov             # Run tests with coverage report
 |---------|-------------|
 | `just serve` | Start dev server with hot reload |
 | `just browser` | Open dev server in browser |
-| `just lint` | Run Ruff check + format |
+| `just lint` | Check Ruff linting and formatting |
 | `just typing` | Type checking via ty |
+| `just typing-functions` | Type-check the separate Functions project |
+| `just test-functions` | Test the separate Functions project |
 | `just test` | Unit + integration tests |
+| `just test-e2e` | Firebase emulator E2E tests |
+| `just test-all` | All test tiers |
 | `just cov` | Coverage report (html/json) |
-| `just check` | lint + typing + test |
+| `just check` | Full app and Functions lint, type, test, and dependency-manifest checks |
 | `just emulators` | Start Firebase emulators for E2E |
 
 Run `just` to see all available commands.
@@ -217,7 +277,8 @@ Run `just` to see all available commands.
 
 ```bash
 just install         # Install/sync dependencies
-just update          # Upgrade dependencies
+just install-functions  # Install/sync Functions dependencies
+just update          # Upgrade root and Functions dependencies
 just fresh           # Clean + reinstall
 ```
 
@@ -227,7 +288,7 @@ just fresh           # Clean + reinstall
 2. Add domain exceptions in `app/exceptions/` if needed
 3. Implement service logic in `app/services/<resource>/`
 4. Create handler in `app/api/<resource>.py` using `APIRouter`
-5. Register router in `app/main.py`
+5. Register business routers in `app/api/__init__.py`; keep health and schema discovery unversioned in `app/main.py`
 6. Add unit tests for service, integration tests for routes
 
 ## Container
@@ -245,6 +306,10 @@ docker build -t fastapi-playground:latest .
 docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
 ```
 
+Profile requests also require Application Default Credentials or a service-account credential mounted into the
+container. The `just container-up` recipe mounts `service_account.json` by default; override its `creds` argument when
+using another local path.
+
 ## Deployment
 
 ### Google Cloud Run
@@ -253,26 +318,22 @@ docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
 # Build and push to Artifact Registry
 gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest
 
-# Deploy with automatic base image updates
+# Deploy the repository-built standalone image
 gcloud run deploy fastapi-playground \
   --image REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest \
   --platform managed \
-  --region REGION \
-  --base-image python314 \
-  --automatic-updates
-
-# Deploy from source with automatic base image updates
-gcloud run deploy fastapi-playground \
-  --source . \
-  --platform managed \
-  --region REGION \
-  --base-image python314 \
-  --automatic-updates
+  --region REGION
 ```
 
-The `--base-image` and `--automatic-updates` flags enable [automatic base image updates](https://cloud.google.com/run/docs/configuring/services/automatic-base-image-updates), allowing Google to apply security patches to the OS and runtime without rebuilding or redeploying.
+The repository Dockerfile produces a standalone image containing the operating system and Python runtime. Do not
+combine that image with `--base-image` or `--automatic-updates`: [Cloud Run automatic base image updates](https://cloud.google.com/run/docs/configuring/services/automatic-base-image-updates)
+require either a scratch-based application image or a different buildpack source-deployment flow. Adopting either
+would change the established build and image convention and requires separate verification. Rebuild the standalone
+image to pick up operating-system, Python, and dependency updates.
 
-Set `FIREBASE_PROJECT_ID` environment variable to enable trace correlation in Cloud Logging.
+The image trusts Cloud Run's forwarded proxy headers so application URLs and HTTPS-only security headers reflect the
+original client request after Cloud Run terminates TLS. Request logs correlate an incoming valid `traceparent`; the
+middleware does not create tracing spans.
 
 For detailed infrastructure setup, see [GCP.md](GCP.md).
 
@@ -282,10 +343,13 @@ For detailed infrastructure setup, see [GCP.md](GCP.md).
 cd functions
 uv venv --python 3.14 venv
 uv pip install --python venv/bin/python -r requirements.txt
-firebase deploy --only functions
+firebase deploy --only functions --project PROJECT_ID
 ```
 
-See [functions/README.md](functions/README.md) for Cloud Functions documentation.
+The model-backed function is private. Grant intended callers `roles/run.invoker` on its backing Cloud Run service and
+send an ID token when invoking it. The Function deploys in `europe-west4`; its Vertex AI client uses the `global`
+endpoint and the auto-updating `gemini-pro-latest` alias. See [functions/README.md](functions/README.md) for the alias
+trade-offs and Cloud Functions documentation.
 
 ## CI/CD
 
@@ -293,8 +357,8 @@ GitHub Actions workflows in `.github/workflows/`:
 
 | Workflow | Description |
 |----------|-------------|
-| `app-ci.yml` | Build, tests, and coverage report |
-| `app-lint.yml` | Code quality (Ruff linting and formatting) |
+| `app-ci.yml` | App and Functions quality checks plus app test coverage |
+| `app-lint.yml` | Fast Ruff linting and formatting feedback |
 | `labeler.yml` | Automatic PR labeling |
 | `labeler-manual.yml` | Manual labeling for historical PRs |
 | `dependabot-auto-merge.yml` | Auto-merge Dependabot minor/patch updates |

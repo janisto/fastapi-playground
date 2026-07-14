@@ -8,12 +8,12 @@
   "functions": [
     {
       "source": "functions",
-      "location": "europe-west4",
       "codebase": "default",
       "ignore": [
         ".git",
         "venv",
         ".venv",
+        ".genkit",
         "__pycache__",
         "firebase-debug.log",
         "firebase-debug.*.log",
@@ -23,8 +23,7 @@
     }
   ],
   "storage": {
-    "rules": "storage.rules",
-    "location": "europe-west4"
+    "rules": "storage.rules"
   },
   "emulators": {
     "auth": {

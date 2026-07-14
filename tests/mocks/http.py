@@ -9,7 +9,7 @@ from respx.models import Route
 def add_ok_response(
     httpx2_mock: Router,
     url: str,
-    json: dict | None = None,
+    json: dict[str, object] | None = None,
     status_code: int = 200,
 ) -> Route:
     """
@@ -21,7 +21,7 @@ def add_ok_response(
 def add_post_response(
     httpx2_mock: Router,
     url: str,
-    json: dict | None = None,
+    json: dict[str, object] | None = None,
     status_code: int = 200,
 ) -> Route:
     """
@@ -35,7 +35,7 @@ def add_error_response(
     url: str,
     status_code: int = 500,
     method: str = "GET",
-    json: dict | None = None,
+    json: dict[str, object] | None = None,
 ) -> Route:
     """
     Add an error response to the mock.

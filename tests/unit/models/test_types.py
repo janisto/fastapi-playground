@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from app.models.types import CountryCode, LanguageCode, NormalizedEmail, Phone, UtcDatetime
+from app.models.types import NormalizedEmail, Phone, UTCDateTime
 
 
 class TestNormalizedEmail:
@@ -106,85 +106,9 @@ class TestPhone:
         assert result.phone == "+358401234567"
 
 
-class TestLanguageCode:
+class TestUTCDateTime:
     """
-    Tests for LanguageCode type alias (ISO 639-1).
-    """
-
-    @pytest.mark.parametrize("valid_code", ["en", "fi", "sv", "de"])
-    def test_valid_language_codes(self, valid_code: str) -> None:
-        """
-        Verify valid ISO 639-1 codes are accepted.
-        """
-
-        class TestModel(BaseModel):
-            lang: LanguageCode
-
-        result = TestModel(lang=valid_code)
-        assert result.lang == valid_code
-
-    @pytest.mark.parametrize(
-        "invalid_code",
-        [
-            "EN",
-            "e",
-            "eng",
-            "12",
-        ],
-    )
-    def test_invalid_language_code_raises(self, invalid_code: str) -> None:
-        """
-        Verify invalid language codes raise ValidationError.
-        """
-
-        class TestModel(BaseModel):
-            lang: LanguageCode
-
-        with pytest.raises(ValidationError):
-            TestModel(lang=invalid_code)
-
-
-class TestCountryCode:
-    """
-    Tests for CountryCode type alias (ISO 3166-1 alpha-2).
-    """
-
-    @pytest.mark.parametrize("valid_code", ["US", "FI", "DE", "GB"])
-    def test_valid_country_codes(self, valid_code: str) -> None:
-        """
-        Verify valid ISO 3166-1 alpha-2 codes are accepted.
-        """
-
-        class TestModel(BaseModel):
-            country: CountryCode
-
-        result = TestModel(country=valid_code)
-        assert result.country == valid_code
-
-    @pytest.mark.parametrize(
-        "invalid_code",
-        [
-            "us",
-            "U",
-            "USA",
-            "12",
-        ],
-    )
-    def test_invalid_country_code_raises(self, invalid_code: str) -> None:
-        """
-        Verify invalid country codes raise ValidationError.
-        """
-
-        class TestModel(BaseModel):
-            country: CountryCode
-
-        with pytest.raises(ValidationError):
-            TestModel(country=invalid_code)
-
-
-class TestUtcDatetime:
-    """
-    Tests for UtcDatetime type alias with .000Z milliseconds format.
+    Tests for UTCDateTime type alias with .000Z milliseconds format.
     """
 
     def test_serializes_with_milliseconds(self) -> None:
@@ -193,7 +117,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = TestModel(timestamp=dt)
@@ -205,7 +129,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         dt = datetime(2025, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
         result = TestModel(timestamp=dt)
@@ -217,7 +141,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = TestModel(timestamp=dt)
@@ -229,7 +153,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         test_cases = [
             (0, "000"),
@@ -242,3 +166,26 @@ class TestUtcDatetime:
             result = TestModel(timestamp=dt)
             serialized = result.model_dump()["timestamp"]
             assert serialized.endswith(f".{expected_ms}Z"), f"Expected .{expected_ms}Z, got {serialized}"
+
+    def test_normalizes_offset_to_utc(self) -> None:
+        """
+        Verify offset-aware datetimes are converted before serialization.
+        """
+
+        class TestModel(BaseModel):
+            timestamp: UTCDateTime
+
+        result = TestModel(timestamp=datetime.fromisoformat("2025-01-15T12:30:00+02:00"))
+
+        assert result.model_dump()["timestamp"] == "2025-01-15T10:30:00.000Z"
+
+    def test_rejects_naive_datetime(self) -> None:
+        """
+        Verify datetimes without timezone information are rejected.
+        """
+
+        class TestModel(BaseModel):
+            timestamp: UTCDateTime
+
+        with pytest.raises(ValidationError, match="datetime must include timezone information"):
+            TestModel(timestamp=datetime.fromisoformat("2025-01-15T10:30:00"))

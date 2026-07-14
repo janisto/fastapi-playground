@@ -21,12 +21,12 @@ def get_profile_service() -> ProfileService:
 
 
 # Service dependency type alias
-ProfileServiceDep = Annotated[ProfileService, Depends(get_profile_service)]
+ProfileServiceDependency = Annotated[ProfileService, Depends(get_profile_service)]
 
 __all__ = [
     "CurrentUser",
     "FirebaseUser",
     "ProfileService",
-    "ProfileServiceDep",
+    "ProfileServiceDependency",
     "get_profile_service",
 ]

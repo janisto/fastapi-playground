@@ -6,6 +6,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import cbor2
+import pytest
+from fastapi_request_observability import RequestContextMiddleware
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
@@ -39,6 +41,7 @@ def _create_app(max_size: int = 1024) -> Starlette:
     with patch("app.middleware.body_limit.get_settings") as mock_settings:
         mock_settings.return_value.max_request_size_bytes = max_size
         app.add_middleware(BodySizeLimitMiddleware)  # type: ignore[arg-type]
+        app.add_middleware(RequestContextMiddleware)
 
     return app
 
@@ -127,6 +130,9 @@ class TestBodySizeLimitErrorResponse:
                 assert body["title"] == "Payload Too Large"
                 assert body["status"] == 413
                 assert body["detail"] == "Request body too large"
+                assert "$schema" not in body
+                assert response.headers["Link"] == '</schemas/ProblemResponse.json>; rel="describedBy"'
+                assert response.headers["Vary"] == "Accept"
 
     def test_413_response_detail_message(self) -> None:
         """
@@ -187,7 +193,7 @@ class TestBodySizeLimitCBORNegotiation:
                     headers={"Accept": "application/cbor"},
                 )
                 assert response.status_code == 413
-                assert response.headers.get("content-type") == "application/problem+cbor"
+                assert response.headers.get("content-type") == "application/cbor"
                 body = cbor2.loads(response.content)
                 assert body["title"] == "Payload Too Large"
                 assert body["status"] == 413
@@ -210,6 +216,58 @@ class TestBodySizeLimitCBORNegotiation:
                 assert response.headers.get("content-type") == "application/problem+json"
                 body = response.json()
                 assert body["title"] == "Payload Too Large"
+
+    def test_413_combines_repeated_accept_fields(self) -> None:
+        """
+        Verify all lines of the list-based Accept field are negotiated.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/echo",
+                    content=b"x" * 100,
+                    headers=[
+                        ("Accept", "application/problem+json;q=0.1"),
+                        ("Accept", "application/cbor;q=1"),
+                    ],
+                )
+
+                assert response.status_code == 413
+                assert response.headers["content-type"] == "application/cbor"
+                assert cbor2.loads(response.content)["status"] == 413
+
+    @pytest.mark.parametrize(
+        "accept",
+        [
+            "application/xml",
+            "application/problem+json;q=0, application/cbor;q=0",
+        ],
+    )
+    def test_oversized_request_preserves_413_when_accept_is_unsupported(self, accept: str) -> None:
+        """
+        Verify representation negotiation never masks request-size rejection.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/echo",
+                    content=b"x" * 100,
+                    headers={"Accept": accept},
+                )
+
+                assert response.status_code == 413
+                assert response.headers["content-type"] == "application/problem+json"
+                assert response.headers["Vary"] == "Accept"
+                assert response.headers["Link"] == '</schemas/ProblemResponse.json>; rel="describedBy"'
+                assert response.json() == {
+                    "title": "Payload Too Large",
+                    "status": 413,
+                    "detail": "Request body too large",
+                }
 
 
 class TestBodySizeLimitEdgeCases:
@@ -269,6 +327,27 @@ class TestBodySizeLimitEdgeCases:
 
             await middleware(scope, receive, send)
             assert response_started
+
+    async def test_413_send_failure_does_not_reach_downstream(self) -> None:
+        """
+        Verify a transport failure while rejecting a request fails closed.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 100
+            downstream = AsyncMock()
+            middleware = BodySizeLimitMiddleware(downstream)
+            scope: dict[str, Any] = {
+                "type": "http",
+                "headers": [(b"content-length", b"101")],
+            }
+            receive = AsyncMock()
+            send = AsyncMock(side_effect=RuntimeError("transport closed"))
+
+            with pytest.raises(RuntimeError, match="transport closed"):
+                await middleware(scope, receive, send)
+
+            downstream.assert_not_awaited()
+            receive.assert_not_awaited()
 
     async def test_request_without_content_length_uses_streaming(self) -> None:
         """
@@ -391,9 +470,9 @@ class TestBodySizeLimitWithChunkedTransfer:
             await middleware(scope, receive, send)
             assert received_body == b"a" * 30 + b"b" * 30 + b"c" * 30
 
-    async def test_drains_remaining_body_after_413(self) -> None:
+    async def test_stops_reading_body_after_413(self) -> None:
         """
-        Verify middleware drains remaining body after sending 413.
+        Verify an oversized stream cannot retain the request by sending more data slowly.
         """
         with patch("app.middleware.body_limit.get_settings") as mock_settings:
             mock_settings.return_value.max_request_size_bytes = 50
@@ -411,4 +490,34 @@ class TestBodySizeLimitWithChunkedTransfer:
 
             await middleware(scope, receive, send)
 
-            assert receive.call_count == 3
+            assert receive.call_count == 2
+
+    async def test_unsupported_accept_still_stops_oversized_stream(self) -> None:
+        """
+        Verify 413 fallback does not read more body data or invoke the app.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 50
+            downstream = AsyncMock()
+            middleware = BodySizeLimitMiddleware(downstream)
+            scope = {
+                "type": "http",
+                "headers": [(b"accept", b"application/xml")],
+            }
+            receive = AsyncMock(
+                side_effect=[
+                    {"type": "http.request", "body": b"x" * 30, "more_body": True},
+                    {"type": "http.request", "body": b"x" * 30, "more_body": True},
+                    {"type": "http.request", "body": b"x" * 10, "more_body": False},
+                ]
+            )
+            send = AsyncMock()
+
+            await middleware(scope, receive, send)
+
+            response_start = next(
+                call.args[0] for call in send.call_args_list if call.args[0]["type"] == "http.response.start"
+            )
+            assert response_start["status"] == 413
+            assert receive.call_count == 2
+            downstream.assert_not_awaited()

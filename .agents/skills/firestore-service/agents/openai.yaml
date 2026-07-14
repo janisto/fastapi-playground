@@ -1,0 +1,4 @@
+interface:
+  display_name: "Firestore Service"
+  short_description: "Build async Firestore service behavior"
+  default_prompt: "Use $firestore-service to implement and test the requested async Firestore service behavior with the repository transaction, ownership, and audit conventions."

@@ -25,6 +25,28 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 
+def _unauthorized() -> HTTPException:
+    """
+    Build the canonical authentication failure response.
+    """
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def _authentication_unavailable() -> HTTPException:
+    """
+    Build the canonical authentication dependency failure response.
+    """
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Authentication service temporarily unavailable",
+        headers={"Retry-After": "30"},
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class FirebaseUser:
     """
@@ -49,7 +71,7 @@ async def verify_firebase_token(
         FirebaseUser: Authenticated user information
 
     Raises:
-        HTTPException: If token is invalid, expired, or revoked
+        HTTPException: If the token is invalid or the authentication service is unavailable.
     """
     token = credentials.credentials
 
@@ -68,11 +90,7 @@ async def verify_firebase_token(
 
         if not uid:
             logger.warning("Invalid token: missing user ID")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Unauthorized",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise _unauthorized()
 
         logger.debug("Successfully authenticated user", extra={"user_id": uid})
 
@@ -88,43 +106,19 @@ async def verify_firebase_token(
     except CertificateFetchError:
         # Network or configuration issue fetching public keys for token verification
         logger.exception("Failed to fetch Firebase public keys for token verification")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service temporarily unavailable",
-            headers={"Retry-After": "30"},
-        ) from None
+        raise _authentication_unavailable() from None
     except ExpiredIdTokenError:
         logger.warning("Expired Firebase ID token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        raise _unauthorized() from None
     except RevokedIdTokenError:
         logger.warning("Revoked Firebase ID token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        raise _unauthorized() from None
     except UserDisabledError:
         logger.warning("Disabled Firebase user account")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        raise _unauthorized() from None
     except InvalidIdTokenError:
         logger.warning("Invalid Firebase ID token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        raise _unauthorized() from None
     except Exception:
         logger.exception("Error verifying Firebase token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unauthorized",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from None
+        raise _authentication_unavailable() from None

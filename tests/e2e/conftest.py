@@ -16,11 +16,20 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app
-
 FIRESTORE_HOST = "127.0.0.1:7030"
 AUTH_HOST = "127.0.0.1:7010"
 PROJECT_ID = "demo-test"
+
+os.environ["ENVIRONMENT"] = "test"
+os.environ["LOG_LEVEL"] = "INFO"
+os.environ["FIRESTORE_EMULATOR_HOST"] = FIRESTORE_HOST
+os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = AUTH_HOST
+os.environ["FIREBASE_PROJECT_ID"] = PROJECT_ID
+os.environ["CORS_ORIGINS"] = ""
+
+# App imports must follow emulator configuration because settings are resolved during import.
+from app.auth.firebase import FirebaseUser, verify_firebase_token  # noqa: E402
+from app.main import app, fastapi_app  # noqa: E402
 
 
 def _emulator_running(host: str) -> bool:
@@ -44,23 +53,27 @@ def require_emulators() -> None:
     if not _emulator_running(FIRESTORE_HOST):
         pytest.skip("Firebase emulators not running (run: just emulators)")
 
-    os.environ["FIRESTORE_EMULATOR_HOST"] = FIRESTORE_HOST
-    os.environ["FIREBASE_AUTH_EMULATOR_HOST"] = AUTH_HOST
-
 
 @pytest.fixture(autouse=True)
 def clear_emulator_data() -> Generator[None]:
     """
-    Clear Firestore emulator data after each test.
+    Clear Firestore emulator data before and after each test.
 
     Ensures test isolation by removing all documents.
     """
-    yield
-    with contextlib.suppress(httpx2.RequestError):
-        httpx2.delete(
-            f"http://{FIRESTORE_HOST}/emulator/v1/projects/{PROJECT_ID}/databases/(default)/documents",
-            timeout=5.0,
-        )
+
+    def clear() -> None:
+        with contextlib.suppress(httpx2.RequestError):
+            httpx2.delete(
+                f"http://{FIRESTORE_HOST}/emulator/v1/projects/{PROJECT_ID}/databases/(default)/documents",
+                timeout=5.0,
+            )
+
+    clear()
+    try:
+        yield
+    finally:
+        clear()
 
 
 @pytest.fixture
@@ -70,5 +83,13 @@ def e2e_client() -> Generator[TestClient]:
 
     Unlike integration tests, this does NOT mock Firebase/Firestore.
     """
-    with TestClient(app) as c:
-        yield c
+
+    async def authenticated_user() -> FirebaseUser:
+        return FirebaseUser(uid="e2e-user", email="e2e@example.com", email_verified=True)
+
+    fastapi_app.dependency_overrides[verify_firebase_token] = authenticated_user
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        fastapi_app.dependency_overrides.pop(verify_firebase_token, None)

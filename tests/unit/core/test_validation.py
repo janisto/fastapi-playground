@@ -11,6 +11,7 @@ from rfc9457 import Problem
 
 from app.core.validation import (
     SENSITIVE_FIELD_NAMES,
+    is_safe_validation_value,
     is_sensitive_field,
     loc_to_dot_notation,
     validation_error_handler,
@@ -97,10 +98,38 @@ class TestIsSensitiveField:
         assert is_sensitive_field(("body", "user", "password")) is True
         assert is_sensitive_field(("body", "credentials", "api_key")) is True
 
+    @pytest.mark.parametrize("field_name", ["access_token", "clientSecret", "private-key", "apiKeyValue"])
+    def test_sensitive_markers_in_composite_names(self, field_name: str) -> None:
+        """Common compound secret field names are redacted."""
+        assert is_sensitive_field(("body", field_name)) is True
+
     def test_integer_in_path_ignored(self) -> None:
         """Integer segments are ignored."""
         assert is_sensitive_field(("body", "items", 0, "password")) is True
         assert is_sensitive_field(("body", "items", 0, "email")) is False
+
+
+class TestIsSafeValidationValue:
+    """Tests for validation value disclosure policy."""
+
+    @pytest.mark.parametrize("value", [None, "invalid", 42, 1.5, True])
+    def test_allows_scalar_values(self, value: object) -> None:
+        """Scalar leaf values can be returned to the caller."""
+        assert is_safe_validation_value(value) is True
+
+    @pytest.mark.parametrize("value", [{"password": "secret"}, ["secret"], ("secret",)])
+    def test_rejects_container_values(self, value: object) -> None:
+        """Container values can contain unrelated secrets and are omitted."""
+        assert is_safe_validation_value(value) is False
+
+    def test_rejects_oversized_strings(self) -> None:
+        """Oversized invalid values are not reflected into error responses."""
+        assert is_safe_validation_value("x" * 201) is False
+
+    @pytest.mark.parametrize("value", [10**200, float("nan"), float("inf"), float("-inf")])
+    def test_rejects_unbounded_or_non_json_numbers(self, value: float) -> None:
+        """Numbers that can break the bounded JSON error contract are omitted."""
+        assert is_safe_validation_value(value) is False
 
 
 class TestValidationErrorHandler:
@@ -108,7 +137,7 @@ class TestValidationErrorHandler:
 
     @pytest.fixture
     def mock_request(self) -> MagicMock:
-        """Create mock request with base_url for $schema generation."""
+        """Create a mock request for validation error handling."""
         mock = MagicMock()
         mock.base_url = "http://testserver/"
         return mock
@@ -147,7 +176,29 @@ class TestValidationErrorHandler:
         assert result.title == "Unprocessable Entity"
         assert result.status == 422
         assert result.detail == "validation failed"
-        assert result.extras["$schema"] == "http://testserver/schemas/ErrorModel.json"
+        assert "$schema" not in result.extras
+        assert len(result.extras["errors"]) == 1
+
+    def test_omits_complete_body_attached_to_missing_field(
+        self,
+        mock_eh: MagicMock,
+        mock_request: MagicMock,
+    ) -> None:
+        """Missing-field errors never echo a complete request body."""
+        exc = self._make_validation_error(
+            [
+                {
+                    "type": "missing",
+                    "loc": ("body", "first_name"),
+                    "msg": "Field required",
+                    "input": {"email": "private@example.com", "password": "do-not-echo"},
+                }
+            ]
+        )
+
+        result = validation_error_handler(mock_eh, mock_request, exc)
+
+        assert "value" not in result.extras["errors"][0]
 
     def test_includes_error_location_and_message(
         self,

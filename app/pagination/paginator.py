@@ -9,7 +9,7 @@ from app.pagination.cursor import Cursor, InvalidCursorError, decode_cursor
 from app.pagination.link import build_link_header
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class PaginationResult[T]:
     """
     Result of pagination operation.
@@ -52,12 +52,16 @@ def paginate[T](
     start_idx = 0
     if cursor:
         decoded = decode_cursor(cursor)
-        if decoded.type != cursor_type:
+        if decoded.cursor_type != cursor_type:
             raise InvalidCursorError(f"invalid cursor type: expected '{cursor_type}'")
+        if not decoded.value:
+            raise InvalidCursorError("cursor value cannot be empty")
         for i, item in enumerate(items):
             if get_id(item) == decoded.value:
                 start_idx = i + 1
                 break
+        else:
+            raise InvalidCursorError("cursor references unknown item")
 
     # Get page of items
     end_idx = start_idx + limit
@@ -68,14 +72,14 @@ def paginate[T](
     prev_cursor = None
 
     if end_idx < len(items) and page_items:
-        next_cursor = Cursor(type=cursor_type, value=get_id(page_items[-1])).encode()
+        next_cursor = Cursor(cursor_type=cursor_type, value=get_id(page_items[-1])).encode()
 
     if start_idx > 0:
         if start_idx <= limit:
-            prev_cursor = Cursor(type=cursor_type, value="").encode()
+            prev_cursor = ""
         else:
             prev_last_idx = start_idx - 1
-            prev_cursor = Cursor(type=cursor_type, value=get_id(items[prev_last_idx - limit])).encode()
+            prev_cursor = Cursor(cursor_type=cursor_type, value=get_id(items[prev_last_idx - limit])).encode()
 
     # Build Link header
     link_header = build_link_header(

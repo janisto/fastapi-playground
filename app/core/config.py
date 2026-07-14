@@ -4,13 +4,13 @@ Configuration settings for the application.
 
 import json
 from functools import cache
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
-def parse_cors_origins(value: str | list[str]) -> list[str]:
+def parse_cors_origins(value: object) -> list[str]:
     """
     Parse CORS origins from either JSON array or comma-separated string.
 
@@ -20,7 +20,12 @@ def parse_cors_origins(value: str | list[str]) -> list[str]:
     - Already-parsed list (passthrough)
     """
     if isinstance(value, list):
-        return value
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("CORS_ORIGINS entries must be strings")
+        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+    if not isinstance(value, str):
+        raise TypeError("CORS_ORIGINS must be a string or array of strings")
 
     if not value or not value.strip():
         return []
@@ -32,9 +37,12 @@ def parse_cors_origins(value: str | list[str]) -> list[str]:
         try:
             parsed = json.loads(value)
             if isinstance(parsed, list):
-                return [str(item).strip() for item in parsed if item]
-        except json.JSONDecodeError:
-            pass
+                if not all(isinstance(item, str) for item in parsed):
+                    raise ValueError("CORS_ORIGINS entries must be strings")
+                return [item.strip() for item in parsed if item.strip()]
+        except json.JSONDecodeError as error:
+            raise ValueError("CORS_ORIGINS must be a valid JSON array or comma-separated list") from error
+        raise ValueError("CORS_ORIGINS JSON value must be an array")
 
     # Fall back to comma-separated
     return [item.strip() for item in value.split(",") if item.strip()]
@@ -46,28 +54,21 @@ class Settings(BaseSettings):
     """
 
     # Environment
-    environment: str = Field(default="production", description="Environment name")
-    debug: bool = Field(default=False, description="Debug mode")
-
-    # Server
-    host: str = Field(default="0.0.0.0", description="Server host")
-    port: int = Field(default=8080, description="Server port")
+    environment: Literal["development", "test", "production"] = Field(
+        default="production", description="Environment name"
+    )
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
+        default="INFO",
+        description="Application log level",
+    )
 
     # Firebase
-    firebase_project_id: str = Field(default="test-project", description="Firebase project ID")
+    firebase_project_id: str = Field(..., min_length=1, description="Firebase project ID")
     google_application_credentials: str | None = Field(default=None, description="Path to service account credentials")
-    firebase_project_number: str | None = Field(default=None, description="Firebase project number")
     firestore_database: str | None = Field(default=None, description="Firestore database ID (default: (default))")
 
-    # App metadata (optional / informational)
-    app_environment: str | None = Field(default=None, description="Application environment")
-    app_url: str | None = Field(default=None, description="Application URL")
-
-    # Secrets
-    secret_manager_enabled: bool = Field(default=True, description="Enable Secret Manager")
-
     # Security / Limits
-    max_request_size_bytes: int = Field(default=1_000_000, description="Maximum request body size in bytes")
+    max_request_size_bytes: int = Field(default=1_000_000, gt=0, description="Maximum request body size in bytes")
 
     # CORS configuration - when allow_credentials=True, wildcards are forbidden per CORS spec
     cors_origins: Annotated[list[str], NoDecode] = Field(
@@ -79,7 +80,7 @@ class Settings(BaseSettings):
         description="Allowed CORS methods",
     )
     cors_headers: list[str] = Field(
-        default=["Authorization", "Content-Type", "traceparent", "X-Request-ID"],
+        default=["Authorization", "Content-Type", "traceparent", "tracestate", "X-Request-ID"],
         description="Allowed CORS headers",
     )
     cors_expose_headers: list[str] = Field(
@@ -89,11 +90,18 @@ class Settings(BaseSettings):
 
     @field_validator("cors_origins", mode="before")
     @classmethod
-    def parse_cors_origins_field(cls, v: str | list[str]) -> list[str]:
+    def parse_cors_origins_field(cls, value: object) -> list[str]:
         """
         Parse CORS origins from JSON array or comma-separated string.
         """
-        return parse_cors_origins(v)
+        return parse_cors_origins(value)
+
+    @property
+    def is_production(self) -> bool:
+        """
+        Return whether production-only security behavior must be enabled.
+        """
+        return self.environment == "production"
 
     model_config = SettingsConfigDict(
         env_file=".env",

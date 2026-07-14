@@ -5,35 +5,47 @@ Integration tests for items endpoint.
 import cbor2
 from fastapi.testclient import TestClient
 
+from app.pagination import MAX_CURSOR_LENGTH
+
+ITEM_FIELD_NAMES = {
+    "id",
+    "name",
+    "category",
+    "price",
+    "in_stock",
+    "created_at",
+    "description",
+}
+
 
 class TestItemsList:
-    """Tests for GET /items/."""
+    """Tests for GET /v1/items."""
 
     def test_returns_200(self, client: TestClient) -> None:
-        """Verify GET /items/ returns 200 OK."""
+        """Verify GET /v1/items returns 200 OK."""
         response = client.get("/v1/items")
 
         assert response.status_code == 200
 
     def test_returns_items_list(self, client: TestClient) -> None:
-        """Verify GET /items/ returns list of items."""
+        """Verify GET /v1/items returns list of items."""
         response = client.get("/v1/items")
 
         body = response.json()
         assert "items" in body
         assert "total" in body
         assert isinstance(body["items"], list)
+        assert set(body["items"][0]) == ITEM_FIELD_NAMES
 
-    def test_returns_schema_url(self, client: TestClient) -> None:
-        """Verify GET /items/ returns $schema URL."""
+    def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
+        """Verify GET /v1/items keeps schema metadata out of the representation."""
         response = client.get("/v1/items")
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/ItemList.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(self, client: TestClient) -> None:
-        """Verify GET /items/ returns Link header with describedBy."""
+        """Verify GET /v1/items returns Link header with describedBy."""
         response = client.get("/v1/items")
 
         link = response.headers.get("link", "")
@@ -68,7 +80,7 @@ class TestItemsList:
 
 
 class TestItemsPagination:
-    """Tests for cursor-based pagination on /items/."""
+    """Tests for cursor-based pagination on /v1/items."""
 
     def test_first_page_has_link_header(self, client: TestClient) -> None:
         """Verify first page includes Link header with next."""
@@ -94,7 +106,7 @@ class TestItemsPagination:
 
         # Extract cursor from Link header
         link = response1.headers.get("link", "")
-        # Parse cursor from link like: </items/?limit=5&cursor=xxx>; rel="next"
+        # Parse cursor from link like: </v1/items?limit=5&cursor=xxx>; rel="next"
         import re
 
         match = re.search(r"cursor=([^&>]+)", link)
@@ -179,22 +191,53 @@ class TestItemsPagination:
         assert body["title"] == "Bad Request"
         assert "invalid cursor type" in body["detail"]
 
-    def test_cursor_with_nonexistent_item_starts_from_beginning(self, client: TestClient) -> None:
-        """Verify cursor with non-existent item ID starts from beginning."""
+    def test_cursor_with_nonexistent_item_returns_error(self, client: TestClient) -> None:
+        """Verify a stale item cursor returns 400 Bad Request."""
         import base64
 
         # Create a cursor with item type but non-existent item ID
         cursor_value = base64.b64encode(b"item:nonexistent-item").decode("ascii")
         response = client.get("/v1/items", params={"cursor": cursor_value, "limit": 5})
 
-        assert response.status_code == 200
+        assert response.status_code == 400
         body = response.json()
-        # Should start from beginning since item is not found
-        assert body["items"][0]["id"] == "item-001"
+        assert body["title"] == "Bad Request"
+        assert body["detail"] == "cursor references unknown item"
+
+    def test_cursor_with_empty_value_returns_error(self, client: TestClient) -> None:
+        """
+        Verify an empty item cursor value returns 400 Bad Request.
+        """
+        import base64
+
+        cursor_value = base64.b64encode(b"item:").decode("ascii")
+        response = client.get("/v1/items", params={"cursor": cursor_value, "limit": 5})
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "cursor value cannot be empty"
+
+    def test_second_page_previous_link_returns_first_page(self, client: TestClient) -> None:
+        """
+        Verify the first previous-page link does not require an empty cursor sentinel.
+        """
+        import re
+
+        first = client.get("/v1/items", params={"limit": 5})
+        next_match = re.search(r'<([^>]+)>;\s*rel="next"', first.headers["link"])
+        assert next_match
+
+        second = client.get(next_match.group(1))
+        previous_match = re.search(r'<([^>]+)>;\s*rel="prev"', second.headers["link"])
+        assert previous_match
+        assert "cursor=" not in previous_match.group(1)
+
+        previous = client.get(previous_match.group(1))
+        assert previous.status_code == 200
+        assert previous.json()["items"][0]["id"] == "item-001"
 
 
 class TestItemsFiltering:
-    """Tests for category filtering on /items/."""
+    """Tests for category filtering on /v1/items."""
 
     def test_category_filter_electronics(self, client: TestClient) -> None:
         """Verify category filter returns only electronics items."""
@@ -261,7 +304,7 @@ class TestItemsFiltering:
         body = response.json()
         assert body["title"] == "Unprocessable Entity"
         assert body["detail"] == "validation failed"
-        assert "$schema" in body
+        assert "$schema" not in body
 
     def test_filter_preserves_in_link_header(self, client: TestClient) -> None:
         """Verify category filter is preserved in Link header."""
@@ -272,7 +315,7 @@ class TestItemsFiltering:
 
 
 class TestItemsInvalidCursor:
-    """Tests for invalid cursor handling on /items/."""
+    """Tests for invalid cursor handling on /v1/items."""
 
     def test_invalid_cursor_returns_400(self, client: TestClient) -> None:
         """Verify invalid cursor returns 400 Bad Request."""
@@ -288,7 +331,7 @@ class TestItemsInvalidCursor:
         assert body["title"] == "Bad Request"
         assert body["status"] == 400
         assert "invalid cursor" in body["detail"]
-        assert "$schema" in body
+        assert "$schema" not in body
 
     def test_invalid_cursor_detail_contains_error_message(self, client: TestClient) -> None:
         """Verify invalid cursor error has descriptive detail."""
@@ -310,6 +353,16 @@ class TestItemsInvalidCursor:
         body = response.json()
         assert body["title"] == "Bad Request"
 
+    def test_oversized_cursor_returns_400(self, client: TestClient) -> None:
+        """Verify cursor length violations remain malformed parameters, not 422 validation errors."""
+        response = client.get(
+            "/v1/items",
+            params={"cursor": "x" * (MAX_CURSOR_LENGTH + 1)},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == "cursor exceeds maximum length"
+
     def test_invalid_cursor_cbor_returns_cbor_problem(self, client: TestClient) -> None:
         """Verify invalid cursor with Accept: application/cbor returns CBOR error."""
         response = client.get(
@@ -326,7 +379,7 @@ class TestItemsInvalidCursor:
 
 
 class TestItemsCBOR:
-    """Tests for CBOR content negotiation on /items/."""
+    """Tests for CBOR content negotiation on /v1/items."""
 
     def test_accept_cbor_returns_cbor(self, client: TestClient) -> None:
         """Verify Accept: application/cbor returns CBOR response."""
@@ -337,3 +390,4 @@ class TestItemsCBOR:
         decoded = cbor2.loads(response.content)
         assert "items" in decoded
         assert "total" in decoded
+        assert set(decoded["items"][0]) == ITEM_FIELD_NAMES

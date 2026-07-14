@@ -4,14 +4,8 @@ Security-related middleware and utilities.
 Headers follow OWASP REST Security Cheat Sheet recommendations.
 """
 
-from __future__ import annotations
-
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp
-
-from app.core.config import get_settings
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # Permissions-Policy disables browser features not needed by REST APIs
 _DEFAULT_PERMISSIONS_POLICY = (
@@ -19,7 +13,7 @@ _DEFAULT_PERMISSIONS_POLICY = (
 )
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+class SecurityHeadersMiddleware:
     """
     Attach security headers to all responses per OWASP REST Security guidelines.
 
@@ -50,8 +44,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         cross_origin_resource_policy: str = "same-origin",
         permissions_policy: str = _DEFAULT_PERMISSIONS_POLICY,
     ) -> None:
-        super().__init__(app)
-        self._settings = get_settings()
+        self.app = app
         self._hsts = hsts
         self._hsts_include_subdomains = hsts_include_subdomains
         self._hsts_preload = hsts_preload
@@ -63,54 +56,46 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         self._cross_origin_resource_policy = cross_origin_resource_policy
         self._permissions_policy = permissions_policy
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        response = await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        # Vary: Origin, Accept - important for proper caching (RFC 9110 Section 12.5.5)
-        # - Origin: CORS responses vary by requesting origin
-        # - Accept: Content negotiation (JSON vs CBOR) varies by Accept header
-        response.headers.setdefault("Vary", "Origin, Accept")
+        async def send_with_security_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                self._apply_headers(MutableHeaders(scope=message), scope)
+            await send(message)
 
-        # Cache-Control (OWASP recommends no-store for API responses)
+        await self.app(scope, receive, send_with_security_headers)
+
+    def _apply_headers(self, headers: MutableHeaders, scope: Scope) -> None:
+        headers.add_vary_header("Accept")
+
         if self._cache_control:
-            response.headers.setdefault("Cache-Control", self._cache_control)
+            headers.setdefault("Cache-Control", self._cache_control)
 
-        # Content-Security-Policy (defense-in-depth for JSON APIs)
-        # Skip strict CSP for documentation endpoints that need external scripts
-        is_docs_path = request.url.path in ("/api-docs", "/api-redoc", "/openapi.json")
+        path = str(scope.get("path", ""))
+        is_docs_path = path in ("/api-docs", "/api-redoc", "/openapi.json")
         if self._content_security_policy and not is_docs_path:
-            response.headers.setdefault("Content-Security-Policy", self._content_security_policy)
+            headers.setdefault("Content-Security-Policy", self._content_security_policy)
 
-        # Cross-Origin-Opener-Policy (Spectre mitigation)
-        if self._cross_origin_opener_policy:
-            response.headers.setdefault("Cross-Origin-Opener-Policy", self._cross_origin_opener_policy)
+        optional_headers = {
+            "Cross-Origin-Opener-Policy": self._cross_origin_opener_policy,
+            "Cross-Origin-Resource-Policy": self._cross_origin_resource_policy,
+            "Permissions-Policy": self._permissions_policy,
+            "Referrer-Policy": self._referrer_policy,
+            "X-Frame-Options": self._x_frame_options,
+        }
+        for name, value in optional_headers.items():
+            if value:
+                headers.setdefault(name, value)
 
-        # Cross-Origin-Resource-Policy (Spectre mitigation)
-        if self._cross_origin_resource_policy:
-            response.headers.setdefault("Cross-Origin-Resource-Policy", self._cross_origin_resource_policy)
+        headers.setdefault("X-Content-Type-Options", "nosniff")
 
-        # Permissions-Policy (disable browser features not needed by REST APIs)
-        if self._permissions_policy:
-            response.headers.setdefault("Permissions-Policy", self._permissions_policy)
-
-        # Referrer-Policy
-        if self._referrer_policy:
-            response.headers.setdefault("Referrer-Policy", self._referrer_policy)
-
-        # X-Content-Type-Options
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-
-        # X-Frame-Options (legacy browser support)
-        if self._x_frame_options:
-            response.headers.setdefault("X-Frame-Options", self._x_frame_options)
-
-        # HSTS only on HTTPS and typically not in debug
-        if self._hsts and (request.url.scheme == "https") and not self._settings.debug:
+        if self._hsts and scope.get("scheme") == "https":
             parts = ["max-age=31536000"]
             if self._hsts_include_subdomains:
                 parts.append("includeSubDomains")
             if self._hsts_preload:
                 parts.append("preload")
-            response.headers.setdefault("Strict-Transport-Security", "; ".join(parts))
-
-        return response
+            headers.setdefault("Strict-Transport-Security", "; ".join(parts))

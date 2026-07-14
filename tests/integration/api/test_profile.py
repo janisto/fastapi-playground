@@ -11,6 +11,17 @@ from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
 from tests.helpers.profiles import make_profile, make_profile_payload_dict
 
 BASE_URL = "/v1/profile"
+PROFILE_FIELD_NAMES = {
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "phone_number",
+    "marketing",
+    "terms",
+    "created_at",
+    "updated_at",
+}
 
 
 class TestCreateProfile:
@@ -34,26 +45,25 @@ class TestCreateProfile:
         assert response.status_code == 201
         body = response.json()
         assert "id" in body
-        assert "firstname" in body
+        assert "first_name" in body
         assert response.headers.get("Location") == "/v1/profile"
         mock_profile_service.create_profile.assert_awaited_once()
 
-    def test_returns_schema_url(
+    def test_response_does_not_embed_schema_metadata(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
         """
-        Verify POST /profile/ returns $schema URL.
+        Verify POST /profile/ keeps schema metadata out of the representation.
         """
         mock_profile_service.create_profile.return_value = make_profile()
 
         response = client.post(BASE_URL, json=make_profile_payload_dict())
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/ProfileData.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(
         self,
@@ -70,7 +80,7 @@ class TestCreateProfile:
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/ProfileData.json" in link
+        assert "/schemas/Profile.json" in link
 
     def test_returns_409_when_duplicate(
         self,
@@ -140,7 +150,7 @@ class TestCreateProfile:
         """
         Verify missing required field returns 422 validation error.
         """
-        payload = make_profile_payload_dict(omit=["firstname"])
+        payload = make_profile_payload_dict(omit=["first_name"])
 
         response = client.post(BASE_URL, json=payload)
 
@@ -148,7 +158,7 @@ class TestCreateProfile:
 
     @pytest.mark.parametrize(
         "missing_field",
-        ["firstname", "lastname", "email", "phone_number", "terms"],
+        ["first_name", "last_name", "email", "phone_number", "terms"],
     )
     def test_returns_422_for_missing_fields(
         self,
@@ -208,25 +218,24 @@ class TestGetProfile:
         assert response.status_code == 200
         body = response.json()
         assert "id" in body
-        assert "firstname" in body
+        assert "first_name" in body
         mock_profile_service.get_profile.assert_awaited_once()
 
-    def test_returns_schema_url(
+    def test_response_does_not_embed_schema_metadata(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
         """
-        Verify GET /profile/ returns $schema URL.
+        Verify GET /profile/ keeps schema metadata out of the representation.
         """
         mock_profile_service.get_profile.return_value = make_profile()
 
         response = client.get(BASE_URL)
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/ProfileData.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(
         self,
@@ -243,7 +252,7 @@ class TestGetProfile:
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/ProfileData.json" in link
+        assert "/schemas/Profile.json" in link
 
     def test_returns_404_when_not_found(
         self,
@@ -304,31 +313,30 @@ class TestUpdateProfile:
         """
         Verify successful profile update returns 200.
         """
-        mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
+        mock_profile_service.update_profile.return_value = make_profile(first_name="Updated")
 
-        response = client.patch(BASE_URL, json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"first_name": "Updated"})
 
         assert response.status_code == 200
         body = response.json()
-        assert body["firstname"] == "Updated"
+        assert body["first_name"] == "Updated"
         mock_profile_service.update_profile.assert_awaited_once()
 
-    def test_returns_schema_url(
+    def test_response_does_not_embed_schema_metadata(
         self,
         client: TestClient,
         with_fake_user: None,
         mock_profile_service: AsyncMock,
     ) -> None:
         """
-        Verify PATCH /profile/ returns $schema URL.
+        Verify PATCH /profile/ keeps schema metadata out of the representation.
         """
-        mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
+        mock_profile_service.update_profile.return_value = make_profile(first_name="Updated")
 
-        response = client.patch(BASE_URL, json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"first_name": "Updated"})
 
         body = response.json()
-        assert "$schema" in body
-        assert "schemas/ProfileData.json" in body["$schema"]
+        assert "$schema" not in body
 
     def test_returns_describedby_link_header(
         self,
@@ -339,13 +347,13 @@ class TestUpdateProfile:
         """
         Verify PATCH /profile/ returns Link header with describedBy.
         """
-        mock_profile_service.update_profile.return_value = make_profile(firstname="Updated")
+        mock_profile_service.update_profile.return_value = make_profile(first_name="Updated")
 
-        response = client.patch(BASE_URL, json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"first_name": "Updated"})
 
         link = response.headers.get("link", "")
         assert 'rel="describedBy"' in link
-        assert "/schemas/ProfileData.json" in link
+        assert "/schemas/Profile.json" in link
 
     def test_returns_404_when_not_found(
         self,
@@ -358,7 +366,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.side_effect = ProfileNotFoundError()
 
-        response = client.patch(BASE_URL, json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"first_name": "Updated"})
 
         assert response.status_code == 404
         assert response.json()["title"] == "Profile not found"
@@ -374,7 +382,7 @@ class TestUpdateProfile:
         """
         mock_profile_service.update_profile.side_effect = RuntimeError("Database connection failed")
 
-        response = client.patch(BASE_URL, json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"first_name": "Updated"})
 
         assert response.status_code == 500
         assert response.json()["detail"] == "Failed to update profile"
@@ -387,7 +395,7 @@ class TestUpdateProfile:
         """
         Verify unauthenticated request returns 401.
         """
-        response = client.patch(BASE_URL, json={"firstname": "Updated"})
+        response = client.patch(BASE_URL, json={"first_name": "Updated"})
 
         assert response.status_code == 401
 
@@ -400,9 +408,9 @@ class TestUpdateProfile:
         """
         Verify partial update with single field works.
         """
-        mock_profile_service.update_profile.return_value = make_profile(lastname="NewLast")
+        mock_profile_service.update_profile.return_value = make_profile(last_name="NewLast")
 
-        response = client.patch(BASE_URL, json={"lastname": "NewLast"})
+        response = client.patch(BASE_URL, json={"last_name": "NewLast"})
 
         assert response.status_code == 200
 
@@ -420,6 +428,40 @@ class TestUpdateProfile:
         response = client.patch(BASE_URL, json={})
 
         assert response.status_code == 200
+
+    @pytest.mark.parametrize("field", ["first_name", "last_name", "email", "phone_number", "marketing"])
+    def test_rejects_explicit_null(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+        field: str,
+    ) -> None:
+        """
+        Verify explicit null fields return validation errors instead of no-op updates.
+        """
+        response = client.patch(BASE_URL, json={field: None})
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "validation failed"
+        mock_profile_service.update_profile.assert_not_awaited()
+
+    @pytest.mark.parametrize("field", ["firstName", "lastName", "phoneNumber", "firstname", "lastname"])
+    def test_rejects_alternate_field_casing(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+        field: str,
+    ) -> None:
+        """
+        Verify PATCH accepts only the documented snake_case property names.
+        """
+        response = client.patch(BASE_URL, json={field: "value"})
+
+        assert response.status_code == 422
+        assert response.json()["detail"] == "validation failed"
+        mock_profile_service.update_profile.assert_not_awaited()
 
 
 class TestDeleteProfile:
@@ -439,6 +481,19 @@ class TestDeleteProfile:
         mock_profile_service.delete_profile.return_value = None
 
         response = client.delete(BASE_URL)
+
+        assert response.status_code == 204
+        assert response.content == b""
+        mock_profile_service.delete_profile.assert_awaited_once()
+
+    def test_ignores_accept_for_bodyless_success(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """Verify Accept does not block a successful response with no representation."""
+        response = client.delete(BASE_URL, headers={"Accept": "application/xml"})
 
         assert response.status_code == 204
         assert response.content == b""
@@ -504,8 +559,8 @@ class TestProfileResponseFormat:
         Verify response includes complete profile data.
         """
         profile = make_profile(
-            firstname="John",
-            lastname="Doe",
+            first_name="John",
+            last_name="Doe",
             email="john@example.com",
         )
         mock_profile_service.get_profile.return_value = profile
@@ -513,8 +568,9 @@ class TestProfileResponseFormat:
         response = client.get(BASE_URL)
 
         body = response.json()
-        assert body["firstname"] == "John"
-        assert body["lastname"] == "Doe"
+        assert set(body) == PROFILE_FIELD_NAMES
+        assert body["first_name"] == "John"
+        assert body["last_name"] == "Doe"
         assert body["email"] == "john@example.com"
 
     def test_response_includes_timestamps(

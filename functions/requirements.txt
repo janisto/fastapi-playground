@@ -1,6 +1,5 @@
-# Generated from pyproject.toml for Firebase CLI runtime detection
-firebase-admin>=7.4.0
-firebase-functions>=0.6.0
-genkit>=0.7.0
-genkit-plugin-google-cloud>=0.7.0
-genkit-plugin-google-genai>=0.7.0
+firebase-admin==7.5.0
+firebase-functions==0.6.0
+genkit==0.7.0
+genkit-plugin-google-cloud==0.7.0
+genkit-plugin-google-genai==0.7.0
