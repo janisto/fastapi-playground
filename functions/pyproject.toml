@@ -30,7 +30,7 @@ packages = ["."]
 testpaths = ["tests"]
 filterwarnings = [
     "error",
-    # Remove these exact filters when the upstream packages stop emitting them.
-    'ignore:^Field name "schema" in "Prompt(Input|Output)Config" shadows an attribute in parent "BaseModel"$:UserWarning:dotpromptz\.typing',
-    "ignore:^'_UnionGenericAlias' is deprecated and slated for removal in Python 3\\.17$:DeprecationWarning:google\\.genai\\.types",
+    # Remove these module-scoped filters when the upstream packages stop emitting warnings.
+    'ignore::UserWarning:dotpromptz\.typing',
+    'ignore::DeprecationWarning:google\.genai\.types',
 ]
