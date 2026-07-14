@@ -72,11 +72,13 @@ export GOOGLE_CLOUD_PROJECT="PROJECT_ID"
 export GOOGLE_CLOUD_ACCESS_TOKEN="$(gcloud auth application-default print-access-token)"
 ```
 
-Run `source ~/.zshrc` and restart VS Code or Codex after changing these values. The access token is short-lived and is
-regenerated when a new shell sources `~/.zshrc`; refresh and restart a long-running client when authentication expires.
-Never commit the expanded token, and use this convenience setup only on a trusted workstation because child processes
-inherit it. If setting the ADC quota project fails, the local identity needs
-`serviceusage.services.use`, commonly granted through `roles/serviceusage.serviceUsageConsumer`. See
+`GOOGLE_CLOUD_ACCESS_TOKEN` contains one access-token value; it is not a self-refreshing credential. Run
+`source ~/.zshrc` to generate a fresh value, then restart VS Code or Codex from that refreshed environment so the MCP
+client inherits it. If Cloud Logging MCP returns `Auth required`, repeat both steps. Refreshing only the shell does not
+change the value held by an already-running client, while restarting a client from an environment that still contains
+the expired value does not fix authentication. Never commit the expanded token, and use this convenience setup only on
+a trusted workstation because child processes inherit it. If setting the ADC quota project fails, the local identity
+needs `serviceusage.services.use`, commonly granted through `roles/serviceusage.serviceUsageConsumer`. See
 [Google Cloud MCP authentication](https://docs.cloud.google.com/mcp/authenticate-mcp) for authentication options and
 token-refresh limitations.
 
@@ -219,6 +221,12 @@ The FastAPI service writes structured JSON to stdout. `fastapi-request-observabi
 record per request, route metadata, and incoming W3C Trace Context correlation. It does not create spans. The Functions
 project separately configures Genkit GCP telemetry. Its default configuration redacts model inputs and outputs from
 telemetry.
+
+A correct client response and access record do not by themselves prove that an expected exception was fully handled.
+The explicit `InvalidCursorError` registration in `app/main.py` is intentional: it keeps malformed cursors inside
+Starlette's exception middleware so they return 400 without being re-raised as an ASGI server error. When verifying this
+path after deployment, use Cloud Logging MCP to correlate the request ID with its 400 access record and confirm that no
+adjacent `Exception in ASGI application` ERROR was emitted for the same request window.
 
 Production checklist:
 
