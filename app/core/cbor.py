@@ -343,8 +343,7 @@ class CBORRoute(APIRoute):
                     break
 
             success_media_type = negotiate_response_media_type(accept)
-            problem_media_type = negotiate_response_media_type(accept, problem=True)
-            if success_media_type is None and problem_media_type is None:
+            if success_media_type is None:
                 raise NotAcceptableHTTPException
 
             cbor_request = CBORRequest(request.scope, request.receive)
@@ -355,11 +354,6 @@ class CBORRoute(APIRoute):
             await cbor_request.body()
 
             response = await original_handler(cbor_request)
-
-            # Problem-only Accept values may reach dependency and domain errors,
-            # but they cannot authorize a successful representation.
-            if success_media_type is None:
-                raise NotAcceptableHTTPException
 
             response_content_type = response.media_type or ""
             if success_media_type == CBOR_MEDIA_TYPE and content_type_matches(response_content_type, JSON_MEDIA_TYPE):

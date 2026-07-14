@@ -27,16 +27,15 @@ class BodySizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Quick check using Content-Length header when present
+        headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
+        content_length = headers.get("content-length")
         try:
-            headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-            cl = headers.get("content-length")
-            if cl is not None and int(cl) > self._max:
-                await self._send_413(send, scope)
-                return
-        except Exception:
-            # Ignore header parsing errors; rely on streaming guard
-            pass
+            declared_size = int(content_length) if content_length is not None else None
+        except ValueError:
+            declared_size = None
+        if declared_size is not None and declared_size > self._max:
+            await self._send_413(send, scope)
+            return
 
         total = 0
         buffered: list[bytes] = []

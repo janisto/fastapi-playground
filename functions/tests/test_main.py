@@ -2,6 +2,7 @@
 Tests for the dad-joke Firebase Function.
 """
 
+import asyncio
 from collections.abc import Coroutine
 from typing import Any
 
@@ -9,6 +10,8 @@ import main
 import pytest
 from firebase_functions import https_fn
 from genkit import GenkitError
+from genkit.plugin_api import ActionKind
+from genkit.plugins.google_genai import VertexAI
 from werkzeug.test import EnvironBuilder
 
 
@@ -32,6 +35,25 @@ def test_function_manifest_requires_authenticated_invocation() -> None:
     Verify deployment does not expose the model-backed endpoint publicly.
     """
     assert main.dad_joke.__firebase_endpoint__.httpsTrigger == {"invoker": ["private"]}
+
+
+def test_vertex_model_uses_global_auto_updating_pro_alias() -> None:
+    """
+    Verify the Function follows the supported Pro alias through the global endpoint.
+    """
+    assert main.GEMINI_MODEL == "vertexai/gemini-pro-latest"
+    assert main.VERTEX_AI_LOCATION == "global"
+
+
+def test_installed_vertex_plugin_resolves_model_alias_without_discovery() -> None:
+    """
+    Verify the pinned Genkit plugin accepts the configured alias on demand.
+    """
+    plugin = VertexAI(location=main.VERTEX_AI_LOCATION)
+
+    action = asyncio.run(plugin.resolve(ActionKind.MODEL, main.GEMINI_MODEL))
+
+    assert action is not None
 
 
 def test_non_get_method_is_rejected_before_generation(monkeypatch: pytest.MonkeyPatch) -> None:

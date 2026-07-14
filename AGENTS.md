@@ -15,6 +15,13 @@ Instructions for contributors and coding agents working in this FastAPI reposito
 - Preserve user changes and unrelated worktree edits. Remove temporary artifacts before finishing.
 - Validate narrowly first, then run broader checks for shared or production-sensitive changes.
 
+## Commit messages
+
+- Use an imperative, specific subject, ideally no longer than 72 characters.
+- Add a body when the reason, failure mode, security implication, or non-obvious constraint is not evident from the diff.
+- Use standard Git trailers such as `Refs: #123` when applicable.
+- Conventional Commit types and scopes are optional, not required.
+
 ## Repository and tooling
 
 - Python 3.14+
@@ -112,6 +119,8 @@ transport exceptions. Log unexpected failures with safe structured context and r
 - CBOR is returned only when explicitly requested through `Accept`.
 - Client quality weights are honored; JSON is the server preference on ties.
 - An explicit `Accept` value that allows neither supported representation returns 406.
+- Problem Details media types do not authorize a success representation. A problem-only `Accept` value must return 406
+  before dependencies or endpoint code execute, especially for mutations.
 - Request bodies use `Content-Type: application/json` or `application/cbor`; unsupported body types return 415.
 - Errors use `application/problem+json` or `application/problem+cbor`.
 - The global request-size guard returns 413 without reading the remaining unbounded body.
@@ -180,6 +189,11 @@ successful call can consume Vertex AI quota. Preserve `invoker="private"`; inten
 the backing Cloud Run service and must send an ID token. Keep model output strictly validated and return sanitized 503
 or 500 responses. Logs may include stable status or exception type, never prompts, generated output, exception strings,
 credentials, or user data.
+
+The Function deploy region remains `europe-west4`; model inference uses the `global` Vertex AI endpoint and the
+auto-updating `gemini-pro-latest` alias. Keep deployment region and model location distinct. An alias avoids stale model
+IDs but may change behavior, latency, or cost without a code change, so preserve structured output validation, tests,
+quota and spend monitoring, and explicit production verification when changing model configuration.
 
 Unit tests in `functions/tests/` must isolate Genkit reflection and GCP telemetry and must not call Vertex AI. Firebase
 deploys from the intentionally lean `functions/requirements.txt`, which pins only direct runtime packages to versions

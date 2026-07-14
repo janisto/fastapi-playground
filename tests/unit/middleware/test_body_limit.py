@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import cbor2
+import pytest
 from fastapi_request_observability import RequestContextMiddleware
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -274,6 +275,27 @@ class TestBodySizeLimitEdgeCases:
 
             await middleware(scope, receive, send)
             assert response_started
+
+    async def test_413_send_failure_does_not_reach_downstream(self) -> None:
+        """
+        Verify a transport failure while rejecting a request fails closed.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 100
+            downstream = AsyncMock()
+            middleware = BodySizeLimitMiddleware(downstream)
+            scope: dict[str, Any] = {
+                "type": "http",
+                "headers": [(b"content-length", b"101")],
+            }
+            receive = AsyncMock()
+            send = AsyncMock(side_effect=RuntimeError("transport closed"))
+
+            with pytest.raises(RuntimeError, match="transport closed"):
+                await middleware(scope, receive, send)
+
+            downstream.assert_not_awaited()
+            receive.assert_not_awaited()
 
     async def test_request_without_content_length_uses_streaming(self) -> None:
         """

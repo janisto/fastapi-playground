@@ -206,16 +206,45 @@ class TestCBORResponse:
         content_type: str,
     ) -> None:
         """
-        Verify Problem Details media types do not authorize successful responses.
+        Verify Problem Details media types are rejected before endpoint execution.
         """
-        mock_profile_service.get_profile.return_value = make_profile()
-
         response = client.get(BASE_URL, headers={"Accept": accept})
 
         assert response.status_code == 406
         assert response.headers["content-type"] == content_type
         body = cbor2.loads(response.content) if content_type == "application/problem+cbor" else response.json()
         assert body["title"] == "Not Acceptable"
+        mock_profile_service.get_profile.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        ("method", "accept", "service_method"),
+        [
+            ("post", "application/problem+json", "create_profile"),
+            ("patch", "application/problem+cbor", "update_profile"),
+            ("delete", "application/problem+json", "delete_profile"),
+        ],
+    )
+    def test_problem_only_accept_cannot_mutate_profile(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+        method: str,
+        accept: str,
+        service_method: str,
+    ) -> None:
+        """
+        Verify unsupported success negotiation cannot execute a mutation.
+        """
+        payloads = {
+            "post": make_profile_payload_dict(),
+            "patch": {"firstname": "Updated"},
+        }
+
+        response = client.request(method, BASE_URL, json=payloads.get(method), headers={"Accept": accept})
+
+        assert response.status_code == 406
+        getattr(mock_profile_service, service_method).assert_not_awaited()
 
 
 class TestCBORErrorResponse:
@@ -275,35 +304,3 @@ class TestCBORErrorResponse:
         assert decoded["detail"] == "validation failed"
         assert "errors" in decoded
         assert "$schema" not in decoded
-
-    def test_problem_cbor_accept_reaches_domain_error_handler(
-        self,
-        client: TestClient,
-        with_fake_user: None,
-        mock_profile_service: AsyncMock,
-    ) -> None:
-        """
-        Verify a problem-only CBOR request receives the domain error rather than 406.
-        """
-        from app.exceptions import ProfileNotFoundError
-
-        mock_profile_service.get_profile.side_effect = ProfileNotFoundError()
-
-        response = client.get(BASE_URL, headers={"Accept": "application/problem+cbor"})
-
-        assert response.status_code == 404
-        assert response.headers["content-type"] == "application/problem+cbor"
-        assert cbor2.loads(response.content)["title"] == "Profile not found"
-
-    def test_problem_json_accept_reaches_authentication_error_handler(
-        self,
-        client: TestClient,
-        mock_profile_service: AsyncMock,
-    ) -> None:
-        """
-        Verify a problem-only JSON request receives the authentication error rather than 406.
-        """
-        response = client.get(BASE_URL, headers={"Accept": "application/problem+json"})
-
-        assert response.status_code == 401
-        assert response.headers["content-type"] == "application/problem+json"

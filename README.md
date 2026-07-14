@@ -69,6 +69,9 @@ API response instance.
 - Responses default to `application/json`; request `application/cbor` explicitly with `Accept`.
 - JSON and CBOR request bodies are selected with `Content-Type`.
 - Quality weights are honored, with JSON preferred on ties; unsupported explicit response formats return 406.
+- `application/problem+json` and `application/problem+cbor` describe error representations, not successful ones. A
+  problem-only `Accept` value returns 406 before endpoint execution; request `application/json` or `application/cbor`
+  and errors use the corresponding Problem Details format.
 
 ### Pagination
 
@@ -337,7 +340,9 @@ firebase deploy --only functions
 ```
 
 The model-backed function is private. Grant intended callers `roles/run.invoker` on its backing Cloud Run service and
-send an ID token when invoking it. See [functions/README.md](functions/README.md) for Cloud Functions documentation.
+send an ID token when invoking it. The Function deploys in `europe-west4`; its Vertex AI client uses the `global`
+endpoint and the auto-updating `gemini-pro-latest` alias. See [functions/README.md](functions/README.md) for the alias
+trade-offs and Cloud Functions documentation.
 
 ## CI/CD
 

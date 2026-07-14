@@ -39,9 +39,12 @@ initialize_app()
 # Export Genkit telemetry to Cloud Trace and Cloud Monitoring (GCP only, not local dev)
 add_gcp_telemetry(force_dev_export=False)
 
+VERTEX_AI_LOCATION = "global"
+GEMINI_MODEL = "vertexai/gemini-pro-latest"
+
 ai = Genkit(
-    plugins=[VertexAI(location="europe-west4")],
-    model="vertexai/gemini-3-pro-preview",
+    plugins=[VertexAI(location=VERTEX_AI_LOCATION)],
+    model=GEMINI_MODEL,
 )
 
 _loop = asyncio.new_event_loop()

@@ -115,10 +115,6 @@ ignore = [
 "app/core/config.py" = [
     "S104",     # Binding to 0.0.0.0 is intentional for containers
 ]
-"app/middleware/body_limit.py" = [
-    "BLE001",   # Broad exception catch intentional for header parsing resilience
-    "S110",     # try-except-pass is intentional for robustness
-]
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
     "fastapi.Depends",

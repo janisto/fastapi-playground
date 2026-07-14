@@ -19,9 +19,9 @@ Enable only the products used by the deployment target:
 - Vertex AI for the `dad_joke` function;
 - Cloud Storage for Firebase only if you plan to use the checked-in storage rules.
 
-The repository uses `europe-west4` for Firestore, Functions, and Vertex AI. Storage location is selected when the bucket
-is provisioned rather than in `firebase.json`. Choose the Cloud Run service region explicitly when deploying the
-FastAPI container.
+The repository uses `europe-west4` for Firestore and Functions. The Function's Vertex AI client uses the `global`
+endpoint. Storage location is selected when the bucket is provisioned rather than in `firebase.json`. Choose the Cloud
+Run service region explicitly when deploying the FastAPI container.
 
 ## APIs and IAM
 
@@ -150,9 +150,15 @@ The `dad_joke` HTTP function uses:
 - runtime `python314` in `europe-west4`;
 - 512 MiB memory and `TIMEOUT_SEC` default `120`;
 - `MIN_INSTANCES` default `0` and `MAX_INSTANCES` default `2`;
-- Genkit with the Vertex AI model configured in `functions/main.py`;
+- Genkit with the `global` Vertex AI endpoint and auto-updating `gemini-pro-latest` alias configured in
+  `functions/main.py`;
 - GCP trace and metric export outside local development.
 - private IAM invocation; unauthenticated internet requests cannot consume model quota.
+
+The alias tracks Google's current Gemini Pro model, avoiding a hard dependency on a dated model ID. It can also change
+model behavior, latency, and cost without a repository deployment. Keep structured output validation and Function tests
+in place, monitor production behavior and spend, and verify alias availability and quota before deployment. See the
+[Genkit Google GenAI model documentation](https://genkit.dev/docs/integrations/google-genai/#models).
 
 Firebase deployment uses the intentionally lean `functions/requirements.txt`, which pins only the direct runtime
 packages to versions from `functions/uv.lock`; the deployment installer resolves their transitive dependencies. Run
@@ -224,6 +230,6 @@ Production checklist:
 | Auth returns 503 | Firebase verification dependency unavailable | ADC, network access, public-key retrieval, and `Retry-After` |
 | Function returns 400 | Unsupported `topic` query value | Use `work`, `tech`, `food`, or `relationships` |
 | Function returns 401/403 before handler | Missing identity token or caller IAM | ID token and `roles/run.invoker` on the backing service |
-| Function returns 503 | Genkit or Vertex AI failure | Vertex API, region/model availability, ADC, IAM, and quotas |
+| Function returns 503 | Genkit or Vertex AI failure | Vertex API, global endpoint/model alias availability, ADC, IAM, and quotas |
 | E2E test skips | Firestore emulator is not running on `127.0.0.1:7030` | Run `just emulators` |
 | CORS is blocked | Origin is absent from `CORS_ORIGINS` | Configure an exact allowed origin |
