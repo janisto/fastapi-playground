@@ -217,6 +217,37 @@ class TestBodySizeLimitCBORNegotiation:
                 body = response.json()
                 assert body["title"] == "Payload Too Large"
 
+    @pytest.mark.parametrize(
+        "accept",
+        [
+            "application/xml",
+            "application/problem+json;q=0, application/problem+cbor;q=0",
+        ],
+    )
+    def test_oversized_request_returns_406_when_no_problem_representation_is_acceptable(self, accept: str) -> None:
+        """
+        Verify request-size rejection honors an explicit unsupported Accept value.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 10
+            app = _create_app(max_size=10)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/echo",
+                    content=b"x" * 100,
+                    headers={"Accept": accept},
+                )
+
+                assert response.status_code == 406
+                assert response.headers["content-type"] == "application/problem+json"
+                assert response.headers["Vary"] == "Accept"
+                assert response.headers["Link"] == '</schemas/ProblemResponse.json>; rel="describedBy"'
+                assert response.json() == {
+                    "title": "Not Acceptable",
+                    "status": 406,
+                    "detail": "Supported response formats: application/json, application/cbor",
+                }
+
 
 class TestBodySizeLimitEdgeCases:
     """
@@ -439,3 +470,33 @@ class TestBodySizeLimitWithChunkedTransfer:
             await middleware(scope, receive, send)
 
             assert receive.call_count == 2
+
+    async def test_unsupported_accept_still_stops_oversized_stream(self) -> None:
+        """
+        Verify 406 negotiation does not read more body data or invoke the app.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 50
+            downstream = AsyncMock()
+            middleware = BodySizeLimitMiddleware(downstream)
+            scope = {
+                "type": "http",
+                "headers": [(b"accept", b"application/xml")],
+            }
+            receive = AsyncMock(
+                side_effect=[
+                    {"type": "http.request", "body": b"x" * 30, "more_body": True},
+                    {"type": "http.request", "body": b"x" * 30, "more_body": True},
+                    {"type": "http.request", "body": b"x" * 10, "more_body": False},
+                ]
+            )
+            send = AsyncMock()
+
+            await middleware(scope, receive, send)
+
+            response_start = next(
+                call.args[0] for call in send.call_args_list if call.args[0]["type"] == "http.response.start"
+            )
+            assert response_start["status"] == 406
+            assert receive.call_count == 2
+            downstream.assert_not_awaited()
