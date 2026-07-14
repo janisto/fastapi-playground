@@ -5,6 +5,16 @@ Integration tests for items endpoint.
 import cbor2
 from fastapi.testclient import TestClient
 
+ITEM_FIELD_NAMES = {
+    "id",
+    "name",
+    "category",
+    "price",
+    "in_stock",
+    "created_at",
+    "description",
+}
+
 
 class TestItemsList:
     """Tests for GET /v1/items."""
@@ -23,6 +33,7 @@ class TestItemsList:
         assert "items" in body
         assert "total" in body
         assert isinstance(body["items"], list)
+        assert set(body["items"][0]) == ITEM_FIELD_NAMES
 
     def test_response_does_not_embed_schema_metadata(self, client: TestClient) -> None:
         """Verify GET /v1/items keeps schema metadata out of the representation."""
@@ -367,3 +378,4 @@ class TestItemsCBOR:
         decoded = cbor2.loads(response.content)
         assert "items" in decoded
         assert "total" in decoded
+        assert set(decoded["items"][0]) == ITEM_FIELD_NAMES

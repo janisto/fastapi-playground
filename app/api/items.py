@@ -15,10 +15,10 @@ from fastapi import APIRouter, Query, Request, Response
 
 from app.core.cbor import CBORRoute
 from app.core.constants import API_V1_PREFIX
-from app.core.openapi import COMMON_CBOR_RESPONSES, problem_response, success_response
+from app.core.openapi import COMMON_CBOR_ERROR_RESPONSES, problem_response, success_response
 from app.core.schema_links import build_described_by_link
 from app.models.error import ValidationProblemResponse
-from app.models.items import MOCK_ITEMS, VALID_CATEGORIES, ItemList
+from app.models.items import MOCK_ITEMS, ItemCategory, ItemList
 from app.pagination import CursorParam, LimitParam, paginate
 
 router = APIRouter(
@@ -26,7 +26,7 @@ router = APIRouter(
     tags=["Items"],
     route_class=CBORRoute,
     responses={
-        **COMMON_CBOR_RESPONSES,
+        **COMMON_CBOR_ERROR_RESPONSES,
         400: problem_response("Invalid pagination cursor"),
         422: problem_response("Validation error", model=ValidationProblemResponse),
     },
@@ -50,7 +50,7 @@ async def list_items(
     cursor: CursorParam = None,
     limit: LimitParam = 20,
     category: Annotated[
-        VALID_CATEGORIES | None,
+        ItemCategory | None,
         Query(description="Filter by category"),
     ] = None,
 ) -> ItemList:

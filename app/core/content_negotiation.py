@@ -10,7 +10,7 @@ import re
 
 CBOR_MEDIA_TYPE = "application/cbor"
 JSON_MEDIA_TYPE = "application/json"
-PROBLEM_JSON = "application/problem+json"
+PROBLEM_JSON_MEDIA_TYPE = "application/problem+json"
 SCHEMA_JSON_MEDIA_TYPE = "application/schema+json"
 
 ALLOWED_CONTENT_TYPES = frozenset({JSON_MEDIA_TYPE, CBOR_MEDIA_TYPE})
@@ -170,10 +170,14 @@ def negotiate_problem_media_type(accept_header: str) -> str:
     in Accept. CBOR is used only when application/cbor is explicitly preferred;
     otherwise JSON Problem Details is the interoperable fallback.
     """
-    explicit_problem_json_quality = _media_type_quality(accept_header, PROBLEM_JSON, explicit_only=True)
+    explicit_problem_json_quality = _media_type_quality(
+        accept_header,
+        PROBLEM_JSON_MEDIA_TYPE,
+        explicit_only=True,
+    )
     if explicit_problem_json_quality is None:
         json_qualities = (
-            _media_type_quality(accept_header, PROBLEM_JSON),
+            _media_type_quality(accept_header, PROBLEM_JSON_MEDIA_TYPE),
             _media_type_quality(accept_header, JSON_MEDIA_TYPE),
         )
         json_quality = max((quality for quality in json_qualities if quality is not None), default=0.0)
@@ -183,7 +187,7 @@ def negotiate_problem_media_type(accept_header: str) -> str:
     cbor_quality = _media_type_quality(accept_header, CBOR_MEDIA_TYPE, explicit_only=True) or 0.0
     if cbor_quality > json_quality:
         return CBOR_MEDIA_TYPE
-    return PROBLEM_JSON
+    return PROBLEM_JSON_MEDIA_TYPE
 
 
 def content_type_matches(content_type: str, media_type: str) -> bool:

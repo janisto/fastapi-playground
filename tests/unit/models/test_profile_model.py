@@ -30,15 +30,15 @@ class TestProfileCreate:
         Verify valid data creates a ProfileCreate instance.
         """
         profile = ProfileCreate(
-            firstname="John",
-            lastname="Doe",
+            first_name="John",
+            last_name="Doe",
             email="john@example.com",
             phone_number="+358401234567",
             marketing=True,
             terms=True,
         )
-        assert profile.firstname == "John"
-        assert profile.lastname == "Doe"
+        assert profile.first_name == "John"
+        assert profile.last_name == "Doe"
         assert profile.email == "john@example.com"
         assert profile.phone_number == "+358401234567"
         assert profile.marketing is True
@@ -49,8 +49,8 @@ class TestProfileCreate:
         Verify email is lowercased.
         """
         profile = ProfileCreate(
-            firstname="John",
-            lastname="Doe",
+            first_name="John",
+            last_name="Doe",
             email="JOHN@EXAMPLE.COM",
             phone_number="+358401234567",
             terms=True,
@@ -62,8 +62,8 @@ class TestProfileCreate:
         Verify marketing field defaults to False.
         """
         profile = ProfileCreate(
-            firstname="John",
-            lastname="Doe",
+            first_name="John",
+            last_name="Doe",
             email="john@example.com",
             phone_number="+358401234567",
             terms=True,
@@ -72,15 +72,15 @@ class TestProfileCreate:
 
     @pytest.mark.parametrize(
         "missing_field",
-        ["firstname", "lastname", "email", "phone_number", "terms"],
+        ["first_name", "last_name", "email", "phone_number", "terms"],
     )
     def test_missing_required_field_raises(self, missing_field: str) -> None:
         """
         Verify missing required fields raise ValidationError.
         """
         data = {
-            "firstname": "John",
-            "lastname": "Doe",
+            "first_name": "John",
+            "last_name": "Doe",
             "email": "john@example.com",
             "phone_number": "+358401234567",
             "terms": True,
@@ -99,8 +99,8 @@ class TestProfileCreate:
         """
         with pytest.raises(ValidationError) as exc_info:
             cast("Any", ProfileCreate)(
-                firstname="John",
-                lastname="Doe",
+                first_name="John",
+                last_name="Doe",
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=True,
@@ -116,8 +116,8 @@ class TestProfileCreate:
         """
         with pytest.raises(ValidationError):
             ProfileCreate(
-                firstname="John",
-                lastname="Doe",
+                first_name="John",
+                last_name="Doe",
                 email="not-an-email",
                 phone_number="+358401234567",
                 terms=True,
@@ -129,60 +129,60 @@ class TestProfileCreate:
         """
         with pytest.raises(ValidationError):
             ProfileCreate(
-                firstname="John",
-                lastname="Doe",
+                first_name="John",
+                last_name="Doe",
                 email="john@example.com",
                 phone_number="invalid-phone",
                 terms=True,
             )
 
-    def test_empty_firstname_raises(self) -> None:
+    def test_empty_first_name_raises(self) -> None:
         """
-        Verify empty firstname raises ValidationError.
+        Verify empty first_name raises ValidationError.
         """
         with pytest.raises(ValidationError):
             ProfileCreate(
-                firstname="",
-                lastname="Doe",
+                first_name="",
+                last_name="Doe",
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=True,
             )
 
-    def test_empty_lastname_raises(self) -> None:
+    def test_empty_last_name_raises(self) -> None:
         """
-        Verify empty lastname raises ValidationError.
+        Verify empty last_name raises ValidationError.
         """
         with pytest.raises(ValidationError):
             ProfileCreate(
-                firstname="John",
-                lastname="",
+                first_name="John",
+                last_name="",
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=True,
             )
 
-    def test_firstname_max_length_raises(self) -> None:
+    def test_first_name_max_length_raises(self) -> None:
         """
-        Verify firstname exceeding max length raises ValidationError.
+        Verify first_name exceeding max length raises ValidationError.
         """
         with pytest.raises(ValidationError):
             ProfileCreate(
-                firstname="J" * 101,
-                lastname="Doe",
+                first_name="J" * 101,
+                last_name="Doe",
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=True,
             )
 
-    def test_lastname_max_length_raises(self) -> None:
+    def test_last_name_max_length_raises(self) -> None:
         """
-        Verify lastname exceeding max length raises ValidationError.
+        Verify last_name exceeding max length raises ValidationError.
         """
         with pytest.raises(ValidationError):
             ProfileCreate(
-                firstname="John",
-                lastname="D" * 101,
+                first_name="John",
+                last_name="D" * 101,
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=True,
@@ -194,8 +194,8 @@ class TestProfileCreate:
         """
         with pytest.raises(ValidationError) as exc_info:
             ProfileCreate(
-                firstname="John",
-                lastname="Doe",
+                first_name="John",
+                last_name="Doe",
                 email="john@example.com",
                 phone_number="+358401234567",
                 terms=False,
@@ -212,8 +212,8 @@ class TestProfileCreate:
         Verify terms=True is accepted on profile creation.
         """
         profile = ProfileCreate(
-            firstname="John",
-            lastname="Doe",
+            first_name="John",
+            last_name="Doe",
             email="john@example.com",
             phone_number="+358401234567",
             terms=True,
@@ -237,9 +237,9 @@ class TestProfileUpdate:
         """
         Verify partial updates work correctly.
         """
-        profile = ProfileUpdate(firstname="Jane")
-        assert profile.firstname == "Jane"
-        assert profile.model_dump() == {"firstname": "Jane"}
+        profile = ProfileUpdate(first_name="Jane")
+        assert profile.first_name == "Jane"
+        assert profile.model_dump() == {"first_name": "Jane"}
 
     def test_email_is_normalized(self) -> None:
         """
@@ -259,11 +259,11 @@ class TestProfileUpdate:
         """
         Verify model_dump with exclude_unset only returns set fields.
         """
-        profile = ProfileUpdate(firstname="Jane")
+        profile = ProfileUpdate(first_name="Jane")
         dumped = profile.model_dump(exclude_unset=True)
-        assert dumped == {"firstname": "Jane"}
+        assert dumped == {"first_name": "Jane"}
 
-    @pytest.mark.parametrize("field", ["firstname", "lastname", "email", "phone_number", "marketing"])
+    @pytest.mark.parametrize("field", ["first_name", "last_name", "email", "phone_number", "marketing"])
     def test_explicit_null_is_rejected(self, field: str) -> None:
         """
         Verify null cannot silently become an omitted partial update.
@@ -285,19 +285,19 @@ class TestProfileUpdate:
         with pytest.raises(ValidationError):
             ProfileUpdate(phone_number="invalid-phone")
 
-    def test_empty_firstname_raises(self) -> None:
+    def test_empty_first_name_raises(self) -> None:
         """
-        Verify empty firstname raises ValidationError when provided.
+        Verify empty first_name raises ValidationError when provided.
         """
         with pytest.raises(ValidationError):
-            ProfileUpdate(firstname="")
+            ProfileUpdate(first_name="")
 
-    def test_firstname_max_length_raises(self) -> None:
+    def test_first_name_max_length_raises(self) -> None:
         """
-        Verify firstname exceeding max length raises ValidationError.
+        Verify first_name exceeding max length raises ValidationError.
         """
         with pytest.raises(ValidationError):
-            ProfileUpdate(firstname="J" * 101)
+            ProfileUpdate(first_name="J" * 101)
 
 
 class TestProfile:
@@ -312,8 +312,8 @@ class TestProfile:
         now = datetime.now(UTC)
         profile = Profile(
             id="user-123",
-            firstname="John",
-            lastname="Doe",
+            first_name="John",
+            last_name="Doe",
             email="john@example.com",
             phone_number="+358401234567",
             marketing=True,
@@ -333,8 +333,8 @@ class TestProfile:
         with pytest.raises(ValidationError):
             Profile.model_validate(
                 {
-                    "firstname": "John",
-                    "lastname": "Doe",
+                    "first_name": "John",
+                    "last_name": "Doe",
                     "email": "john@example.com",
                     "phone_number": "+358401234567",
                     "marketing": True,
@@ -352,8 +352,8 @@ class TestProfile:
             Profile.model_validate(
                 {
                     "id": "user-123",
-                    "firstname": "John",
-                    "lastname": "Doe",
+                    "first_name": "John",
+                    "last_name": "Doe",
                     "email": "john@example.com",
                     "phone_number": "+358401234567",
                     "marketing": True,
@@ -369,8 +369,8 @@ class TestProfile:
         with pytest.raises(ValidationError):
             Profile(
                 id="x" * 129,
-                firstname="John",
-                lastname="Doe",
+                first_name="John",
+                last_name="Doe",
                 email="john@example.com",
                 phone_number="+358401234567",
                 marketing=True,

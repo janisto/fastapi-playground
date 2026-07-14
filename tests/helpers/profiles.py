@@ -8,8 +8,8 @@ from app.models.profile import Profile, ProfileCreate, ProfileUpdate
 
 
 def make_profile_create(
-    firstname: str = "John",
-    lastname: str = "Doe",
+    first_name: str = "John",
+    last_name: str = "Doe",
     email: str = "john@example.com",
     phone_number: str = "+1234567890",
     marketing: bool = True,
@@ -19,8 +19,8 @@ def make_profile_create(
     Factory for ProfileCreate with sensible defaults.
     """
     return ProfileCreate(
-        firstname=firstname,
-        lastname=lastname,
+        first_name=first_name,
+        last_name=last_name,
         email=email,
         phone_number=phone_number,
         marketing=marketing,
@@ -30,8 +30,8 @@ def make_profile_create(
 
 def make_profile(
     user_id: str = "test-user-123",
-    firstname: str = "John",
-    lastname: str = "Doe",
+    first_name: str = "John",
+    last_name: str = "Doe",
     email: str = "john@example.com",
     phone_number: str = "+1234567890",
     marketing: bool = True,
@@ -45,8 +45,8 @@ def make_profile(
     now = datetime.now(UTC)
     return Profile(
         id=user_id,
-        firstname=firstname,
-        lastname=lastname,
+        first_name=first_name,
+        last_name=last_name,
         email=email,
         phone_number=phone_number,
         marketing=marketing,
@@ -57,8 +57,8 @@ def make_profile(
 
 
 def make_profile_update(
-    firstname: str | None = None,
-    lastname: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
     email: str | None = None,
     phone_number: str | None = None,
     marketing: bool | None = None,
@@ -67,8 +67,8 @@ def make_profile_update(
     Factory for ProfileUpdate with only the provided fields.
     """
     return ProfileUpdate(
-        firstname=firstname,
-        lastname=lastname,
+        first_name=first_name,
+        last_name=last_name,
         email=email,
         phone_number=phone_number,
         marketing=marketing,
@@ -77,8 +77,8 @@ def make_profile_update(
 
 def make_profile_payload_dict(
     *,
-    firstname: str = "John",
-    lastname: str = "Doe",
+    first_name: str = "John",
+    last_name: str = "Doe",
     email: str = "john@example.com",
     phone_number: str = "+1234567890",
     marketing: bool = True,
@@ -92,8 +92,8 @@ def make_profile_payload_dict(
     Use `overrides` to change values and `omit` to drop specific keys to test validation errors.
     """
     payload: dict[str, object] = {
-        "firstname": firstname,
-        "lastname": lastname,
+        "first_name": first_name,
+        "last_name": last_name,
         "email": email,
         "phone_number": phone_number,
         "marketing": marketing,

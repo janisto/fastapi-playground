@@ -14,7 +14,8 @@ editing persistence behavior.
   `app/dependencies.py`.
 - Reuse `get_async_firestore_client()` and the collection constant exported by the domain models.
 - Use the authenticated UID as the ownership boundary for user-owned data. Do not accept a client-selected owner ID.
-- Keep stored field names and Pydantic model fields aligned explicitly.
+- Keep stored field names and Pydantic model fields aligned explicitly in `snake_case`; do not introduce storage aliases
+  for alternate casing.
 - Never add test flags, production fakes, or network calls to unit tests.
 
 ## Transactions and data semantics
@@ -39,6 +40,9 @@ result. Do not log profile fields, tokens, request bodies, or exception strings 
 
 Run focused service tests, then `just lint`, `just typing`, and `just test`. Run `just test-e2e` when transaction or
 Firestore integration semantics change and the emulators are available.
+
+A persisted-field rename is a breaking data-contract change. Update emulator assertions and document the required
+deployed-data migration; do not add a compatibility read path unless the user explicitly requests one.
 
 The async Firestore client's `close()` method is synchronous in the supported SDK. Call the repository lifecycle
 helper without `await`, and keep shutdown in the lifespan `finally` block so failed requests cannot skip cleanup.

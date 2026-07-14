@@ -82,6 +82,32 @@ Business routers own their complete `/v1/...` prefix and are exported through `b
 This keeps FastAPI route metadata, OpenAPI paths, and observability `path_template` values aligned. Health and schema
 discovery remain unversioned.
 
+## Naming conventions
+
+Use names that communicate both meaning and symbol kind. Do not apply one casing style indiscriminately:
+
+- Modules, packages, functions, methods, parameters, local variables, model fields, and instance attributes use
+  `snake_case`.
+- Classes, exceptions, Pydantic models, enums, and type aliases use `PascalCase`. Keep established initialisms uppercase
+  inside PascalCase names, for example `CBORRoute`, `JSONValue`, `OpenAPIResponse`, and `UTCDateTime`.
+- Module-level constants use `UPPER_SNAKE_CASE`. A type alias is not a constant: prefer `ItemCategory` over a name such
+  as `VALID_CATEGORIES`.
+- Private implementation names use a leading underscore. Avoid opaque abbreviations and single-letter names outside a
+  conventional, tightly scoped context; prefer names such as `exception_handler` and `genkit` over `eh` and `ai`.
+- Public JSON and CBOR object properties, query parameters, path parameters, and Firestore document fields use
+  `snake_case`. Define the desired field name directly; do not add camelCase aliases or alternate-casing compatibility
+  inputs. Compound words remain separated, for example `first_name`, `in_stock`, and `created_at`.
+- Operation IDs use `<resource>_<action>`. Static URL path segments remain lowercase and use established resource
+  names. Schema discovery document names preserve the exact `PascalCase` OpenAPI component name, for example
+  `/schemas/Profile.json`.
+- Preserve names owned by external protocols, libraries, or platforms exactly, including HTTP headers,
+  `describedBy`, Google Cloud fields such as `spanId`, and SDK options such as `projectId`.
+
+When a public or persisted field is renamed, update the request and response models, service and Firestore keys,
+OpenAPI components, standalone schemas, JSON and CBOR contract tests, fixtures, examples, and relevant documentation in
+one change. Treat such a rename as a breaking contract and plan any deployed-data migration explicitly; do not hide it
+behind a compatibility alias.
+
 ## Application composition
 
 `app/main.py` builds `fastapi_app` first, then exports the outer `app`. Use `fastapi_app` for dependency overrides and
@@ -191,7 +217,7 @@ Document response headers that runtime code emits, including `X-Request-ID`, `Li
 - Response models do not inherit strict request bases.
 - Use `model_dump()`; use `exclude_unset=True` for PATCH.
 - PATCH fields may be omitted but explicit null is rejected unless a domain explicitly defines null semantics.
-- Use shared `UtcDatetime`, `NormalizedEmail`, and `Phone` aliases from `app/models/types.py` where applicable.
+- Use shared `UTCDateTime`, `NormalizedEmail`, and `Phone` aliases from `app/models/types.py` where applicable.
 - Public timestamps are UTC ISO 8601 with explicit millisecond precision, for example `2025-01-15T10:30:00.000Z`.
 - Scalar fields have useful `Field` descriptions and examples. Nested-model arrays rely on their referenced schemas.
 - Do not use model-level `json_schema_extra` examples.

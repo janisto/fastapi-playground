@@ -24,7 +24,7 @@ from app.core.content_negotiation import (
     ALLOWED_CONTENT_TYPES,
     CBOR_MEDIA_TYPE,
     JSON_MEDIA_TYPE,
-    PROBLEM_JSON,
+    PROBLEM_JSON_MEDIA_TYPE,
     accepts_media_type,
     content_type_is_allowed,
     content_type_matches,
@@ -34,8 +34,8 @@ from app.core.content_negotiation import (
     normalize_media_type,
 )
 
-type MakeRequestFn = Callable[[bytes, str], CBORRequest]
-type MakeRequestResponseFn = Callable[[str], tuple[MagicMock, JSONResponse]]
+type MakeRequestFunction = Callable[[bytes, str], CBORRequest]
+type MakeRequestResponseFunction = Callable[[str], tuple[MagicMock, JSONResponse]]
 
 
 class TestCBORDecodeError:
@@ -72,7 +72,7 @@ class TestCBORRequest:
     """Tests for CBORRequest body handling."""
 
     @pytest.fixture
-    def make_request(self) -> MakeRequestFn:
+    def make_request(self) -> MakeRequestFunction:
         """Factory for creating CBORRequest with body and content-type."""
 
         def _make(body: bytes, content_type: str = "") -> CBORRequest:
@@ -88,7 +88,7 @@ class TestCBORRequest:
 
         return _make
 
-    async def test_json_body_unchanged(self, make_request: MakeRequestFn) -> None:
+    async def test_json_body_unchanged(self, make_request: MakeRequestFunction) -> None:
         """JSON body is returned unchanged."""
         data = {"name": "test"}
         body = json.dumps(data).encode()
@@ -98,7 +98,7 @@ class TestCBORRequest:
 
         assert result == body
 
-    async def test_cbor_body_decoded_to_json(self, make_request: MakeRequestFn) -> None:
+    async def test_cbor_body_decoded_to_json(self, make_request: MakeRequestFunction) -> None:
         """CBOR body is decoded and re-encoded as JSON."""
         data = {"name": "test", "count": 42}
         cbor_body = cbor2.dumps(data)
@@ -109,7 +109,7 @@ class TestCBORRequest:
         decoded = json.loads(result)
         assert decoded == data
 
-    async def test_empty_body_allowed(self, make_request: MakeRequestFn) -> None:
+    async def test_empty_body_allowed(self, make_request: MakeRequestFunction) -> None:
         """Empty body is allowed regardless of content-type."""
         request = make_request(b"", JSON_MEDIA_TYPE)
 
@@ -117,7 +117,7 @@ class TestCBORRequest:
 
         assert result == b""
 
-    async def test_no_content_type_allowed(self, make_request: MakeRequestFn) -> None:
+    async def test_no_content_type_allowed(self, make_request: MakeRequestFunction) -> None:
         """Missing content-type is allowed."""
         body = b"raw data"
         request = make_request(body, "")
@@ -126,7 +126,7 @@ class TestCBORRequest:
 
         assert result == body
 
-    async def test_unsupported_content_type_raises(self, make_request: MakeRequestFn) -> None:
+    async def test_unsupported_content_type_raises(self, make_request: MakeRequestFunction) -> None:
         """Unsupported content-type raises UnsupportedMediaTypeHTTPException."""
         request = make_request(b"data", "text/plain")
 
@@ -137,7 +137,7 @@ class TestCBORRequest:
         assert "text/plain" in str(exc_info.value.detail)
         assert all(ct in str(exc_info.value.detail) for ct in sorted(ALLOWED_CONTENT_TYPES))
 
-    async def test_invalid_cbor_raises(self, make_request: MakeRequestFn) -> None:
+    async def test_invalid_cbor_raises(self, make_request: MakeRequestFunction) -> None:
         """Invalid CBOR data raises CBORDecodeHTTPException."""
         # Use truncated CBOR: starts with map of 2 items but only has 0 bytes following
         # 0xA2 = map with 2 items, which expects content that isn't there
@@ -149,7 +149,7 @@ class TestCBORRequest:
         assert exc_info.value.status_code == 400
         assert "Failed to decode CBOR" in str(exc_info.value.detail)
 
-    async def test_body_cached(self, make_request: MakeRequestFn) -> None:
+    async def test_body_cached(self, make_request: MakeRequestFunction) -> None:
         """Body is cached after first read."""
         data = {"key": "value"}
         cbor_body = cbor2.dumps(data)
@@ -160,7 +160,7 @@ class TestCBORRequest:
 
         assert result1 == result2
 
-    async def test_content_type_with_charset(self, make_request: MakeRequestFn) -> None:
+    async def test_content_type_with_charset(self, make_request: MakeRequestFunction) -> None:
         """Content-type with charset parameter is handled."""
         data = {"name": "test"}
         body = json.dumps(data).encode()
@@ -180,7 +180,7 @@ class TestCBORProblemPostHook:
         return CBORProblemPostHook()
 
     @pytest.fixture
-    def make_request_response(self) -> MakeRequestResponseFn:
+    def make_request_response(self) -> MakeRequestResponseFunction:
         """Factory for creating mock request and response."""
 
         def _make(accept: str = "") -> tuple[MagicMock, JSONResponse]:
@@ -195,7 +195,7 @@ class TestCBORProblemPostHook:
     def test_json_accept_unchanged(
         self,
         hook: CBORProblemPostHook,
-        make_request_response: MakeRequestResponseFn,
+        make_request_response: MakeRequestResponseFunction,
     ) -> None:
         """JSON Accept header leaves response unchanged."""
         request, response = make_request_response("application/json")
@@ -210,7 +210,7 @@ class TestCBORProblemPostHook:
     def test_cbor_accept_serializes_body(
         self,
         hook: CBORProblemPostHook,
-        make_request_response: MakeRequestResponseFn,
+        make_request_response: MakeRequestResponseFunction,
     ) -> None:
         """CBOR Accept header serializes body as CBOR."""
         request, response = make_request_response(CBOR_MEDIA_TYPE)
@@ -226,7 +226,7 @@ class TestCBORProblemPostHook:
     def test_cbor_accept_updates_content_length(
         self,
         hook: CBORProblemPostHook,
-        make_request_response: MakeRequestResponseFn,
+        make_request_response: MakeRequestResponseFunction,
     ) -> None:
         """CBOR Accept updates content-length header."""
         request, response = make_request_response(CBOR_MEDIA_TYPE)
@@ -241,7 +241,7 @@ class TestCBORProblemPostHook:
     def test_no_accept_header_unchanged(
         self,
         hook: CBORProblemPostHook,
-        make_request_response: MakeRequestResponseFn,
+        make_request_response: MakeRequestResponseFunction,
     ) -> None:
         """Missing Accept header leaves response unchanged."""
         request, response = make_request_response("")
@@ -256,7 +256,7 @@ class TestCBORProblemPostHook:
     def test_mixed_accept_tie_prefers_json(
         self,
         hook: CBORProblemPostHook,
-        make_request_response: MakeRequestResponseFn,
+        make_request_response: MakeRequestResponseFunction,
     ) -> None:
         """Equal client quality uses the server preference for JSON."""
         request, response = make_request_response("application/json, application/cbor")
@@ -271,7 +271,7 @@ class TestCBORProblemPostHook:
     def test_unregistered_problem_cbor_accept_falls_back_to_json(
         self,
         hook: CBORProblemPostHook,
-        make_request_response: MakeRequestResponseFn,
+        make_request_response: MakeRequestResponseFunction,
     ) -> None:
         """
         Verify the unregistered application/problem+cbor type is not implemented.
@@ -294,7 +294,7 @@ class TestCBORConstants:
         """Media type constants are correct."""
         assert CBOR_MEDIA_TYPE == "application/cbor"
         assert JSON_MEDIA_TYPE == "application/json"
-        assert PROBLEM_JSON == "application/problem+json"
+        assert PROBLEM_JSON_MEDIA_TYPE == "application/problem+json"
 
     def test_allowed_content_types(self) -> None:
         """Allowed content types include JSON and CBOR."""
@@ -664,13 +664,13 @@ class TestNegotiateResponseMediaType:
 
     def test_selects_problem_media_types(self) -> None:
         """Problem Details uses registered JSON or generic CBOR media types."""
-        assert negotiate_problem_media_type(PROBLEM_JSON) == PROBLEM_JSON
+        assert negotiate_problem_media_type(PROBLEM_JSON_MEDIA_TYPE) == PROBLEM_JSON_MEDIA_TYPE
         assert negotiate_problem_media_type(CBOR_MEDIA_TYPE) == CBOR_MEDIA_TYPE
 
     def test_problem_negotiation_falls_back_to_json(self) -> None:
         """An error preserves its status even when Accept is unsupported."""
-        assert negotiate_problem_media_type("application/xml") == PROBLEM_JSON
-        assert negotiate_problem_media_type("application/problem+cbor") == PROBLEM_JSON
+        assert negotiate_problem_media_type("application/xml") == PROBLEM_JSON_MEDIA_TYPE
+        assert negotiate_problem_media_type("application/problem+cbor") == PROBLEM_JSON_MEDIA_TYPE
 
     def test_explicit_problem_json_exclusion_allows_cbor(self) -> None:
         """An exact exclusion overrides the application/json compatibility preference."""
@@ -682,7 +682,7 @@ class TestNegotiateResponseMediaType:
         """
         Keep Problem Details media types out of success negotiation.
         """
-        assert negotiate_api_media_type(PROBLEM_JSON) is None
+        assert negotiate_api_media_type(PROBLEM_JSON_MEDIA_TYPE) is None
         assert negotiate_api_media_type("application/problem+cbor") is None
 
     def test_can_disable_cbor_for_json_only_routes(self) -> None:

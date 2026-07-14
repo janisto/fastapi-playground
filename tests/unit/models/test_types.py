@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from app.models.types import NormalizedEmail, Phone, UtcDatetime
+from app.models.types import NormalizedEmail, Phone, UTCDateTime
 
 
 class TestNormalizedEmail:
@@ -106,9 +106,9 @@ class TestPhone:
         assert result.phone == "+358401234567"
 
 
-class TestUtcDatetime:
+class TestUTCDateTime:
     """
-    Tests for UtcDatetime type alias with .000Z milliseconds format.
+    Tests for UTCDateTime type alias with .000Z milliseconds format.
     """
 
     def test_serializes_with_milliseconds(self) -> None:
@@ -117,7 +117,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = TestModel(timestamp=dt)
@@ -129,7 +129,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         dt = datetime(2025, 1, 15, 10, 30, 0, 123456, tzinfo=UTC)
         result = TestModel(timestamp=dt)
@@ -141,7 +141,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         dt = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         result = TestModel(timestamp=dt)
@@ -153,7 +153,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         test_cases = [
             (0, "000"),
@@ -173,7 +173,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         result = TestModel(timestamp=datetime.fromisoformat("2025-01-15T12:30:00+02:00"))
 
@@ -185,7 +185,7 @@ class TestUtcDatetime:
         """
 
         class TestModel(BaseModel):
-            timestamp: UtcDatetime
+            timestamp: UTCDateTime
 
         with pytest.raises(ValidationError, match="datetime must include timezone information"):
             TestModel(timestamp=datetime.fromisoformat("2025-01-15T10:30:00"))

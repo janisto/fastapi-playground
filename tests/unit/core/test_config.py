@@ -43,7 +43,7 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(var, raising=False)
 
 
-class TestParseCorsOrigins:
+class TestParseCORSOrigins:
     """
     Tests for parse_cors_origins function.
     """

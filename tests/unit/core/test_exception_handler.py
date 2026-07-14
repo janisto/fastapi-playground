@@ -41,20 +41,20 @@ class TestStripAboutBlankTypePostHook:
         assert result_content == {"type": "https://example.com/error", "title": "Error", "status": 400}
 
 
-class TestCborDecodeErrorHandler:
+class TestCBORDecodeErrorHandler:
     """Tests for cbor_decode_error_handler."""
 
     def test_returns_cbor_decode_problem(self) -> None:
         """
         Verify handler converts CBORDecodeError to CBORDecodeProblem.
         """
-        eh = MagicMock()
+        exception_handler = MagicMock()
         request = MagicMock()
         exc = CBORDecodeError("Custom decode error")
 
         from app.core.cbor import CBORDecodeProblem
 
-        result = cbor_decode_error_handler(eh, request, exc)
+        result = cbor_decode_error_handler(exception_handler, request, exc)
 
         assert isinstance(result, CBORDecodeProblem)
         assert result.detail == "Custom decode error"
@@ -63,11 +63,11 @@ class TestCborDecodeErrorHandler:
         """
         Verify handler uses default detail when not specified.
         """
-        eh = MagicMock()
+        exception_handler = MagicMock()
         request = MagicMock()
         exc = CBORDecodeError()
 
-        result = cbor_decode_error_handler(eh, request, exc)
+        result = cbor_decode_error_handler(exception_handler, request, exc)
 
         assert result.detail == "Invalid CBOR data"
 

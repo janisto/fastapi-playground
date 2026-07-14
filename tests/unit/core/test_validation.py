@@ -189,7 +189,7 @@ class TestValidationErrorHandler:
             [
                 {
                     "type": "missing",
-                    "loc": ("body", "firstname"),
+                    "loc": ("body", "first_name"),
                     "msg": "Field required",
                     "input": {"email": "private@example.com", "password": "do-not-echo"},
                 }

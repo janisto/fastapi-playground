@@ -29,8 +29,10 @@ Do not add a hand-maintained specification or generated artifact. The small sche
 - Keep every operation ID stable and unique, paths free of trailing slashes, and summaries and descriptions accurate.
 - Document every reachable success and error status with the correct schema and implemented JSON or CBOR media types;
   omit content for 204 responses.
-- Keep request and response models separate. Reject unknown request fields and preserve aliases, examples, constraints,
-  and UTC millisecond serialization in component schemas.
+- Keep request and response models separate. Reject unknown request fields and preserve examples, constraints, and UTC
+  millisecond serialization in component schemas.
+- Follow the `AGENTS.md` naming policy in component properties and request parameters: use `snake_case` directly and do
+  not introduce camelCase aliases. Preserve externally standardized names exactly.
 - Mark protected operations through the existing bearer dependency and verify the generated security requirement.
 - Document `Location` and `Link` headers when runtime behavior emits them.
 - Keep Problem Details models aligned with strict RFC 9457 responses, validation error details, production redaction,
@@ -43,11 +45,11 @@ Do not add a hand-maintained specification or generated artifact. The small sche
 ## Workflow
 
 1. Inspect route registration, runtime behavior, dependencies, request and response models, and exception mapping.
-2. Update operation metadata, models, or shared error declarations at their source.
+2. Update operation metadata, models, field names, or shared error declarations at their source.
 3. Add focused runtime tests for changed statuses, validation, authentication, negotiation, and headers.
 4. Inspect `/openapi.json` and the affected `/schemas/{Model}.json` documents through the composed application.
 5. Assert cross-cutting invariants when appropriate: exact path and method sets, unique operation IDs, protected-route
-   security, reachable status codes, component references, and schema-link resolution.
+   security, reachable status codes, snake_case component properties, component references, and schema-link resolution.
 6. Reject unrelated schema churn and contract claims that differ from observable runtime behavior.
 
 Run focused integration tests, then `just lint`, `just typing`, and `just test`.

@@ -24,6 +24,7 @@ task-specific skills.
 - Require every named path, command, route, default, and environment variable to exist.
 - Describe `/health` as dependency-free liveness, not Firebase readiness.
 - State that JSON is the default and CBOR requires explicit `Accept` negotiation.
+- State that public JSON and CBOR properties, request parameters, and persisted Firestore fields use `snake_case`.
 - State that quality weights are honored, JSON wins ties, and unsupported explicit response formats return 406.
 - Describe request observability according to `fastapi-request-observability`; do not document deleted local helpers.
 - Keep the root app and `functions/` dependency environments distinct.

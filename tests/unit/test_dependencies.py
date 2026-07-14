@@ -6,7 +6,7 @@ from app.dependencies import (
     CurrentUser,
     FirebaseUser,
     ProfileService,
-    ProfileServiceDep,
+    ProfileServiceDependency,
     get_profile_service,
 )
 
@@ -43,6 +43,6 @@ class TestExports:
         """Verify ProfileService is re-exported."""
         assert ProfileService is not None
 
-    def test_profile_service_dep_is_exported(self) -> None:
-        """Verify ProfileServiceDep type alias is accessible."""
-        assert ProfileServiceDep is not None
+    def test_profile_service_dependency_is_exported(self) -> None:
+        """Verify ProfileServiceDependency type alias is accessible."""
+        assert ProfileServiceDependency is not None

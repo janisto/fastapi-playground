@@ -135,7 +135,7 @@ class TestRouterConfiguration:
         assert "/health" in fastapi_app.openapi()["paths"]
 
 
-class TestCorsMiddleware:
+class TestCORSMiddleware:
     """
     Tests for CORS middleware configuration.
     """

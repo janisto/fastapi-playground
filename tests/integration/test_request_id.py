@@ -11,7 +11,7 @@ from app.exceptions import ProfileNotFoundError
 from tests.helpers.profiles import make_profile
 
 
-class TestRequestIdPropagation:
+class TestRequestIDPropagation:
     """
     Tests for X-Request-ID header in success responses.
     """
@@ -77,7 +77,7 @@ class TestRequestIdPropagation:
         assert bytes.fromhex(request_id)
 
 
-class TestRequestIdInErrorResponses:
+class TestRequestIDInErrorResponses:
     """
     Tests for X-Request-ID header in error responses.
     """

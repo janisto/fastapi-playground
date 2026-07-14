@@ -28,7 +28,7 @@ def _normalize_utc_datetime(value: datetime) -> datetime:
 
 
 # UTC datetime with consistent .000Z milliseconds format
-UtcDatetime = Annotated[
+UTCDateTime = Annotated[
     datetime,
     AfterValidator(_normalize_utc_datetime),
     PlainSerializer(_serialize_datetime_ms),

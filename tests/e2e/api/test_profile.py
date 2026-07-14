@@ -33,8 +33,8 @@ class TestProfileE2EFlow:
         Persist, retrieve, update, and delete a profile through the API.
         """
         profile = {
-            "firstname": "E2E",
-            "lastname": "User",
+            "first_name": "E2E",
+            "last_name": "User",
             "email": "E2E@EXAMPLE.COM",
             "phone_number": "+358401234567",
             "marketing": False,
@@ -49,13 +49,13 @@ class TestProfileE2EFlow:
 
         retrieved = e2e_client.get(BASE_URL)
         assert retrieved.status_code == status.HTTP_200_OK
-        assert retrieved.json()["firstname"] == "E2E"
+        assert retrieved.json()["first_name"] == "E2E"
 
-        updated = e2e_client.patch(BASE_URL, json={"firstname": "Updated", "marketing": True})
+        updated = e2e_client.patch(BASE_URL, json={"first_name": "Updated", "marketing": True})
         assert updated.status_code == status.HTTP_200_OK
         updated_body = updated.json()
-        assert updated_body["firstname"] == "Updated"
-        assert updated_body["lastname"] == "User"
+        assert updated_body["first_name"] == "Updated"
+        assert updated_body["last_name"] == "User"
         assert updated_body["email"] == "e2e@example.com"
         assert updated_body["marketing"] is True
         assert updated_body["created_at"] == created_body["created_at"]
@@ -71,14 +71,14 @@ class TestProfileE2EFlow:
         Reject a duplicate create without overwriting the existing document.
         """
         original = {
-            "firstname": "Original",
-            "lastname": "User",
+            "first_name": "Original",
+            "last_name": "User",
             "email": "original@example.com",
             "phone_number": "+358401234567",
             "marketing": False,
             "terms": True,
         }
-        replacement = {**original, "firstname": "Replacement"}
+        replacement = {**original, "first_name": "Replacement"}
 
         assert e2e_client.post(BASE_URL, json=original).status_code == status.HTTP_201_CREATED
         duplicate = e2e_client.post(BASE_URL, json=replacement)
@@ -86,12 +86,12 @@ class TestProfileE2EFlow:
         assert duplicate.status_code == status.HTTP_409_CONFLICT
         retrieved = e2e_client.get(BASE_URL)
         assert retrieved.status_code == status.HTTP_200_OK
-        assert retrieved.json()["firstname"] == "Original"
+        assert retrieved.json()["first_name"] == "Original"
 
     @pytest.mark.parametrize(
         ("method", "payload"),
         [
-            ("patch", {"firstname": "Missing"}),
+            ("patch", {"first_name": "Missing"}),
             ("delete", None),
         ],
     )

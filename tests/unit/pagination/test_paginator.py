@@ -284,7 +284,7 @@ class TestPaginateCursorNavigation:
 
         items = create_items(10)
         # Create cursor with different type
-        cursor = Cursor(type="user", value="item-003").encode()
+        cursor = Cursor(cursor_type="user", value="item-003").encode()
 
         with pytest.raises(InvalidCursorError, match="invalid cursor type: expected 'item'"):
             paginate(
@@ -299,7 +299,7 @@ class TestPaginateCursorNavigation:
     def test_nonexistent_cursor_value_raises_error(self) -> None:
         """Verify stale cursor values are rejected."""
         items = create_items(10)
-        cursor = Cursor(type="item", value="nonexistent").encode()
+        cursor = Cursor(cursor_type="item", value="nonexistent").encode()
 
         with pytest.raises(InvalidCursorError, match="cursor references unknown item"):
             paginate(
@@ -316,7 +316,7 @@ class TestPaginateCursorNavigation:
         Verify an externally supplied empty cursor value is rejected.
         """
         items = create_items(10)
-        cursor = Cursor(type="item", value="").encode()
+        cursor = Cursor(cursor_type="item", value="").encode()
 
         with pytest.raises(InvalidCursorError, match="cursor value cannot be empty"):
             paginate(
@@ -574,7 +574,7 @@ class TestPaginateCursorTypes:
         from app.pagination import decode_cursor
 
         decoded = decode_cursor(result.next_cursor)
-        assert decoded.type == "custom_type"
+        assert decoded.cursor_type == "custom_type"
 
 
 class TestPaginateEdgeCases:
@@ -660,7 +660,7 @@ class TestPaginateEdgeCases:
     def test_cursor_at_last_item(self) -> None:
         """Verify empty result when cursor points to last item."""
         items = create_items(5)
-        cursor = Cursor(type="item", value="item-005").encode()
+        cursor = Cursor(cursor_type="item", value="item-005").encode()
 
         result = paginate(
             items=items,

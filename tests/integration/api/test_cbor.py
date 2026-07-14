@@ -11,6 +11,17 @@ from fastapi.testclient import TestClient
 from tests.helpers.profiles import make_profile, make_profile_payload_dict
 
 BASE_URL = "/v1/profile"
+PROFILE_FIELD_NAMES = {
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+    "phone_number",
+    "marketing",
+    "terms",
+    "created_at",
+    "updated_at",
+}
 
 
 class TestCBORRequest:
@@ -64,7 +75,8 @@ class TestCBORRequest:
         assert response.status_code == 201
         assert response.headers["content-type"] == "application/cbor"
         decoded = cbor2.loads(response.content)
-        assert decoded["firstname"] == profile.firstname
+        assert set(decoded) == PROFILE_FIELD_NAMES
+        assert decoded["first_name"] == profile.first_name
         assert decoded["id"] == profile.id
 
     def test_unsupported_content_type_returns_415(
@@ -128,8 +140,7 @@ class TestCBORResponse:
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/cbor"
         decoded = cbor2.loads(response.content)
-        assert "id" in decoded
-        assert "firstname" in decoded
+        assert set(decoded) == PROFILE_FIELD_NAMES
 
     def test_accept_json_returns_json(
         self,
@@ -150,8 +161,7 @@ class TestCBORResponse:
         assert response.status_code == 200
         assert "application/json" in response.headers["content-type"]
         body = response.json()
-        assert "id" in body
-        assert "firstname" in body
+        assert set(body) == PROFILE_FIELD_NAMES
 
     def test_default_returns_json(
         self,
@@ -258,7 +268,7 @@ class TestCBORResponse:
         """
         payloads = {
             "post": make_profile_payload_dict(),
-            "patch": {"firstname": "Updated"},
+            "patch": {"first_name": "Updated"},
         }
 
         response = client.request(method, BASE_URL, json=payloads.get(method), headers={"Accept": accept})

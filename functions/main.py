@@ -42,7 +42,7 @@ add_gcp_telemetry(force_dev_export=False)
 VERTEX_AI_LOCATION = "global"
 GEMINI_MODEL = "vertexai/gemini-pro-latest"
 
-ai = Genkit(
+genkit = Genkit(
     plugins=[VertexAI(location=VERTEX_AI_LOCATION)],
     model=GEMINI_MODEL,
 )
@@ -133,13 +133,13 @@ def build_system_prompt(style: JokeStyle) -> str:
     """
     Build system prompt for a specific joke style.
     """
-    style_desc = STYLE_DEFINITIONS[style]
+    style_description = STYLE_DEFINITIONS[style]
     return f"""You are a dad joke generator. Generate family-friendly jokes that elicit eye-rolls and groans.
 
-Use this style: {style.value} - {style_desc}"""
+Use this style: {style.value} - {style_description}"""
 
 
-@ai.flow()
+@genkit.flow()
 async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     """
     Generate a dad joke using Gemini.
@@ -150,7 +150,7 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     style = random.choice(list(JokeStyle))  # noqa: S311
     user_prompt = f"Generate a dad joke about {topic.value}." if topic else "Generate a dad joke."
 
-    result = await ai.generate(
+    result = await genkit.generate(
         system=build_system_prompt(style),
         prompt=user_prompt,
         output_schema=GeneratedJoke,
@@ -169,7 +169,7 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     )
 
 
-def _handle_dad_joke(req: https_fn.Request) -> https_fn.Response:
+def _handle_dad_joke(request: https_fn.Request) -> https_fn.Response:
     """
     HTTP endpoint that returns a dad joke.
 
@@ -179,7 +179,7 @@ def _handle_dad_joke(req: https_fn.Request) -> https_fn.Response:
     Returns:
         JSON with setup, punchline, topic, and style fields.
     """
-    if req.method != "GET":
+    if request.method != "GET":
         return https_fn.Response(
             json.dumps({"error": "METHOD_NOT_ALLOWED", "message": "Use GET"}),
             status=405,
@@ -188,7 +188,7 @@ def _handle_dad_joke(req: https_fn.Request) -> https_fn.Response:
         )
 
     try:
-        topic_param = req.args.get("topic")
+        topic_param = request.args.get("topic")
         topic = JokeTopic(topic_param.lower()) if topic_param else None
 
         joke_flow = cast("Callable[[JokeTopic | None], Coroutine[object, object, DadJoke]]", generate_dad_joke)
@@ -240,8 +240,8 @@ def _handle_dad_joke(req: https_fn.Request) -> https_fn.Response:
 
 
 @https_fn.on_request(invoker="private")
-def dad_joke(req: https_fn.Request) -> https_fn.Response:
+def dad_joke(request: https_fn.Request) -> https_fn.Response:
     """
     Serve the private dad-joke HTTP function.
     """
-    return _handle_dad_joke(req)
+    return _handle_dad_joke(request)

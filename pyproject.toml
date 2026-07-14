@@ -91,7 +91,6 @@ ignore = [
     "SLF001",   # Unit tests verify private state where it is the behavior boundary
     "PLR2004",  # Magic values OK in tests
     "PT013",    # Allow `from pytest import ...` style
-    "N817",     # Allow short aliases like PS for ProfileService
     "RET504",   # Unnecessary assignment OK in tests for clarity
     "S104",     # Testing 0.0.0.0 binding is intentional
 ]

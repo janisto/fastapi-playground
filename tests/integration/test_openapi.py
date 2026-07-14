@@ -2,6 +2,7 @@
 Integration tests for the generated OpenAPI contract.
 """
 
+import re
 from typing import cast
 
 from app.main import fastapi_app
@@ -16,6 +17,7 @@ EXPECTED_OPERATIONS = {
     ("patch", "/v1/profile", "profile_update"),
     ("delete", "/v1/profile", "profile_delete"),
 }
+SNAKE_CASE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 
 
 def test_exact_operation_set_and_unique_ids() -> None:
@@ -105,6 +107,29 @@ def test_profile_update_schema_rejects_null_without_requiring_fields() -> None:
     for field_schema in schema["properties"].values():
         assert field_schema.get("type") != "null"
         assert {variant.get("type") for variant in field_schema.get("anyOf", [])} <= {"string", "boolean"}
+
+
+def test_public_properties_and_parameters_use_snake_case() -> None:
+    """
+    Verify generated property and request-parameter names follow the public naming contract.
+    """
+    schema = fastapi_app.openapi()
+    property_names = {
+        property_name
+        for component in schema["components"]["schemas"].values()
+        for property_name in component.get("properties", {})
+    }
+    parameter_names = {
+        parameter["name"]
+        for path_item in schema["paths"].values()
+        for operation in path_item.values()
+        for parameter in operation.get("parameters", [])
+        if parameter["in"] in {"path", "query"}
+    }
+
+    assert property_names
+    assert parameter_names
+    assert all(SNAKE_CASE_NAME_PATTERN.fullmatch(name) for name in property_names | parameter_names)
 
 
 def test_response_headers_match_runtime_contract() -> None:

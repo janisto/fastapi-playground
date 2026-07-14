@@ -123,13 +123,32 @@ class TestSchemaContent:
         assert "total" in data["properties"]
         assert data["properties"]["items"]["items"]["$ref"] == "#/$defs/Item"
         assert "Item" in data["$defs"]
+        assert set(data["$defs"]["Item"]["properties"]) == {
+            "id",
+            "name",
+            "category",
+            "price",
+            "in_stock",
+            "created_at",
+            "description",
+        }
 
     def test_profile_schema_exists(self) -> None:
         response = client.get("/schemas/Profile.json")
 
         assert response.status_code == 200
         data = response.json()
-        assert "properties" in data
+        assert set(data["properties"]) == {
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "phone_number",
+            "marketing",
+            "terms",
+            "created_at",
+            "updated_at",
+        }
 
     def test_problem_schemas_exist(self) -> None:
         problem = client.get("/schemas/ProblemResponse.json")

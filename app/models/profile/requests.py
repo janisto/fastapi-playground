@@ -13,14 +13,14 @@ class ProfileBase(BaseModel):
     Base profile model with common fields.
     """
 
-    firstname: str = Field(
+    first_name: str = Field(
         ...,
         min_length=1,
         max_length=100,
         description="First name",
         examples=["John"],
     )
-    lastname: str = Field(
+    last_name: str = Field(
         ...,
         min_length=1,
         max_length=100,
@@ -60,13 +60,13 @@ class ProfileCreate(ProfileBase):
 
     @field_validator("terms", mode="after")
     @classmethod
-    def terms_must_be_accepted(cls, v: bool) -> bool:
+    def terms_must_be_accepted(cls, value: bool) -> bool:
         """
         Enforce terms acceptance on profile creation.
         """
-        if not v:
+        if not value:
             raise ValueError("terms must be accepted")
-        return v
+        return value
 
 
 class ProfileUpdate(BaseModel):
@@ -74,14 +74,14 @@ class ProfileUpdate(BaseModel):
     Model for updating an existing profile.
     """
 
-    firstname: str | MISSING = Field(
+    first_name: str | MISSING = Field(
         MISSING,
         min_length=1,
         max_length=100,
         description="First name",
         examples=["John"],
     )
-    lastname: str | MISSING = Field(
+    last_name: str | MISSING = Field(
         MISSING,
         min_length=1,
         max_length=100,

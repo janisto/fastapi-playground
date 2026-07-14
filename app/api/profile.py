@@ -8,9 +8,9 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.core.cbor import CBORRoute
 from app.core.constants import API_V1_PREFIX
-from app.core.openapi import COMMON_CBOR_RESPONSES, empty_response, problem_response, success_response
+from app.core.openapi import COMMON_CBOR_ERROR_RESPONSES, empty_response, problem_response, success_response
 from app.core.schema_links import build_described_by_link
-from app.dependencies import CurrentUser, ProfileServiceDep
+from app.dependencies import CurrentUser, ProfileServiceDependency
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
 from app.models.error import ValidationProblemResponse
 from app.models.profile import Profile, ProfileCreate, ProfileUpdate
@@ -23,7 +23,7 @@ router = APIRouter(
     tags=["Profile"],
     route_class=CBORRoute,
     responses={
-        **COMMON_CBOR_RESPONSES,
+        **COMMON_CBOR_ERROR_RESPONSES,
         401: problem_response("Unauthorized", authenticate=True),
         503: problem_response("Authentication service unavailable", retry_after=True),
     },
@@ -54,7 +54,7 @@ async def create_profile(
     request: Request,
     profile_data: ProfileCreate,
     current_user: CurrentUser,
-    service: ProfileServiceDep,
+    profile_service: ProfileServiceDependency,
     response: Response,
 ) -> Profile:
     """
@@ -64,7 +64,7 @@ async def create_profile(
     Returns 409 Conflict if a profile already exists.
     """
     try:
-        profile = await service.create_profile(current_user.uid, profile_data)
+        profile = await profile_service.create_profile(current_user.uid, profile_data)
         response.headers["Location"] = str(request.url.path)
         return _profile_response(response, profile)
     except HTTPException, ProfileAlreadyExistsError:
@@ -89,7 +89,7 @@ async def create_profile(
 async def get_profile(
     response: Response,
     current_user: CurrentUser,
-    service: ProfileServiceDep,
+    profile_service: ProfileServiceDependency,
 ) -> Profile:
     """
     Retrieve the profile of the authenticated user.
@@ -97,7 +97,7 @@ async def get_profile(
     Returns 404 Not Found if no profile exists for the user.
     """
     try:
-        profile = await service.get_profile(current_user.uid)
+        profile = await profile_service.get_profile(current_user.uid)
         return _profile_response(response, profile)
     except HTTPException, ProfileNotFoundError:
         raise
@@ -125,7 +125,7 @@ async def update_profile(
     response: Response,
     profile_data: ProfileUpdate,
     current_user: CurrentUser,
-    service: ProfileServiceDep,
+    profile_service: ProfileServiceDependency,
 ) -> Profile:
     """
     Partially update the profile of the authenticated user.
@@ -135,7 +135,7 @@ async def update_profile(
     Returns 404 Not Found if no profile exists for the user.
     """
     try:
-        profile = await service.update_profile(current_user.uid, profile_data)
+        profile = await profile_service.update_profile(current_user.uid, profile_data)
         return _profile_response(response, profile)
     except HTTPException, ProfileNotFoundError:
         raise
@@ -159,7 +159,7 @@ async def update_profile(
 )
 async def delete_profile(
     current_user: CurrentUser,
-    service: ProfileServiceDep,
+    profile_service: ProfileServiceDependency,
 ) -> None:
     """
     Delete the profile of the authenticated user.
@@ -168,7 +168,7 @@ async def delete_profile(
     Returns 404 Not Found if no profile exists for the user.
     """
     try:
-        await service.delete_profile(current_user.uid)
+        await profile_service.delete_profile(current_user.uid)
     except HTTPException, ProfileNotFoundError:
         raise
     except Exception:

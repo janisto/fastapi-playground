@@ -25,6 +25,7 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 - Use plural nouns for collections (`/items`, not `/item`)
 - Avoid verbs in URIs; let HTTP methods convey the action
 - Return resources directly without wrapper envelopes
+- Use `snake_case` consistently for public JSON and CBOR properties, request parameters, and persisted Firestore fields
 
 ### HTTP Methods & Status Codes
 
@@ -165,7 +166,7 @@ token. See [GCP.md](GCP.md) for IAM and troubleshooting details.
 .github/agents/       Evidence-based security review profile for GitHub Copilot
 app/
   main.py              # FastAPI composition, lifespan, and outer ASGI middleware
-  dependencies.py      # Dependency injection (CurrentUser, ProfileServiceDep)
+  dependencies.py      # Dependency injection (CurrentUser, ProfileServiceDependency)
   api/                 # API route handlers
     health.py          # Health check endpoint
     hello.py           # Hello greeting endpoints
@@ -190,7 +191,7 @@ app/
     security.py        # Security headers (HSTS, X-Frame-Options)
   models/              # Pydantic schemas
     error.py           # ProblemResponse schema
-    types.py           # Shared types (NormalizedEmail, Phone, UtcDatetime)
+    types.py           # Shared types (NormalizedEmail, Phone, UTCDateTime)
     health/            # Health response models
     hello/             # Hello response models
     items/             # Items response models

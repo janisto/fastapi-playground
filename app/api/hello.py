@@ -12,7 +12,7 @@ from fastapi import APIRouter, Response, status
 
 from app.core.cbor import CBORRoute
 from app.core.constants import API_V1_PREFIX
-from app.core.openapi import COMMON_CBOR_RESPONSES, problem_response, success_response
+from app.core.openapi import COMMON_CBOR_ERROR_RESPONSES, problem_response, success_response
 from app.core.schema_links import build_described_by_link
 from app.models.error import ValidationProblemResponse
 from app.models.hello import GREETINGS, Greeting, GreetingRequest
@@ -21,7 +21,7 @@ router = APIRouter(
     prefix=f"{API_V1_PREFIX}/hello",
     tags=["Hello"],
     route_class=CBORRoute,
-    responses=COMMON_CBOR_RESPONSES,
+    responses=COMMON_CBOR_ERROR_RESPONSES,
 )
 
 GREETING_SCHEMA_PATH = "/schemas/Greeting.json"

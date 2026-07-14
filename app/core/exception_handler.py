@@ -1,9 +1,7 @@
 """
 Exception handler singleton for fastapi-problem integration.
 
-Provides `eh` for:
-1. Registering handlers via add_exception_handler(fastapi_app, eh)
-2. Generating OpenAPI responses via eh.generate_swagger_response()
+Provides `exception_handler` for registering handlers with the FastAPI application.
 """
 
 import logging
@@ -71,7 +69,7 @@ def schema_link_post_hook(
 
 
 def cbor_decode_error_handler(
-    eh: ExceptionHandler,
+    exception_handler: ExceptionHandler,
     request: Request,
     exc: CBORDecodeError,
 ) -> CBORDecodeProblem:
@@ -82,7 +80,7 @@ def cbor_decode_error_handler(
 
 
 def cbor_decode_http_exception_handler(
-    eh: ExceptionHandler,
+    exception_handler: ExceptionHandler,
     request: Request,
     exc: CBORDecodeHTTPException,
 ) -> CBORDecodeProblem:
@@ -93,7 +91,7 @@ def cbor_decode_http_exception_handler(
 
 
 def unsupported_media_type_handler(
-    eh: ExceptionHandler,
+    exception_handler: ExceptionHandler,
     request: Request,
     exc: UnsupportedMediaTypeHTTPException,
 ) -> UnsupportedMediaTypeProblem:
@@ -104,7 +102,7 @@ def unsupported_media_type_handler(
 
 
 def not_acceptable_handler(
-    eh: ExceptionHandler,
+    exception_handler: ExceptionHandler,
     request: Request,
     exc: NotAcceptableHTTPException,
 ) -> NotAcceptableProblem:
@@ -115,7 +113,7 @@ def not_acceptable_handler(
 
 
 def invalid_cursor_error_handler(
-    eh: ExceptionHandler,
+    exception_handler: ExceptionHandler,
     request: Request,
     exc: InvalidCursorError,
 ) -> Problem:
@@ -132,7 +130,7 @@ def invalid_cursor_error_handler(
     )
 
 
-eh = new_exception_handler(
+exception_handler = new_exception_handler(
     logger=logger,
     strict_rfc9457=True,
     documentation_uri_template="about:blank",

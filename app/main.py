@@ -20,7 +20,7 @@ from starlette.types import ASGIApp
 from app.api import business_routers, health, schemas
 from app.api.schemas import populate_schema_cache
 from app.core.config import get_settings
-from app.core.exception_handler import eh
+from app.core.exception_handler import exception_handler
 from app.core.firebase import close_async_firestore_client, initialize_firebase
 from app.core.logging import configure_logging
 from app.core.openapi import register_schema_components
@@ -68,7 +68,7 @@ register_schema_components(openapi_schema)
 populate_schema_cache(openapi_schema)
 
 # Register RFC 9457 Problem Details exception handler
-add_exception_handler(fastapi_app, eh)
+add_exception_handler(fastapi_app, exception_handler)
 
 settings = get_settings()
 application: ASGIApp = BodySizeLimitMiddleware(fastapi_app)

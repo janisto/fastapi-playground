@@ -96,7 +96,7 @@ def problem_response(
     }
 
 
-COMMON_CBOR_RESPONSES: dict[int | str, dict[str, Any]] = {
+COMMON_CBOR_ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: problem_response("Malformed CBOR request"),
     406: problem_response("Requested response format is not supported"),
     413: problem_response("Request body is too large"),

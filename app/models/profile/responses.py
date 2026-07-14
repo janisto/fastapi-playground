@@ -11,7 +11,7 @@ Change here if a rename is ever required; update related tests accordingly.
 
 from pydantic import BaseModel, Field
 
-from app.models.types import NormalizedEmail, Phone, UtcDatetime
+from app.models.types import NormalizedEmail, Phone, UTCDateTime
 
 # Firestore collection name for profiles
 PROFILE_COLLECTION = "profiles"
@@ -32,14 +32,14 @@ class Profile(BaseModel):
         description="Unique identifier",
         examples=["user-abc123"],
     )
-    firstname: str = Field(
+    first_name: str = Field(
         ...,
         min_length=1,
         max_length=100,
         description="First name",
         examples=["John"],
     )
-    lastname: str = Field(
+    last_name: str = Field(
         ...,
         min_length=1,
         max_length=100,
@@ -66,12 +66,12 @@ class Profile(BaseModel):
         description="Terms acceptance",
         examples=[True],
     )
-    created_at: UtcDatetime = Field(
+    created_at: UTCDateTime = Field(
         ...,
         description="Creation timestamp",
         examples=["2025-01-15T10:30:00.000Z"],
     )
-    updated_at: UtcDatetime = Field(
+    updated_at: UTCDateTime = Field(
         ...,
         description="Last update timestamp",
         examples=["2025-01-15T10:30:00.000Z"],

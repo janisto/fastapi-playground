@@ -22,12 +22,12 @@ router = APIRouter(prefix="/schemas", tags=["Schemas"])
 _OPENAPI_COMPONENT_PREFIX = "#/components/schemas/"
 _JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
-type JsonValue = None | bool | int | float | str | list[JsonValue] | dict[str, JsonValue]
+type JSONValue = None | bool | int | float | str | list[JSONValue] | dict[str, JSONValue]
 
 _schema_cache: dict[str, dict[str, Any]] = {}
 
 
-def _rewrite_component_refs(value: JsonValue, referenced: set[str]) -> None:
+def _rewrite_component_refs(value: JSONValue, referenced: set[str]) -> None:
     """
     Rewrite OpenAPI component references for a standalone JSON Schema.
     """

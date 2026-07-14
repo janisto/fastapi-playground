@@ -23,6 +23,10 @@ For every operation, define a stable `<resource>_<action>` operation ID, summary
 error responses, and a precise return type. Use 201 plus `Location` for persistent creation and 204 without a model for
 deletion. Keep paths without trailing slashes because redirects are disabled.
 
+Use the repository naming policy from `AGENTS.md`: public JSON and CBOR properties and request parameters are
+`snake_case`, while Pydantic models and type aliases are `PascalCase`. Define field names directly and do not add casing
+aliases. Preserve externally specified names such as HTTP headers and standards-defined relation values.
+
 Add a `Link: </schemas/Model.json>; rel="describedBy"` header to modeled responses. Do not add `$schema` to response
 instances; that keyword identifies the dialect of the standalone schema document. Keep shared OpenAPI response
 metadata in `app/core/openapi.py`, and keep route-specific statuses aligned with runtime behavior.

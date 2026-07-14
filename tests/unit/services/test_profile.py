@@ -16,8 +16,8 @@ from tests.mocks.firestore import FakeAsyncClient
 
 def _make_profile_data(
     user_id: str = "user-123",
-    firstname: str = "John",
-    lastname: str = "Doe",
+    first_name: str = "John",
+    last_name: str = "Doe",
     email: str = "john@example.com",
     phone_number: str = "+358401234567",
     marketing: bool = True,
@@ -29,8 +29,8 @@ def _make_profile_data(
     now = datetime.now(UTC)
     return {
         "id": user_id,
-        "firstname": firstname,
-        "lastname": lastname,
+        "first_name": first_name,
+        "last_name": last_name,
         "email": email,
         "phone_number": phone_number,
         "marketing": marketing,
@@ -41,8 +41,8 @@ def _make_profile_data(
 
 
 def _make_profile_create(
-    firstname: str = "John",
-    lastname: str = "Doe",
+    first_name: str = "John",
+    last_name: str = "Doe",
     email: str = "john@example.com",
     phone_number: str = "+358401234567",
     marketing: bool = True,
@@ -52,8 +52,8 @@ def _make_profile_create(
     Create ProfileCreate model for tests.
     """
     return ProfileCreate(
-        firstname=firstname,
-        lastname=lastname,
+        first_name=first_name,
+        last_name=last_name,
         email=email,
         phone_number=phone_number,
         marketing=marketing,
@@ -62,8 +62,8 @@ def _make_profile_create(
 
 
 def _make_profile_update(
-    firstname: str | None = None,
-    lastname: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
     email: str | None = None,
     phone_number: str | None = None,
     marketing: bool | None = None,
@@ -72,8 +72,8 @@ def _make_profile_update(
     Create ProfileUpdate model for tests.
     """
     values = {
-        "firstname": firstname,
-        "lastname": lastname,
+        "first_name": first_name,
+        "last_name": last_name,
         "email": email,
         "phone_number": phone_number,
         "marketing": marketing,
@@ -100,8 +100,6 @@ def mock_transactional_methods(mocker: MockerFixture, fake_db: FakeAsyncClient) 
     so we need to patch the decorated methods directly to use our fake
     transaction logic.
     """
-    from app.exceptions import ProfileAlreadyExistsError
-    from app.services.profile import ProfileService as PS
 
     async def fake_create_in_transaction(
         transaction: object,
@@ -137,9 +135,9 @@ def mock_transactional_methods(mocker: MockerFixture, fake_db: FakeAsyncClient) 
         data = fake_db._store.pop(doc_id)
         return data
 
-    mocker.patch.object(PS, "_create_in_transaction", staticmethod(fake_create_in_transaction))
-    mocker.patch.object(PS, "_update_in_transaction", staticmethod(fake_update_in_transaction))
-    mocker.patch.object(PS, "_delete_in_transaction", staticmethod(fake_delete_in_transaction))
+    mocker.patch.object(ProfileService, "_create_in_transaction", staticmethod(fake_create_in_transaction))
+    mocker.patch.object(ProfileService, "_update_in_transaction", staticmethod(fake_update_in_transaction))
+    mocker.patch.object(ProfileService, "_delete_in_transaction", staticmethod(fake_delete_in_transaction))
 
 
 @pytest.fixture(autouse=True)
@@ -165,8 +163,8 @@ class TestProfileServiceGetProfile:
         profile = await service.get_profile("user-123")
 
         assert profile.id == "user-123"
-        assert profile.firstname == "John"
-        assert profile.lastname == "Doe"
+        assert profile.first_name == "John"
+        assert profile.last_name == "Doe"
         assert profile.email == "john@example.com"
 
     async def test_returns_profile_with_all_fields(self, fake_db: FakeAsyncClient) -> None:
@@ -175,8 +173,8 @@ class TestProfileServiceGetProfile:
         """
         fake_db._store["user-456"] = _make_profile_data(
             user_id="user-456",
-            firstname="Jane",
-            lastname="Smith",
+            first_name="Jane",
+            last_name="Smith",
             email="jane@example.com",
             phone_number="+358409876543",
             marketing=False,
@@ -187,8 +185,8 @@ class TestProfileServiceGetProfile:
         profile = await service.get_profile("user-456")
 
         assert profile.id == "user-456"
-        assert profile.firstname == "Jane"
-        assert profile.lastname == "Smith"
+        assert profile.first_name == "Jane"
+        assert profile.last_name == "Smith"
         assert profile.email == "jane@example.com"
         assert profile.phone_number == "+358409876543"
         assert profile.marketing is False
@@ -246,7 +244,7 @@ class TestProfileServiceCreateProfile:
         profile = await service.create_profile("new-user", profile_create)
 
         assert profile.id == "new-user"
-        assert profile.firstname == "John"
+        assert profile.first_name == "John"
         assert profile.email == "john@example.com"
         assert "new-user" in fake_db._store
 
@@ -282,8 +280,8 @@ class TestProfileServiceCreateProfile:
         Verify create_profile stores all input fields.
         """
         profile_create = _make_profile_create(
-            firstname="Alice",
-            lastname="Wonder",
+            first_name="Alice",
+            last_name="Wonder",
             email="alice@example.com",
             phone_number="+358401111111",
             marketing=False,
@@ -294,8 +292,19 @@ class TestProfileServiceCreateProfile:
         await service.create_profile("alice-id", profile_create)
 
         stored = fake_db._store["alice-id"]
-        assert stored["firstname"] == "Alice"
-        assert stored["lastname"] == "Wonder"
+        assert set(stored) == {
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "phone_number",
+            "marketing",
+            "terms",
+            "created_at",
+            "updated_at",
+        }
+        assert stored["first_name"] == "Alice"
+        assert stored["last_name"] == "Wonder"
         assert stored["email"] == "alice@example.com"
         assert stored["phone_number"] == "+358401111111"
         assert stored["marketing"] is False
@@ -312,13 +321,13 @@ class TestProfileServiceUpdateProfile:
         Verify update_profile updates a single field.
         """
         fake_db._store["user-123"] = _make_profile_data(user_id="user-123")
-        profile_update = _make_profile_update(firstname="Updated")
+        profile_update = _make_profile_update(first_name="Updated")
 
         service = ProfileService()
         profile = await service.update_profile("user-123", profile_update)
 
-        assert profile.firstname == "Updated"
-        assert fake_db._store["user-123"]["firstname"] == "Updated"
+        assert profile.first_name == "Updated"
+        assert fake_db._store["user-123"]["first_name"] == "Updated"
 
     async def test_updates_multiple_fields(self, fake_db: FakeAsyncClient) -> None:
         """
@@ -326,16 +335,16 @@ class TestProfileServiceUpdateProfile:
         """
         fake_db._store["user-123"] = _make_profile_data(user_id="user-123")
         profile_update = _make_profile_update(
-            firstname="New First",
-            lastname="New Last",
+            first_name="New First",
+            last_name="New Last",
             marketing=False,
         )
 
         service = ProfileService()
         profile = await service.update_profile("user-123", profile_update)
 
-        assert profile.firstname == "New First"
-        assert profile.lastname == "New Last"
+        assert profile.first_name == "New First"
+        assert profile.last_name == "New Last"
         assert profile.marketing is False
 
     async def test_updates_updated_at_timestamp(self, fake_db: FakeAsyncClient) -> None:
@@ -348,7 +357,7 @@ class TestProfileServiceUpdateProfile:
             "created_at": original_time,
             "updated_at": original_time,
         }
-        profile_update = _make_profile_update(firstname="Updated")
+        profile_update = _make_profile_update(first_name="Updated")
 
         service = ProfileService()
         profile = await service.update_profile("user-123", profile_update)
@@ -359,7 +368,7 @@ class TestProfileServiceUpdateProfile:
         """
         Verify update_profile raises ProfileNotFoundError when profile missing.
         """
-        profile_update = _make_profile_update(firstname="Updated")
+        profile_update = _make_profile_update(first_name="Updated")
 
         service = ProfileService()
 
@@ -379,7 +388,7 @@ class TestProfileServiceUpdateProfile:
         service = ProfileService()
         profile = await service.update_profile("user-123", profile_update)
 
-        assert profile.firstname == original_data["firstname"]
+        assert profile.first_name == original_data["first_name"]
 
 
 class TestProfileServiceDeleteProfile:

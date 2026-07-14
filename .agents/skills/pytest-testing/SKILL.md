@@ -25,6 +25,10 @@ Assert observable contracts: exact status, relevant headers, decoded response sh
 negotiation, authentication and authorization, body limits, request IDs, stale cursors, and absence of sensitive log
 fields. Prefer parametrization for validation matrices and `AsyncMock` assertions for async service calls.
 
+For public models, assert representative complete JSON and CBOR property sets and generated schema properties in
+`snake_case`; do not only assert a resource envelope or one unaffected field. For persisted models, assert Firestore
+keys use the same names. These tests enforce the naming policy that static Python linting cannot see.
+
 Use `pytest-mock` for call-aware patching, `monkeypatch` for environment isolation, HTTPX2 for HTTP requests, and
 `pytest-httpx2` for outbound mocks. With automatic asyncio mode, do not add `pytest.mark.asyncio` to ordinary async
 tests.

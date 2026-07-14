@@ -86,7 +86,7 @@ def is_safe_validation_value(value: object) -> bool:
 
 
 def validation_error_handler(
-    eh: ExceptionHandler,
+    exception_handler: ExceptionHandler,
     request: Request,
     exc: RequestValidationError,
 ) -> Problem:

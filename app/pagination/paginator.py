@@ -52,7 +52,7 @@ def paginate[T](
     start_idx = 0
     if cursor:
         decoded = decode_cursor(cursor)
-        if decoded.type != cursor_type:
+        if decoded.cursor_type != cursor_type:
             raise InvalidCursorError(f"invalid cursor type: expected '{cursor_type}'")
         if not decoded.value:
             raise InvalidCursorError("cursor value cannot be empty")
@@ -72,14 +72,14 @@ def paginate[T](
     prev_cursor = None
 
     if end_idx < len(items) and page_items:
-        next_cursor = Cursor(type=cursor_type, value=get_id(page_items[-1])).encode()
+        next_cursor = Cursor(cursor_type=cursor_type, value=get_id(page_items[-1])).encode()
 
     if start_idx > 0:
         if start_idx <= limit:
             prev_cursor = ""
         else:
             prev_last_idx = start_idx - 1
-            prev_cursor = Cursor(type=cursor_type, value=get_id(items[prev_last_idx - limit])).encode()
+            prev_cursor = Cursor(cursor_type=cursor_type, value=get_id(items[prev_last_idx - limit])).encode()
 
     # Build Link header
     link_header = build_link_header(
