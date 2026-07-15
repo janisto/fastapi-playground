@@ -1,5 +1,10 @@
 # FastAPI Playground
 
+[![CI](https://img.shields.io/github/actions/workflow/status/janisto/fastapi-playground/app-ci.yml?branch=main&label=CI)](https://github.com/janisto/fastapi-playground/actions/workflows/app-ci.yml)
+[![Lint](https://img.shields.io/github/actions/workflow/status/janisto/fastapi-playground/app-lint.yml?branch=main&label=lint)](https://github.com/janisto/fastapi-playground/actions/workflows/app-lint.yml)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/github/license/janisto/fastapi-playground)](LICENSE)
+
 A FastAPI application demonstrating Firebase Authentication, Firestore CRUD operations, and modern Python development workflow using `uv` (dependency & virtualenv manager) and `just` (task runner).
 
 <img src="assets/python.svg" alt="Python logo" width="400">
