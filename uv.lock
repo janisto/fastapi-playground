@@ -414,7 +414,7 @@ requires-dist = [
     { name = "cbor2", specifier = ">=5.7.1" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.139.0" },
     { name = "fastapi-problem", specifier = ">=0.12.1" },
-    { name = "fastapi-request-observability", specifier = ">=0.2.0" },
+    { name = "fastapi-request-observability", specifier = ">=2.0.0" },
     { name = "firebase-admin", specifier = ">=7.4.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
@@ -448,14 +448,14 @@ wheels = [
 
 [[package]]
 name = "fastapi-request-observability"
-version = "1.0.1"
+version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastapi" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/92/85/4d8b783af686baff5ccb81d6521847d8094c1472772ec014d45e94c4b84d/fastapi_request_observability-1.0.1.tar.gz", hash = "sha256:1ab08ebc486213815676b4445969ed3b8877bad0279d2f19e711f251da873ee5", size = 16072, upload-time = "2026-07-17T14:46:22.563Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/45/d97cd490a9b78000a986ee3f80ea5982f5f190af7d8b487387f05fc29e71/fastapi_request_observability-2.0.0.tar.gz", hash = "sha256:4ea1d8ad8479f2f3efc7742b3f501da7e1f44f3be70844ea69393e90136a54a2", size = 21855, upload-time = "2026-07-22T19:35:58.539Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/03/2ffce80f19060f238621fc13decf751ec77364571e37f9bc510b6ec2cc0c/fastapi_request_observability-1.0.1-py3-none-any.whl", hash = "sha256:38965623038893adf43bb20807c2b24eb875a439912d9e47a031a5b27b9a78cb", size = 19247, upload-time = "2026-07-17T14:46:21.611Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/f7/3cbc8346cbc2e4c718c74f4e49731d11114620d49b60ab7a32b223f8a651/fastapi_request_observability-2.0.0-py3-none-any.whl", hash = "sha256:02ad78c403ed70be54adf697eef7c6d921cfb25a4628e2221620fd3c014a0a46", size = 25063, upload-time = "2026-07-22T19:35:57.503Z" },
 ]
 
 [[package]]

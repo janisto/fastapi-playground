@@ -220,6 +220,10 @@ record per request, route metadata, and incoming W3C Trace Context correlation. 
 project separately formats Genkit logs as structured JSON for platform capture; it does not configure a Genkit trace or
 metric exporter.
 
+Both observability middleware components use W3C Trace Context Level 1. The service intentionally omits v2's
+privacy-sensitive raw path, direct peer address, User-Agent, and exception-message access fields; route templates and
+operation IDs remain available as low-cardinality dimensions.
+
 A correct client response and access record do not by themselves prove that an expected exception was fully handled.
 The explicit `InvalidCursorError` registration in `app/main.py` is intentional: it keeps malformed cursors inside
 Starlette's exception middleware so they return 400 without being re-raised as an ASGI server error. When verifying this

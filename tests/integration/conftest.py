@@ -50,7 +50,11 @@ def client(mock_profile_service: AsyncMock) -> Generator[TestClient]:
         patch("app.main.close_async_firestore_client"),
     ):
         fastapi_app.dependency_overrides[get_profile_service] = lambda: mock_profile_service
-        with TestClient(app, raise_server_exceptions=False) as c:
+        with TestClient(
+            app,
+            raise_server_exceptions=False,
+            client=("203.0.113.10", 50000),
+        ) as c:
             yield c
         fastapi_app.dependency_overrides.clear()
 

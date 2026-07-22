@@ -7,7 +7,12 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-from fastapi_request_observability import AccessLogMiddleware, LoggingPreset, RequestContextMiddleware
+from fastapi_request_observability import (
+    AccessLogMiddleware,
+    LoggingPreset,
+    RequestContextMiddleware,
+    TraceContextLevel,
+)
 
 from app.middleware import SecurityHeadersMiddleware
 
@@ -111,6 +116,12 @@ class TestAppConfiguration:
         access_config = access_log_middleware.config
         assert access_config.preset is LoggingPreset.GCP
         assert access_config.logger.name == "http.access"
+        assert access_config.trace_context_level is TraceContextLevel.LEVEL_1
+        assert app.config.trace_context_level is access_config.trace_context_level
+        assert access_config.capture_path is False
+        assert access_config.capture_peer_ip is False
+        assert access_config.capture_user_agent is False
+        assert access_config.capture_error is False
         assert security_headers_middleware._hsts is settings.is_production
 
 

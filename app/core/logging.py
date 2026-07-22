@@ -26,7 +26,7 @@ def configure_logging() -> None:
     root.setLevel(settings.log_level)
 
     handler = logging.StreamHandler(stream=sys.stdout)
-    handler.setFormatter(JSONFormatter(LoggingPreset.GCP, include_source=True))
+    handler.setFormatter(JSONFormatter(preset=LoggingPreset.GCP, include_source=True))
     root.addHandler(handler)
 
     for name in ("uvicorn", "uvicorn.error"):

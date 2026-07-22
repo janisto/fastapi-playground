@@ -18,7 +18,7 @@ def _access_payloads(caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
     """
     Format captured access records using the production logging preset.
     """
-    formatter = JSONFormatter(LoggingPreset.GCP)
+    formatter = JSONFormatter(preset=LoggingPreset.GCP)
     return [json.loads(formatter.format(record)) for record in caplog.records if record.name == "http.access"]
 
 
@@ -48,11 +48,20 @@ def test_emits_correlated_gcp_access_record(
     assert payload["request_id"] == response.headers["X-Request-ID"]
     assert payload["correlation_id"] == trace_id
     assert payload["logging.googleapis.com/trace"] == trace_id
+    assert payload["trace_flags"] == "01"
+    assert payload["trace_sampled"] is True
+    assert "trace_id_random" not in payload
     assert payload["path_template"] == "/health"
     assert payload["operation_id"] == "health_get"
     assert payload["status"] == 200
     assert payload["httpRequest"]["status"] == 200
     assert "logging.googleapis.com/spanId" not in payload
+    assert "path" not in payload
+    assert "peer_ip" not in payload
+    assert "user_agent" not in payload
+    assert "requestUrl" not in payload["httpRequest"]
+    assert "remoteIp" not in payload["httpRequest"]
+    assert "userAgent" not in payload["httpRequest"]
 
 
 def test_access_record_uses_full_prefixed_route_template(

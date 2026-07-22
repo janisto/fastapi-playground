@@ -13,7 +13,9 @@ from fastapi_request_observability import (
     AccessLogConfig,
     AccessLogMiddleware,
     LoggingPreset,
+    RequestContextConfig,
     RequestContextMiddleware,
+    TraceContextLevel,
 )
 from starlette.types import ASGIApp
 
@@ -29,6 +31,8 @@ from app.middleware import (
     SecurityHeadersMiddleware,
 )
 from app.pagination import InvalidCursorError
+
+_TRACE_CONTEXT_LEVEL = TraceContextLevel.LEVEL_1
 
 
 @asynccontextmanager
@@ -94,6 +98,11 @@ access_log_middleware = AccessLogMiddleware(
     config=AccessLogConfig(
         logger=logging.getLogger("http.access"),
         preset=LoggingPreset.GCP,
+        trace_context_level=_TRACE_CONTEXT_LEVEL,
+        capture_path=False,
+        capture_peer_ip=False,
+        capture_user_agent=False,
+        capture_error=False,
     ),
 )
 security_headers_middleware = SecurityHeadersMiddleware(
@@ -104,4 +113,7 @@ security_headers_middleware = SecurityHeadersMiddleware(
 )
 
 # Request context remains outermost so every final response receives X-Request-ID.
-app = RequestContextMiddleware(security_headers_middleware)
+app = RequestContextMiddleware(
+    security_headers_middleware,
+    config=RequestContextConfig(trace_context_level=_TRACE_CONTEXT_LEVEL),
+)
