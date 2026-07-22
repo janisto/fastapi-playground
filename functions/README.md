@@ -33,11 +33,10 @@ default to 120, 0, and 2 respectively.
 
 ## Vertex AI requirements
 
-Enable `aiplatform.googleapis.com`, `logging.googleapis.com`, `cloudtrace.googleapis.com`, and
-`monitoring.googleapis.com`. Grant the Functions runtime service account `roles/aiplatform.user`,
-`roles/logging.logWriter`, `roles/cloudtrace.agent`, and `roles/monitoring.metricWriter`. The Function deploys in
-`europe-west4`, while `main.py` configures the Vertex AI client to use the `global` endpoint and the auto-updating
-`gemini-pro-latest` alias. The installed Genkit Vertex AI plugin resolves this alias dynamically.
+Enable `aiplatform.googleapis.com` and `logging.googleapis.com`. Grant the Functions runtime service account
+`roles/aiplatform.user`. The Function deploys in `europe-west4`, while `main.py` configures the Vertex AI client to use
+the `global` endpoint and the auto-updating `gemini-pro-latest` alias. The installed Genkit Google GenAI integration
+resolves this alias dynamically.
 
 The alias follows Google's current Gemini Pro model and avoids outages caused by a dated model ID being retired. It is
 not a reproducibility pin: behavior, latency, and cost can change without a Function deployment. The response schema
@@ -46,9 +45,9 @@ contract tests, monitor errors, latency, and spend, and verify alias availabilit
 [Genkit Python model documentation](https://genkit.dev/docs/python/models/) and
 [Python Vertex AI plugin documentation](https://genkit.dev/docs/python/integrations/vertex-ai/).
 
-The function exports Genkit logs, traces, and metrics to Google Cloud outside local development. The telemetry
-integration keeps its default input/output redaction. Do not include prompts, generated content, credentials, or other
-sensitive values in additional logs.
+In Cloud Run functions, the Function formats Genkit logs as structured JSON on stdout for platform capture. It does not
+configure a Genkit trace or metric exporter. Do not include prompts, generated content, credentials, or other sensitive
+values in additional logs.
 
 ## Dependency management
 

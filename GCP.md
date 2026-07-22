@@ -34,15 +34,13 @@ Enable the relevant APIs for your deployment:
 - `artifactregistry.googleapis.com` for the FastAPI image and function build artifacts;
 - `cloudbuild.googleapis.com` for Firebase's function source build;
 - `logging.googleapis.com` for build and runtime logs;
-- `cloudtrace.googleapis.com` for Genkit trace export;
-- `monitoring.googleapis.com` for Genkit metric export;
 - `secretmanager.googleapis.com` only when injecting managed secrets.
 
 Grant the runtime service account the minimum roles required by the deployed component:
 
 - FastAPI: `roles/datastore.user`; Cloud Run captures the service's structured stdout without a Logging API client;
-- `dad_joke` function: `roles/aiplatform.user`, `roles/logging.logWriter`, `roles/cloudtrace.agent`, and
-  `roles/monitoring.metricWriter` for the configured Genkit telemetry exporters;
+- `dad_joke` function: `roles/aiplatform.user`; Cloud Run captures the Function's structured stdout without a Logging
+  API client;
 - intended `dad_joke` callers: `roles/run.invoker` on the function's backing Cloud Run service;
 - Secret Manager consumers: `roles/secretmanager.secretAccessor` for only the required secrets.
 
@@ -161,7 +159,7 @@ The `dad_joke` HTTP function uses:
 - `MIN_INSTANCES` default `0` and `MAX_INSTANCES` default `2`;
 - Genkit with the `global` Vertex AI endpoint and auto-updating `gemini-pro-latest` alias configured in
   `functions/main.py`;
-- GCP log, trace, and metric export outside local development;
+- structured Genkit JSON logging captured by Cloud Run functions;
 - private IAM invocation; unauthenticated internet requests cannot consume model quota.
 
 The alias tracks Google's current Gemini Pro model, avoiding a hard dependency on a dated model ID. It can also change
@@ -219,8 +217,12 @@ uses `requirements.txt` for Python deployments, consistent with the current
 
 The FastAPI service writes structured JSON to stdout. `fastapi-request-observability` adds request IDs, one access
 record per request, route metadata, and incoming W3C Trace Context correlation. It does not create spans. The Functions
-project separately configures Genkit GCP telemetry. Its default configuration redacts model inputs and outputs from
-telemetry.
+project separately formats Genkit logs as structured JSON for platform capture; it does not configure a Genkit trace or
+metric exporter.
+
+Both observability middleware components use W3C Trace Context Level 1. The service intentionally omits v2's
+privacy-sensitive raw path, direct peer address, User-Agent, and exception-message access fields; route templates and
+operation IDs remain available as low-cardinality dimensions.
 
 A correct client response and access record do not by themselves prove that an expected exception was fully handled.
 The explicit `InvalidCursorError` registration in `app/main.py` is intentional: it keeps malformed cursors inside

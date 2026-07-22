@@ -46,4 +46,5 @@ details. Never log request bodies, credentials, or profile PII.
 5. Add integration tests for success, validation, authentication or authorization, domain failures, headers, and
    representative JSON and CBOR behavior.
 
-Run the focused tests, then `just lint`, `just typing`, and `just test`.
+Apply `$adversarial-testing`, then use `$pytest-testing` for repository test conventions. Run the focused tests,
+then `just lint`, `just typing`, and `just test`.

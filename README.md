@@ -168,7 +168,7 @@ token. See [GCP.md](GCP.md) for IAM and troubleshooting details.
 ## Project Layout
 
 ```
-.agents/skills/        Five portable project workflows with Codex UI metadata
+.agents/skills/        Six portable project workflows with Codex UI metadata
 .github/agents/       Evidence-based security review profile for GitHub Copilot
 app/
   main.py              # FastAPI composition, lifespan, and outer ASGI middleware

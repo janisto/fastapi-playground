@@ -7,14 +7,16 @@ description: Write or review fastapi-playground tests using pytest, FastAPI Test
 
 Read `AGENTS.md`, the implementation under test, the relevant suite's `conftest.py`, and neighboring tests before
 choosing a boundary. Fixtures are scoped under `tests/unit/`, `tests/integration/`, `tests/e2e/`, and `functions/tests/`.
+Apply `$adversarial-testing` first to rank failure modes and select mutation-resistant cases; this skill supplies
+pytest, fixture, Firebase, Functions, and command conventions.
 
 ## Choose the narrowest useful test
 
 - Pure models, helpers, services, and isolated middleware belong in `tests/unit/`.
 - Composed routing, handlers, middleware order, negotiation, and exception responses belong in `tests/integration/`.
 - Real Auth or Firestore SDK behavior belongs in `tests/e2e/` with local Firebase emulators.
-- Firebase Function handler and deployment-manifest behavior belongs in `functions/tests/`; isolate Genkit telemetry and
-  reflection infrastructure in test configuration and never call Vertex AI.
+- Firebase Function handler and deployment-manifest behavior belongs in `functions/tests/`; isolate Genkit reflection
+  infrastructure in test configuration and never call Vertex AI.
 
 Use the shared fixtures and helpers before adding new ones. Override FastAPI dependencies on `fastapi_app`, while HTTP
 clients target the exported outer `app` so request IDs and response-wide middleware are exercised. Always clean up

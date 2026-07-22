@@ -1,0 +1,4 @@
+interface:
+  display_name: "Adversarial Testing"
+  short_description: "Enforce adversarial, high-signal software tests"
+  default_prompt: "Use $adversarial-testing to analyze this code and implement precise tests for its highest-risk behavior."

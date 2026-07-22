@@ -11,8 +11,7 @@ import structlog
 from firebase_admin import initialize_app
 from firebase_functions import https_fn, logger, options, params
 from genkit import Genkit, GenkitError
-from genkit.plugins.google_cloud import add_gcp_telemetry
-from genkit.plugins.google_genai import VertexAI
+from genkit_google_genai import VertexAI
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Configure structlog for JSON output in Cloud Run/Functions (Genkit uses structlog internally)
@@ -35,9 +34,6 @@ options.set_global_options(
 
 # Initialize Firebase Admin SDK (credentials auto-detected on GCP)
 initialize_app()
-
-# Export Genkit telemetry to Cloud Trace and Cloud Monitoring (GCP only, not local dev)
-add_gcp_telemetry(force_dev_export=False)
 
 VERTEX_AI_LOCATION = "global"
 GEMINI_MODEL = "vertexai/gemini-pro-latest"

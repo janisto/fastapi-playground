@@ -1,6 +1,7 @@
 """Unit tests for pagination helper."""
 
 from dataclasses import dataclass
+from typing import TypedDict
 
 import pytest
 
@@ -14,6 +15,15 @@ class MockItem:
 
     id: str
     name: str
+
+
+class DictItem(TypedDict):
+    """
+    Dictionary item used by pagination tests.
+    """
+
+    id: str
+    value: int
 
 
 def get_mock_id(item: MockItem) -> str:
@@ -745,7 +755,7 @@ class TestPaginateWithDifferentItemTypes:
 
     def test_with_dict_items(self) -> None:
         """Verify pagination works with dict items."""
-        items = [{"id": f"dict-{i}", "value": i} for i in range(10)]
+        items: list[DictItem] = [{"id": f"dict-{i}", "value": i} for i in range(10)]
 
         result = paginate(
             items=items,

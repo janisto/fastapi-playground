@@ -6,9 +6,8 @@ requires-python = ">=3.14"
 dependencies = [
     "firebase-admin>=7.4.0",
     "firebase-functions>=0.6.0",
-    "genkit>=0.7.0",
-    "genkit-plugin-google-cloud>=0.7.0",
-    "genkit-plugin-google-genai>=0.7.0",
+    "genkit>=0.8.0",
+    "genkit-google-genai>=0.8.0",
 ]
 
 [dependency-groups]
