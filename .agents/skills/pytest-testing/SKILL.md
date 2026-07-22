@@ -15,8 +15,8 @@ pytest, fixture, Firebase, Functions, and command conventions.
 - Pure models, helpers, services, and isolated middleware belong in `tests/unit/`.
 - Composed routing, handlers, middleware order, negotiation, and exception responses belong in `tests/integration/`.
 - Real Auth or Firestore SDK behavior belongs in `tests/e2e/` with local Firebase emulators.
-- Firebase Function handler and deployment-manifest behavior belongs in `functions/tests/`; isolate Genkit telemetry and
-  reflection infrastructure in test configuration and never call Vertex AI.
+- Firebase Function handler and deployment-manifest behavior belongs in `functions/tests/`; isolate Genkit reflection
+  infrastructure in test configuration and never call Vertex AI.
 
 Use the shared fixtures and helpers before adding new ones. Override FastAPI dependencies on `fastapi_app`, while HTTP
 clients target the exported outer `app` so request IDs and response-wide middleware are exercised. Always clean up

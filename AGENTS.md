@@ -285,7 +285,7 @@ auto-updating `gemini-pro-latest` alias. Keep deployment region and model locati
 IDs but may change behavior, latency, or cost without a code change, so preserve structured output validation, tests,
 quota and spend monitoring, and explicit production verification when changing model configuration.
 
-Unit tests in `functions/tests/` must isolate Genkit reflection and GCP telemetry and must not call Vertex AI. Firebase
+Unit tests in `functions/tests/` must isolate Genkit reflection and must not call Vertex AI. Firebase
 deploys from the intentionally lean `functions/requirements.txt`, which pins only direct runtime packages to versions
 from `functions/uv.lock`. Do not hand-edit it or include transitive dependencies; use the restricted exporter through
 `just sync-functions-requirements`.

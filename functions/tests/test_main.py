@@ -12,7 +12,7 @@ import pytest
 from firebase_functions import https_fn
 from genkit import GenkitError
 from genkit.plugin_api import ActionKind
-from genkit.plugins.google_genai import VertexAI
+from genkit_google_genai import VertexAI
 from pydantic import ValidationError
 from werkzeug.test import EnvironBuilder
 

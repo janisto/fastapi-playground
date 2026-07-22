@@ -159,8 +159,7 @@ _export-functions-requirements output:
         --only-emit-package firebase-admin \
         --only-emit-package firebase-functions \
         --only-emit-package genkit \
-        --only-emit-package genkit-plugin-google-cloud \
-        --only-emit-package genkit-plugin-google-genai \
+        --only-emit-package genkit-google-genai \
         -o {{ output }} >/dev/null
 
 # Regenerate the lean Firebase deployment requirements
