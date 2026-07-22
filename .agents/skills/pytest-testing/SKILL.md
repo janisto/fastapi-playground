@@ -7,6 +7,8 @@ description: Write or review fastapi-playground tests using pytest, FastAPI Test
 
 Read `AGENTS.md`, the implementation under test, the relevant suite's `conftest.py`, and neighboring tests before
 choosing a boundary. Fixtures are scoped under `tests/unit/`, `tests/integration/`, `tests/e2e/`, and `functions/tests/`.
+Apply `$adversarial-testing` first to rank failure modes and select mutation-resistant cases; this skill supplies
+pytest, fixture, Firebase, Functions, and command conventions.
 
 ## Choose the narrowest useful test
 
