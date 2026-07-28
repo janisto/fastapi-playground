@@ -11,7 +11,7 @@ Change here if a rename is ever required; update related tests accordingly.
 
 from pydantic import BaseModel, Field
 
-from app.models.types import NormalizedEmail, Phone, UTCDateTime
+from app.models.types import Name, NormalizedEmail, Phone, UTCDateTime
 
 # Firestore collection name for profiles
 PROFILE_COLLECTION = "profiles"
@@ -32,17 +32,13 @@ class Profile(BaseModel):
         description="Unique identifier",
         examples=["user-abc123"],
     )
-    first_name: str = Field(
+    first_name: Name = Field(
         ...,
-        min_length=1,
-        max_length=100,
         description="First name",
         examples=["John"],
     )
-    last_name: str = Field(
+    last_name: Name = Field(
         ...,
-        min_length=1,
-        max_length=100,
         description="Last name",
         examples=["Doe"],
     )

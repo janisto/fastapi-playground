@@ -45,8 +45,11 @@ def normalize_email(email: str) -> str:
 # Normalized email (lowercase, stripped)
 NormalizedEmail = Annotated[EmailStr, AfterValidator(normalize_email)]
 
+# Human name component with surrounding whitespace normalized.
+Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
 # E.164 phone number format (e.g., "+358401234567")
 Phone = Annotated[
     str,
-    StringConstraints(min_length=8, max_length=16, pattern=r"^\+[1-9]\d{6,14}$", strip_whitespace=True),
+    StringConstraints(min_length=8, max_length=16, pattern=r"^\+[1-9][0-9]{6,14}$", strip_whitespace=True),
 ]

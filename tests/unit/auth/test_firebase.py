@@ -15,6 +15,7 @@ from firebase_admin.auth import (
     UserDisabledError,
 )
 from pytest import MonkeyPatch
+from pytest_mock import MockerFixture
 
 from app.auth.firebase import FirebaseUser, verify_firebase_token
 from tests.mocks.firebase import (
@@ -82,6 +83,20 @@ class TestVerifyFirebaseToken:
         assert user.uid == "user-123"
         assert user.email == "user@example.com"
         assert user.email_verified is True
+
+    async def test_verification_uses_initialized_app_and_revocation_check(self, mocker: MockerFixture) -> None:
+        """
+        Verify token validation is bound to the configured app and checks revocation.
+        """
+        app = mocker.patch("app.auth.firebase.get_firebase_app").return_value
+        verify = mocker.patch(
+            "app.auth.firebase.auth.verify_id_token",
+            return_value={"uid": "user-123"},
+        )
+
+        await verify_firebase_token(_make_credentials("valid-token"))
+
+        verify.assert_called_once_with("valid-token", app=app, check_revoked=True)
 
     async def test_expired_token_raises_401(self, monkeypatch: MonkeyPatch) -> None:
         """

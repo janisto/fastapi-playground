@@ -162,6 +162,29 @@ class TestProfileCreate:
                 terms=True,
             )
 
+    def test_names_are_trimmed_and_whitespace_only_is_rejected(self) -> None:
+        """
+        Verify shared name normalization applies to profile input.
+        """
+        profile = ProfileCreate(
+            first_name="  John ",
+            last_name=" Doe  ",
+            email="john@example.com",
+            phone_number="+358401234567",
+            terms=True,
+        )
+
+        assert profile.first_name == "John"
+        assert profile.last_name == "Doe"
+        with pytest.raises(ValidationError):
+            ProfileCreate(
+                first_name=" ",
+                last_name="Doe",
+                email="john@example.com",
+                phone_number="+358401234567",
+                terms=True,
+            )
+
     def test_first_name_max_length_raises(self) -> None:
         """
         Verify first_name exceeding max length raises ValidationError.

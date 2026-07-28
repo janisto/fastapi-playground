@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Coroutine
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import main
 import pytest
@@ -32,11 +33,21 @@ def close_coroutine(coro: Coroutine[object, object, object]) -> None:
     coro.close()
 
 
-def test_function_manifest_requires_authenticated_invocation() -> None:
+def test_function_manifest_preserves_quota_and_deployment_contract() -> None:
     """
-    Verify deployment does not expose the model-backed endpoint publicly.
+    Verify deployment remains private, bounded, and regionally explicit.
     """
-    assert main.dad_joke.__firebase_endpoint__.httpsTrigger == {"invoker": ["private"]}
+    endpoint = main.dad_joke.__firebase_endpoint__
+
+    assert endpoint.httpsTrigger == {"invoker": ["private"]}
+    assert endpoint.region == ["europe-west4"]
+    assert endpoint.platform == "gcfv2"
+    assert endpoint.availableMemoryMb == 512
+    assert endpoint.cpu == "gcf_gen1"
+    assert endpoint.concurrency == 1
+    assert endpoint.timeoutSeconds == "{{ params.TIMEOUT_SEC }}"
+    assert endpoint.minInstances == "{{ params.MIN_INSTANCES }}"
+    assert endpoint.maxInstances == "{{ params.MAX_INSTANCES }}"
 
 
 def test_vertex_model_uses_global_auto_updating_pro_alias() -> None:
@@ -100,6 +111,46 @@ def test_generation_rejects_non_model_output(monkeypatch: pytest.MonkeyPatch) ->
         asyncio.run(main.generate_dad_joke())
 
     assert isinstance(exc_info.value.__cause__, main.InvalidGeneratedJokeError)
+
+
+def test_generation_uses_exact_model_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Verify generation sends the intended prompt, schema, and thinking configuration.
+    """
+    generate = AsyncMock(
+        return_value=SimpleNamespace(
+            output=main.GeneratedJoke(setup="Valid setup", punchline="Valid punchline"),
+        )
+    )
+    monkeypatch.setattr(main.genkit, "generate", generate)
+    monkeypatch.setattr(main.random, "choice", lambda _styles: main.JokeStyle.PUN)
+
+    joke = asyncio.run(main.generate_dad_joke(main.JokeTopic.TECH))
+
+    assert joke.style is main.JokeStyle.PUN
+    assert joke.topic is main.JokeTopic.TECH
+    generate.assert_awaited_once_with(
+        system=main.build_system_prompt(main.JokeStyle.PUN),
+        prompt="Generate a dad joke about tech.",
+        output_schema=main.GeneratedJoke,
+        config={"thinking_config": {"thinking_level": "MEDIUM"}},
+    )
+
+
+def test_run_async_returns_result_and_propagates_failure() -> None:
+    """
+    Verify the synchronous bridge preserves coroutine outcomes.
+    """
+
+    async def succeed() -> str:
+        return "ok"
+
+    async def fail() -> None:
+        raise RuntimeError("bridge failure")
+
+    assert main.run_async(succeed()) == "ok"
+    with pytest.raises(RuntimeError, match="bridge failure"):
+        main.run_async(fail())
 
 
 def test_non_get_method_is_rejected_before_generation(monkeypatch: pytest.MonkeyPatch) -> None:

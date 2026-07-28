@@ -29,6 +29,12 @@ Instructions for coding agents working in this repository.
 - Mark breaking changes with `!` and explain them in a `BREAKING CHANGE:` footer.
 - Before committing, run `just qa` and `git diff --check`.
 
+## GitHub automation
+
+- Reference GitHub Actions by explicit full release tags such as
+  `owner/action@v1.2.3`, not full commit SHAs or floating major-version tags.
+  Dependabot updates those release tags.
+
 ## Mandatory skills
 
 - Use `.agents/skills/adversarial-testing/SKILL.md` for every task that plans, creates, modifies, reviews, debugs, or evaluates tests. Apply it alongside any more specific framework or infrastructure testing skill.

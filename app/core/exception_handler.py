@@ -7,6 +7,7 @@ Provides `exception_handler` for registering handlers with the FastAPI applicati
 import logging
 from typing import Any, cast
 
+from fastapi_problem.error import ServerProblem
 from fastapi_problem.handler import ExceptionHandler, PostHook, StripExtrasPostHook, new_exception_handler
 from rfc9457 import Problem
 from starlette.requests import Request
@@ -31,6 +32,17 @@ from app.pagination import InvalidCursorError
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+class UnhandledServerProblem(ServerProblem):
+    """
+    Generic public representation for unexpected server failures.
+    """
+
+    title = "Internal Server Error"
+
+    def __init__(self, _internal_detail: str | None = None) -> None:
+        super().__init__(detail="An unexpected error occurred")
 
 
 def strip_about_blank_type_post_hook(
@@ -134,6 +146,7 @@ exception_handler = new_exception_handler(
     logger=logger,
     strict_rfc9457=True,
     documentation_uri_template="about:blank",
+    unhandled_wrappers={"default": UnhandledServerProblem},
     request_validation_handler=cast("Handler", validation_error_handler),
     handlers={
         CBORDecodeError: cast("Handler", cbor_decode_error_handler),

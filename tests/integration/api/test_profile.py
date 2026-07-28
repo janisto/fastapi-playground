@@ -2,12 +2,14 @@
 Integration tests for profile endpoints.
 """
 
+import json
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
+from app.models.profile import ProfileCreate, ProfileUpdate
 from tests.helpers.profiles import make_profile, make_profile_payload_dict
 
 BASE_URL = "/v1/profile"
@@ -39,15 +41,19 @@ class TestCreateProfile:
         Verify successful profile creation returns 201.
         """
         mock_profile_service.create_profile.return_value = make_profile()
+        payload = make_profile_payload_dict()
 
-        response = client.post(BASE_URL, json=make_profile_payload_dict())
+        response = client.post(BASE_URL, json=payload)
 
         assert response.status_code == 201
         body = response.json()
         assert "id" in body
         assert "first_name" in body
         assert response.headers.get("Location") == "/v1/profile"
-        mock_profile_service.create_profile.assert_awaited_once()
+        mock_profile_service.create_profile.assert_awaited_once_with(
+            "test-user-123",
+            ProfileCreate.model_validate(payload),
+        )
 
     def test_response_does_not_embed_schema_metadata(
         self,
@@ -141,6 +147,28 @@ class TestCreateProfile:
 
         assert response.status_code == 422
 
+    def test_validation_error_with_unpaired_surrogate_is_serializable(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify invalid Unicode input cannot break Problem Details serialization.
+        """
+        payload = make_profile_payload_dict(phone_number="\ud800")
+
+        response = client.post(
+            BASE_URL,
+            content=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+
+        assert response.status_code == 422
+        assert "\ud800" not in response.text
+        assert "value" not in response.json()["errors"][0]
+        mock_profile_service.create_profile.assert_not_awaited()
+
     def test_returns_422_with_missing_required_field(
         self,
         client: TestClient,
@@ -219,7 +247,7 @@ class TestGetProfile:
         body = response.json()
         assert "id" in body
         assert "first_name" in body
-        mock_profile_service.get_profile.assert_awaited_once()
+        mock_profile_service.get_profile.assert_awaited_once_with("test-user-123")
 
     def test_response_does_not_embed_schema_metadata(
         self,
@@ -320,7 +348,10 @@ class TestUpdateProfile:
         assert response.status_code == 200
         body = response.json()
         assert body["first_name"] == "Updated"
-        mock_profile_service.update_profile.assert_awaited_once()
+        mock_profile_service.update_profile.assert_awaited_once_with(
+            "test-user-123",
+            ProfileUpdate(first_name="Updated"),
+        )
 
     def test_response_does_not_embed_schema_metadata(
         self,
@@ -484,7 +515,7 @@ class TestDeleteProfile:
 
         assert response.status_code == 204
         assert response.content == b""
-        mock_profile_service.delete_profile.assert_awaited_once()
+        mock_profile_service.delete_profile.assert_awaited_once_with("test-user-123")
 
     def test_ignores_accept_for_bodyless_success(
         self,

@@ -5,7 +5,7 @@ Profile request models.
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.experimental.missing_sentinel import MISSING
 
-from app.models.types import NormalizedEmail, Phone
+from app.models.types import Name, NormalizedEmail, Phone
 
 
 class ProfileBase(BaseModel):
@@ -13,17 +13,13 @@ class ProfileBase(BaseModel):
     Base profile model with common fields.
     """
 
-    first_name: str = Field(
+    first_name: Name = Field(
         ...,
-        min_length=1,
-        max_length=100,
         description="First name",
         examples=["John"],
     )
-    last_name: str = Field(
+    last_name: Name = Field(
         ...,
-        min_length=1,
-        max_length=100,
         description="Last name",
         examples=["Doe"],
     )
@@ -74,17 +70,13 @@ class ProfileUpdate(BaseModel):
     Model for updating an existing profile.
     """
 
-    first_name: str | MISSING = Field(
+    first_name: Name | MISSING = Field(
         MISSING,
-        min_length=1,
-        max_length=100,
         description="First name",
         examples=["John"],
     )
-    last_name: str | MISSING = Field(
+    last_name: Name | MISSING = Field(
         MISSING,
-        min_length=1,
-        max_length=100,
         description="Last name",
         examples=["Doe"],
     )

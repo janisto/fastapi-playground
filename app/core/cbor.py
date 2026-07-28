@@ -8,6 +8,7 @@ Content negotiation policy lives in app.core.content_negotiation.
 import json
 from collections.abc import Callable
 from datetime import UTC
+from io import BytesIO
 from typing import Any, override
 
 import cbor2
@@ -130,7 +131,10 @@ class CBORRequest(StarletteRequest):
 
             if body and content_type_matches(content_type, CBOR_MEDIA_TYPE):
                 try:
-                    decoded = cbor2.loads(body)
+                    stream = BytesIO(body)
+                    decoded = cbor2.CBORDecoder(stream, allow_duplicate_keys=False).decode()
+                    if stream.read(1):
+                        raise CBORDecodeHTTPException("Failed to decode CBOR: trailing data")
                     body = json.dumps(decoded).encode("utf-8")
                     self._cbor_decoded = True
                     # Update Content-Type in scope headers so FastAPI parses as JSON

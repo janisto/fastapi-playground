@@ -1,0 +1,36 @@
+name: GitHub Actions security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: Zizmor
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read # Resolve workflow metadata for private repositories.
+      contents: read # Check out and scan repository workflows.
+      security-events: write # Upload SARIF results to code scanning.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@v0.6.1
+        with:
+          advanced-security: true
+          persona: pedantic
+          version: "1.28.0"

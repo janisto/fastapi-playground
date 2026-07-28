@@ -3,10 +3,7 @@ name: Pull Request Labeler
 on:
   pull_request_target:
 
-permissions:
-  contents: read
-  pull-requests: write
-  issues: write
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
@@ -14,12 +11,17 @@ concurrency:
 
 jobs:
   label-pr:
+    name: Label pull request
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
+    permissions:
+      contents: read # Read the labeler configuration from the default branch.
+      pull-requests: write # Apply labels to the pull request.
+
     steps:
       - name: Run labeler
-        uses: actions/labeler@v6.2.0
+        uses: actions/labeler@v7.0.0
         with:
           configuration-path: .github/labeler.yml
           sync-labels: true

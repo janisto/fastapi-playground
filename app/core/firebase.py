@@ -5,7 +5,7 @@ Firebase initialization and configuration.
 import logging
 
 import firebase_admin
-from firebase_admin import credentials
+from firebase_admin import credentials, firestore_async
 from google.cloud.firestore import AsyncClient
 
 from app.core.config import get_settings
@@ -65,9 +65,9 @@ def get_async_firestore_client() -> AsyncClient:
     global _async_firestore_client
     if _async_firestore_client is None:
         settings = get_settings()
-        _async_firestore_client = AsyncClient(
-            project=settings.firebase_project_id,
-            database=settings.firestore_database,
+        _async_firestore_client = firestore_async.client(
+            app=get_firebase_app(),
+            database_id=settings.firestore_database,
         )
     return _async_firestore_client
 

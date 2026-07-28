@@ -15,6 +15,9 @@
         ".venv",
         ".genkit",
         "__pycache__",
+        ".runtimeconfig.json",
+        ".env*",
+        "node_modules",
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"

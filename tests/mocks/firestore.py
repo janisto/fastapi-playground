@@ -28,7 +28,7 @@ class FakeDocumentReference:
         self._store = store
         self.id = doc_id
 
-    async def get(self) -> FakeDocumentSnapshot:
+    async def get(self, *, transaction: object | None = None) -> FakeDocumentSnapshot:
         data = self._store.get(self.id)
         return FakeDocumentSnapshot(data, self.id)
 

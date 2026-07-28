@@ -377,6 +377,23 @@ class TestBodySizeLimitEdgeCases:
             await middleware(scope, receive, send)
             assert received_body == b"x" * 50
 
+    async def test_disconnect_stops_without_invoking_downstream(self) -> None:
+        """
+        Verify a disconnected client does not produce a synthetic request.
+        """
+        with patch("app.middleware.body_limit.get_settings") as mock_settings:
+            mock_settings.return_value.max_request_size_bytes = 100
+            downstream = AsyncMock()
+            middleware = BodySizeLimitMiddleware(downstream)
+            scope: dict[str, Any] = {"type": "http", "headers": []}
+            receive = AsyncMock(return_value={"type": "http.disconnect"})
+            send = AsyncMock()
+
+            await middleware(scope, receive, send)
+
+            downstream.assert_not_awaited()
+            send.assert_not_awaited()
+
     async def test_streaming_body_exceeds_limit_returns_413(self) -> None:
         """
         Verify streaming body that exceeds limit during transfer returns 413.

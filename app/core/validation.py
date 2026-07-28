@@ -31,6 +31,25 @@ _SENSITIVE_COMPOSITE_MARKERS = tuple(
     marker for marker in _SENSITIVE_FIELD_MARKERS if len(marker) >= _MIN_SENSITIVE_COMPOSITE_MARKER_LENGTH
 )
 _MAX_EXPOSED_VALUE_LENGTH = 200
+_MAX_VALIDATION_ERRORS = 100
+_MAX_VALIDATION_TEXT_LENGTH = 200
+
+
+def _safe_validation_text(value: str) -> str:
+    """
+    Return bounded UTF-8 text suitable for a JSON or CBOR error response.
+    """
+    return value.encode("utf-8", errors="replace").decode("utf-8")[:_MAX_VALIDATION_TEXT_LENGTH]
+
+
+def _is_safe_validation_string(value: str) -> bool:
+    if len(value) > _MAX_EXPOSED_VALUE_LENGTH:
+        return False
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def loc_to_dot_notation(loc: Sequence[str | int]) -> str:
@@ -75,7 +94,7 @@ def is_safe_validation_value(value: object) -> bool:
     request body to a missing-field error.
     """
     if isinstance(value, str):
-        return len(value) <= _MAX_EXPOSED_VALUE_LENGTH
+        return _is_safe_validation_string(value)
     if value is None or isinstance(value, bool):
         return True
     if isinstance(value, int):
@@ -105,19 +124,23 @@ def validation_error_handler(
         "errors": [{"location": "body.email", "message": "...", "value": "..."}]
     }
     """
+    validation_errors = exc.errors()
     errors: list[dict[str, Any]] = []
-    for error in exc.errors():
+    for error in validation_errors[:_MAX_VALIDATION_ERRORS]:
         loc = error["loc"]
         error_detail: dict[str, Any] = {
-            "location": loc_to_dot_notation(loc),
-            "message": error["msg"],
+            "location": _safe_validation_text(loc_to_dot_notation(loc)),
+            "message": _safe_validation_text(error["msg"]),
         }
         if "input" in error and not is_sensitive_field(loc) and is_safe_validation_value(error["input"]):
             error_detail["value"] = error["input"]
         errors.append(error_detail)
+    extensions: dict[str, Any] = {"errors": errors}
+    if len(validation_errors) > _MAX_VALIDATION_ERRORS:
+        extensions["errors_truncated"] = True
     return Problem(
         title="Unprocessable Entity",
         detail="validation failed",
         status=422,
-        errors=errors,
+        **extensions,
     )

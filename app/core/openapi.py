@@ -2,11 +2,15 @@
 Reusable OpenAPI response documentation.
 """
 
+from copy import deepcopy
 from typing import Any
 
+from fastapi import FastAPI
 from fastapi.openapi.utils import validation_error_definition
+from fastapi.routing import iter_route_contexts
 from pydantic import BaseModel
 
+from app.core.cbor import CBORRoute
 from app.models.error import ProblemResponse, ValidationProblemResponse
 
 type OpenAPIResponse = dict[str, Any]
@@ -116,3 +120,23 @@ def register_schema_components(openapi_schema: dict[str, Any]) -> None:
         schemas.update(definitions)
         schemas[model.__name__] = schema
     schemas.setdefault("ValidationError", validation_error_definition)
+
+
+def register_cbor_request_bodies(app: FastAPI, openapi_schema: dict[str, Any]) -> None:
+    """
+    Advertise CBOR for request bodies handled by CBORRoute.
+    """
+    paths = openapi_schema.get("paths", {})
+    for route_context in iter_route_contexts(app.routes):
+        route = route_context.route
+        if not isinstance(route, CBORRoute) or route.body_field is None:
+            continue
+        path_item = paths.get(route.path_format, {})
+        for method in route.methods or ():
+            operation = path_item.get(method.lower())
+            if operation is None:
+                continue
+            content = operation.get("requestBody", {}).get("content", {})
+            json_body = content.get("application/json")
+            if json_body is not None:
+                content["application/cbor"] = deepcopy(json_body)

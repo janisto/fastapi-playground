@@ -247,7 +247,7 @@ Protected routes require `Authorization: Bearer <Firebase ID token>` header.
 ### Build and Test
 
 ```bash
-just lint               # Check Ruff linting and formatting
+just lint               # Check Python style and GitHub Actions security
 just typing             # Type-check the FastAPI app
 just typing-functions   # Type-check the separate Functions project
 just test-functions     # Run isolated Functions tests
@@ -265,7 +265,7 @@ just cov                # Generate HTML and JSON coverage reports
 |---------|-------------|
 | `just serve` | Start dev server with hot reload |
 | `just browser` | Open dev server in browser |
-| `just lint` | Check Ruff linting and formatting |
+| `just lint` | Check Ruff linting/formatting and GitHub Actions with zizmor |
 | `just typing` | Type checking via ty |
 | `just typing-functions` | Type-check the separate Functions project |
 | `just test-functions` | Test the separate Functions project |
@@ -321,11 +321,12 @@ using another local path.
 
 ```bash
 # Build and push to Artifact Registry
-gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest
+GIT_SHA="$(git rev-parse HEAD)"
+gcloud builds submit --tag "REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:${GIT_SHA}"
 
 # Deploy the repository-built standalone image
 gcloud run deploy fastapi-playground \
-  --image REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:latest \
+  --image "REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:${GIT_SHA}" \
   --platform managed \
   --region REGION
 ```
@@ -362,8 +363,9 @@ GitHub Actions workflows in `.github/workflows/`:
 
 | Workflow | Description |
 |----------|-------------|
-| `app-ci.yml` | App and Functions quality checks plus app test coverage |
-| `app-lint.yml` | Fast Ruff linting and formatting feedback |
+| `app-ci.yml` | App and Functions checks, container build, and app test coverage |
+| `app-lint.yml` | Repository linting and GitHub Actions security gating |
+| `zizmor.yml` | Upload GitHub Actions security findings to code scanning |
 | `labeler.yml` | Automatic PR labeling |
 | `labeler-manual.yml` | Manual labeling for historical PRs |
 | `dependabot-auto-merge.yml` | Auto-merge Dependabot minor/patch updates |

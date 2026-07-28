@@ -3,16 +3,23 @@ name: Dependabot auto-merge
 
 on: pull_request
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   auto-merge:
+    name: Approve safe Dependabot update
     runs-on: ubuntu-latest
 
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'janisto/fastapi-playground'
+
+    permissions:
+      contents: write # Enable the squash merge.
+      issues: write # Add the automerge label through the issues API.
+      pull-requests: write # Approve the pull request and enable auto-merge.
 
     steps:
       - name: Fetch Dependabot metadata

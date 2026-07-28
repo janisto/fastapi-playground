@@ -182,7 +182,7 @@ class TestRequestIDInErrorResponses:
         """
 
         def fail_authentication() -> None:
-            raise RuntimeError("dependency failed")
+            raise RuntimeError("TOP SECRET dependency detail")
 
         from app.main import fastapi_app
 
@@ -196,5 +196,7 @@ class TestRequestIDInErrorResponses:
             fastapi_app.dependency_overrides.pop(verify_firebase_token, None)
 
         assert response.status_code == 500
+        assert response.json()["detail"] == "An unexpected error occurred"
+        assert "TOP SECRET" not in response.text
         assert response.headers["X-Request-ID"] == "unhandled-error-test-id"
         assert response.headers["X-Content-Type-Options"] == "nosniff"
