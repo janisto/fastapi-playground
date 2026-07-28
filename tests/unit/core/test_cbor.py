@@ -149,6 +149,25 @@ class TestCBORRequest:
         assert exc_info.value.status_code == 400
         assert "Failed to decode CBOR" in str(exc_info.value.detail)
 
+    @pytest.mark.parametrize(
+        "body",
+        [
+            b"\xa2\x61a\x01\x61a\x02",
+            cbor2.dumps({"name": "test"}) + cbor2.dumps(None),
+        ],
+        ids=["duplicate-map-key", "trailing-top-level-item"],
+    )
+    async def test_ambiguous_cbor_raises(self, make_request: MakeRequestFunction, body: bytes) -> None:
+        """
+        Verify ambiguous CBOR cannot be silently normalized before validation.
+        """
+        request = make_request(body, CBOR_MEDIA_TYPE)
+
+        with pytest.raises(CBORDecodeHTTPException) as exc_info:
+            await request.body()
+
+        assert exc_info.value.status_code == 400
+
     async def test_body_cached(self, make_request: MakeRequestFunction) -> None:
         """Body is cached after first read."""
         data = {"key": "value"}
@@ -600,6 +619,19 @@ class TestAcceptsMediaType:
         """Skips malformed media ranges without slash."""
         assert accepts_media_type("invalid, application/cbor", "application/cbor") is True
         assert accepts_media_type("invalid", "application/cbor") is False
+
+    def test_quoted_separators_do_not_create_media_ranges_or_parameters(self) -> None:
+        """
+        Verify separators inside quoted parameter values retain their quoted meaning.
+        """
+        assert accepts_media_type('text/plain;note=",application/json;q=1,"', JSON_MEDIA_TYPE) is False
+        assert accepts_media_type('application/json;note=";q=1"', JSON_MEDIA_TYPE) is False
+
+    def test_unterminated_quoted_parameter_is_rejected(self) -> None:
+        """
+        Verify incomplete quoted-string syntax cannot opt into a representation.
+        """
+        assert accepts_media_type('text/plain;note=",application/json', JSON_MEDIA_TYPE) is False
 
     def test_media_range_with_unsupported_parameters_does_not_match(self) -> None:
         """

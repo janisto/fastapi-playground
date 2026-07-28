@@ -263,6 +263,17 @@ class TestHelloValidation:
         assert body["detail"] == "validation failed"
         assert "errors" in body
 
+    def test_name_is_trimmed_and_whitespace_only_is_rejected(self, client: TestClient) -> None:
+        """
+        Verify the public contract normalizes surrounding whitespace but rejects blanks.
+        """
+        response = client.post("/v1/hello", json={"name": "  Alice  "})
+        blank_response = client.post("/v1/hello", json={"name": " \t "})
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "Hello, Alice!"
+        assert blank_response.status_code == 422
+
     def test_missing_name_returns_422(self, client: TestClient) -> None:
         """Verify missing name returns 422 validation error."""
         response = client.post("/v1/hello", json={})

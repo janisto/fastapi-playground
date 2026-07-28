@@ -57,3 +57,7 @@ class ValidationProblemResponse(BaseModel):
         default_factory=list,
         description="List of validation errors with location, message, and value",
     )
+    errors_truncated: bool = Field(
+        default=False,
+        description="Whether additional validation errors were omitted from the response",
+    )

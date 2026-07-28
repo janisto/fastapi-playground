@@ -8,13 +8,18 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
+from pydantic import ValidationError
 from pytest_mock import MockerFixture
 
 from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
-from app.models.profile import ProfileCreate, ProfileUpdate
+from app.models.profile import Profile, ProfileCreate, ProfileUpdate
 from app.services.profile import ProfileService
 from app.services.profile.service import _log_profile_audit_event
-from tests.mocks.firestore import FakeAsyncClient
+from tests.mocks.firestore import FakeAsyncClient, FakeDocumentReference, FakeTransaction
+
+_CREATE_TRANSACTION_BODY = cast("Any", ProfileService._create_in_transaction).to_wrap
+_UPDATE_TRANSACTION_BODY = cast("Any", ProfileService._update_in_transaction).to_wrap
+_DELETE_TRANSACTION_BODY = cast("Any", ProfileService._delete_in_transaction).to_wrap
 
 
 def _make_profile_data(
@@ -119,14 +124,13 @@ def mock_transactional_methods(mocker: MockerFixture, fake_db: FakeAsyncClient) 
         transaction: object,
         doc_ref: object,
         updates: dict[str, Any],
-    ) -> dict[str, Any] | None:
+    ) -> Profile | None:
         doc_id = getattr(doc_ref, "id", None)
         if not doc_id or doc_id not in fake_db._store:
             return None
-        existing_data = fake_db._store[doc_id].copy()
+        profile = Profile.model_validate({**fake_db._store[doc_id], **updates})
         fake_db._store[doc_id].update(updates)
-        # Return merged data as the real implementation does
-        return {**existing_data, **updates}
+        return profile
 
     async def fake_delete_in_transaction(
         transaction: object,
@@ -319,6 +323,22 @@ class TestProfileServiceCreateProfile:
         assert stored["marketing"] is False
         assert stored["terms"] is True
 
+    async def test_transaction_body_enforces_create_if_absent(self) -> None:
+        """
+        Verify the production transaction body writes once and rejects replacement.
+        """
+        store: dict[str, dict[str, Any]] = {}
+        transaction = FakeTransaction(store)
+        doc_ref = FakeDocumentReference(store, "user-123")
+        data = _make_profile_data(user_id="user-123")
+
+        await _CREATE_TRANSACTION_BODY(transaction, doc_ref, data)
+
+        assert store["user-123"] == data
+        with pytest.raises(ProfileAlreadyExistsError):
+            await _CREATE_TRANSACTION_BODY(transaction, doc_ref, _make_profile_data(first_name="Replacement"))
+        assert store["user-123"] == data
+
 
 class TestProfileServiceUpdateProfile:
     """
@@ -410,6 +430,20 @@ class TestProfileServiceUpdateProfile:
         assert profile.first_name == original_data["first_name"]
         mock_audit_log.assert_not_called()
 
+    async def test_transaction_rejects_invalid_persisted_profile_before_write(self) -> None:
+        """
+        Verify corrupt persisted data cannot be committed by an otherwise valid update.
+        """
+        store = {"user-123": _make_profile_data(user_id="user-123", first_name="")}
+        original = store["user-123"].copy()
+        transaction = FakeTransaction(store)
+        doc_ref = FakeDocumentReference(store, "user-123")
+
+        with pytest.raises(ValidationError):
+            await _UPDATE_TRANSACTION_BODY(transaction, doc_ref, {"marketing": False})
+
+        assert store["user-123"] == original
+
 
 class TestProfileServiceDeleteProfile:
     """
@@ -444,6 +478,18 @@ class TestProfileServiceDeleteProfile:
 
         assert "not found" in str(exc_info.value.detail).lower()
         mock_audit_log.assert_not_called()
+
+    async def test_transaction_body_deletes_only_existing_document(self) -> None:
+        """
+        Verify the production transaction body distinguishes absence from deletion.
+        """
+        store = {"user-123": _make_profile_data(user_id="user-123")}
+        transaction = FakeTransaction(store)
+        doc_ref = FakeDocumentReference(store, "user-123")
+
+        assert await _DELETE_TRANSACTION_BODY(transaction, doc_ref) is True
+        assert "user-123" not in store
+        assert await _DELETE_TRANSACTION_BODY(transaction, doc_ref) is False
 
 
 def test_profile_audit_event_contains_only_stable_identifiers(

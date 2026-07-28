@@ -155,7 +155,7 @@ not a scratch-based application image, so do not combine it with Cloud Run `--ba
 The `dad_joke` HTTP function uses:
 
 - runtime `python314` in `europe-west4`;
-- 512 MiB memory and `TIMEOUT_SEC` default `120`;
+- 512 MiB memory, concurrency `1`, and `TIMEOUT_SEC` default `120`;
 - `MIN_INSTANCES` default `0` and `MAX_INSTANCES` default `2`;
 - Genkit with the `global` Vertex AI endpoint and auto-updating `gemini-pro-latest` alias configured in
   `functions/main.py`;

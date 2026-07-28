@@ -1,11 +1,12 @@
 # Exclude local/dev artifacts from Docker build context
-venv/
-.venv/
-__pycache__/
-.pytest_cache/
-.ruff_cache/
+**/venv/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
 htmlcov/
 tests/
+functions/
 *.log
 .mypy_cache/
 .ty-cache/
@@ -19,7 +20,7 @@ site/
 *.swp
 *.pem
 *.key
-*.env
+**/.env*
 *.pyo
 *.pyd
 *.pkl

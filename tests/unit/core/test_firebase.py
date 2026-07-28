@@ -133,11 +133,13 @@ class TestGetAsyncFirestoreClient:
 
     def test_creates_client_on_first_call(self, mocker: MockerFixture) -> None:
         """
-        Verify AsyncClient is created lazily on first call.
+        Verify the Admin SDK client uses the initialized app.
         """
+        app = MagicMock()
+        firebase_mod._firebase_app = app
         mock_async_client = MagicMock()
-        mock_async_client_cls = mocker.patch(
-            "app.core.firebase.AsyncClient",
+        client_factory = mocker.patch(
+            "app.core.firebase.firestore_async.client",
             return_value=mock_async_client,
         )
         mocker.patch(
@@ -148,15 +150,17 @@ class TestGetAsyncFirestoreClient:
         result = get_async_firestore_client()
 
         assert result is mock_async_client
-        mock_async_client_cls.assert_called_once_with(project="test-project", database=None)
+        client_factory.assert_called_once_with(app=app, database_id=None)
 
     def test_creates_client_with_custom_database(self, mocker: MockerFixture) -> None:
         """
         Verify AsyncClient is created with custom database when configured.
         """
+        app = MagicMock()
+        firebase_mod._firebase_app = app
         mock_async_client = MagicMock()
-        mock_async_client_cls = mocker.patch(
-            "app.core.firebase.AsyncClient",
+        client_factory = mocker.patch(
+            "app.core.firebase.firestore_async.client",
             return_value=mock_async_client,
         )
         mocker.patch(
@@ -167,7 +171,7 @@ class TestGetAsyncFirestoreClient:
         result = get_async_firestore_client()
 
         assert result is mock_async_client
-        mock_async_client_cls.assert_called_once_with(project="test-project", database="custom-db")
+        client_factory.assert_called_once_with(app=app, database_id="custom-db")
 
     def test_returns_existing_client_on_subsequent_calls(self, mocker: MockerFixture) -> None:
         """

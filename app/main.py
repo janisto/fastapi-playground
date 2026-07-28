@@ -5,6 +5,7 @@ FastAPI application with Firebase Authentication and Firestore integration.
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import cast
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,11 +22,11 @@ from starlette.types import ASGIApp
 
 from app.api import business_routers, health, schemas
 from app.api.schemas import populate_schema_cache
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.exception_handler import exception_handler
 from app.core.firebase import close_async_firestore_client, initialize_firebase
 from app.core.logging import configure_logging
-from app.core.openapi import register_schema_components
+from app.core.openapi import register_cbor_request_bodies, register_schema_components
 from app.middleware import (
     BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
@@ -70,6 +71,7 @@ fastapi_app.include_router(schemas.router)  # /schemas (unversioned)
 # Populate schema cache from OpenAPI spec (must be after all routers are registered)
 openapi_schema = fastapi_app.openapi()
 register_schema_components(openapi_schema)
+register_cbor_request_bodies(fastapi_app, openapi_schema)
 populate_schema_cache(openapi_schema)
 
 # Register RFC 9457 Problem Details exception handler
@@ -78,42 +80,55 @@ add_exception_handler(fastapi_app, exception_handler)
 # handles it inside ExceptionMiddleware instead of re-raising it as a server error.
 fastapi_app.add_exception_handler(InvalidCursorError, exception_handler)
 
-settings = get_settings()
-application: ASGIApp = BodySizeLimitMiddleware(fastapi_app)
 
-# CORS wraps the body limit and FastAPI recovery so preflights and error responses retain CORS headers.
-if settings.cors_origins:  # pragma: no cover
-    allow_credentials = "*" not in settings.cors_origins
-    application = CORSMiddleware(
-        application,
-        allow_origins=settings.cors_origins,
-        allow_credentials=allow_credentials,
-        allow_methods=settings.cors_methods,
-        allow_headers=settings.cors_headers,
-        expose_headers=settings.cors_expose_headers,
+def _build_application(inner_app: ASGIApp, application_settings: Settings) -> RequestContextMiddleware:
+    """
+    Compose the response-wide middleware stack from explicit settings.
+    """
+    application: ASGIApp = BodySizeLimitMiddleware(
+        inner_app,
+        max_request_size_bytes=application_settings.max_request_size_bytes,
     )
 
-access_log_middleware = AccessLogMiddleware(
-    application,
-    config=AccessLogConfig(
-        logger=logging.getLogger("http.access"),
-        preset=LoggingPreset.GCP,
-        trace_context_level=_TRACE_CONTEXT_LEVEL,
-        capture_path=False,
-        capture_peer_ip=False,
-        capture_user_agent=False,
-        capture_error=False,
-    ),
-)
-security_headers_middleware = SecurityHeadersMiddleware(
-    access_log_middleware,
-    hsts=settings.is_production,
-    hsts_include_subdomains=True,
-    hsts_preload=False,
-)
+    # CORS wraps the body limit and FastAPI recovery so preflights and error responses retain CORS headers.
+    if application_settings.cors_origins:
+        allow_credentials = "*" not in application_settings.cors_origins
+        application = CORSMiddleware(
+            application,
+            allow_origins=application_settings.cors_origins,
+            allow_credentials=allow_credentials,
+            allow_methods=application_settings.cors_methods,
+            allow_headers=application_settings.cors_headers,
+            expose_headers=application_settings.cors_expose_headers,
+        )
 
-# Request context remains outermost so every final response receives X-Request-ID.
-app = RequestContextMiddleware(
-    security_headers_middleware,
-    config=RequestContextConfig(trace_context_level=_TRACE_CONTEXT_LEVEL),
-)
+    access_log = AccessLogMiddleware(
+        application,
+        config=AccessLogConfig(
+            logger=logging.getLogger("http.access"),
+            preset=LoggingPreset.GCP,
+            trace_context_level=_TRACE_CONTEXT_LEVEL,
+            capture_path=False,
+            capture_peer_ip=False,
+            capture_user_agent=False,
+            capture_error=False,
+        ),
+    )
+    security_headers = SecurityHeadersMiddleware(
+        access_log,
+        hsts=application_settings.is_production,
+        hsts_include_subdomains=True,
+        hsts_preload=False,
+    )
+
+    # Request context remains outermost so every final response receives X-Request-ID.
+    return RequestContextMiddleware(
+        security_headers,
+        config=RequestContextConfig(trace_context_level=_TRACE_CONTEXT_LEVEL),
+    )
+
+
+settings = get_settings()
+app = _build_application(fastapi_app, settings)
+security_headers_middleware = cast("SecurityHeadersMiddleware", app.app)
+access_log_middleware = cast("AccessLogMiddleware", security_headers_middleware.app)

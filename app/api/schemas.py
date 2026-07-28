@@ -22,7 +22,7 @@ router = APIRouter(prefix="/schemas", tags=["Schemas"])
 _OPENAPI_COMPONENT_PREFIX = "#/components/schemas/"
 _JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
-type JSONValue = None | bool | int | float | str | list[JSONValue] | dict[str, JSONValue]
+type JSONValue = bool | int | float | str | list[JSONValue] | dict[str, JSONValue] | None
 
 _schema_cache: dict[str, dict[str, Any]] = {}
 

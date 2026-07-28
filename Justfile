@@ -65,6 +65,7 @@ fix:
 lint:
     uv run ruff check
     uv run ruff format --check
+    uv run zizmor --offline --persona=pedantic .
 
 # Modernize code (PEP 585/604, etc.) via Ruff's pyupgrade
 [group('qa')]
@@ -160,6 +161,8 @@ _export-functions-requirements output:
         --only-emit-package firebase-functions \
         --only-emit-package genkit \
         --only-emit-package genkit-google-genai \
+        --only-emit-package pydantic \
+        --only-emit-package structlog \
         -o {{ output }} >/dev/null
 
 # Regenerate the lean Firebase deployment requirements

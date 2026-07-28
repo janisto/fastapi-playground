@@ -126,6 +126,12 @@ class TestIsSafeValidationValue:
         """Oversized invalid values are not reflected into error responses."""
         assert is_safe_validation_value("x" * 201) is False
 
+    def test_rejects_non_utf8_string_values(self) -> None:
+        """
+        Verify invalid Unicode cannot break error serialization.
+        """
+        assert is_safe_validation_value("\ud800") is False
+
     @pytest.mark.parametrize("value", [10**200, float("nan"), float("inf"), float("-inf")])
     def test_rejects_unbounded_or_non_json_numbers(self, value: float) -> None:
         """Numbers that can break the bounded JSON error contract are omitted."""
@@ -178,6 +184,35 @@ class TestValidationErrorHandler:
         assert result.detail == "validation failed"
         assert "$schema" not in result.extras
         assert len(result.extras["errors"]) == 1
+
+    def test_bounds_error_count_and_text(
+        self,
+        mock_eh: MagicMock,
+        mock_request: MagicMock,
+    ) -> None:
+        """
+        Verify adversarial validation output remains bounded and serializable.
+        """
+        exc = self._make_validation_error(
+            [
+                {
+                    "type": "value_error",
+                    "loc": ("body", f"field-{index}\ud800"),
+                    "msg": "x" * 300,
+                    "input": "\ud800",
+                }
+                for index in range(101)
+            ]
+        )
+
+        result = validation_error_handler(mock_eh, mock_request, exc)
+
+        errors = result.extras["errors"]
+        assert len(errors) == 100
+        assert result.extras["errors_truncated"] is True
+        assert len(errors[0]["message"]) == 200
+        assert "\ud800" not in errors[0]["location"]
+        assert "value" not in errors[0]
 
     def test_omits_complete_body_attached_to_missing_field(
         self,

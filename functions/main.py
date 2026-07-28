@@ -27,6 +27,7 @@ if os.getenv("K_SERVICE"):  # Running in Cloud Run/Functions
 options.set_global_options(
     region=options.SupportedRegion.EUROPE_WEST4,
     memory=options.MemoryOption.MB_512,
+    concurrency=1,
     timeout_sec=params.IntParam("TIMEOUT_SEC", default=120),
     min_instances=params.IntParam("MIN_INSTANCES", default=0),
     max_instances=params.IntParam("MAX_INSTANCES", default=2),

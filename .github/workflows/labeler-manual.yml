@@ -5,25 +5,31 @@ on:
     inputs:
       maxCount:
         description: "Max number of PRs to process"
-        required: false
-        default: "200"
+        required: true
+        default: 200
+        type: number
       scope:
         description: "Which PRs to consider: 'closed' or 'all'"
-        required: false
+        required: true
         default: "closed"
+        type: choice
+        options:
+          - "closed"
+          - "all"
 
 concurrency:
   group: label-prs
   cancel-in-progress: false
 
-permissions:
-  contents: read
-  pull-requests: write
-  issues: write
+permissions: {}
 
 jobs:
   collect-prs:
+    name: Collect pull requests
     runs-on: ubuntu-latest
+
+    permissions:
+      pull-requests: read # Enumerate pull requests selected by the operator.
 
     outputs:
       pr_numbers: ${{ steps.get_prs.outputs.pr_numbers }}
@@ -36,11 +42,13 @@ jobs:
         with:
           retries: 3
           script: |
-            const maxCountRaw = process.env.INPUT_MAX_COUNT || "200";
-            const maxCount = Math.max(0, Number.parseInt(maxCountRaw, 10) || 0);
+            const maxCount = Number(process.env.INPUT_MAX_COUNT);
+            if (!Number.isInteger(maxCount) || maxCount < 1 || maxCount > 256) {
+              core.setFailed("maxCount must be an integer from 1 through 256");
+              return;
+            }
 
-            const scope = (process.env.INPUT_SCOPE || "closed").toLowerCase();
-            const state = scope === "all" ? "all" : "closed";
+            const state = process.env.INPUT_SCOPE;
 
             const allPRs = await github.paginate(github.rest.pulls.list, {
               owner: context.repo.owner,
@@ -50,9 +58,9 @@ jobs:
             });
 
             const prNumbersAll = allPRs.map(pr => pr.number).sort((a, b) => a - b);
-            const prNumbers = maxCount > 0 ? prNumbersAll.slice(0, maxCount) : prNumbersAll;
+            const prNumbers = prNumbersAll.slice(0, maxCount);
 
-            core.info(`Collected ${prNumbers.length} ${state} PRs (max ${maxCount || 'all'}): ${prNumbers.slice(0,20).join(", ")}...`);
+            core.info(`Collected ${prNumbers.length} ${state} PRs (max ${maxCount}): ${prNumbers.slice(0,20).join(", ")}...`);
 
             core.setOutput("pr_numbers", JSON.stringify(prNumbers));
             core.setOutput("pr_count", String(prNumbers.length));
@@ -61,10 +69,15 @@ jobs:
           INPUT_SCOPE: ${{ github.event.inputs.scope }}
 
   label-prs-matrix:
+    name: Label pull request ${{ matrix.pr }}
     if: needs.collect-prs.outputs.pr_count != '0'
     needs: collect-prs
 
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read # Read the labeler configuration from the default branch.
+      pull-requests: write # Apply labels to the selected pull request.
 
     strategy:
       max-parallel: 10
@@ -72,7 +85,8 @@ jobs:
         pr: ${{ fromJson(needs.collect-prs.outputs.pr_numbers) }}
 
     steps:
-      - uses: actions/labeler@v6.2.0
+      - name: Run labeler
+        uses: actions/labeler@v7.0.0
         with:
           pr-number: ${{ matrix.pr }}
           configuration-path: .github/labeler.yml

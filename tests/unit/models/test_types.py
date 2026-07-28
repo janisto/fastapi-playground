@@ -7,7 +7,34 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from app.models.types import NormalizedEmail, Phone, UTCDateTime
+from app.models.types import Name, NormalizedEmail, Phone, UTCDateTime
+
+
+class TestName:
+    """
+    Tests for normalized name components.
+    """
+
+    def test_strips_surrounding_whitespace(self) -> None:
+        """
+        Verify normalization happens before length validation and persistence.
+        """
+
+        class TestModel(BaseModel):
+            name: Name
+
+        assert TestModel(name="  Alice  ").name == "Alice"
+
+    def test_rejects_whitespace_only_name(self) -> None:
+        """
+        Verify blank names cannot pass the minimum-length constraint.
+        """
+
+        class TestModel(BaseModel):
+            name: Name
+
+        with pytest.raises(ValidationError):
+            TestModel(name=" \t ")
 
 
 class TestNormalizedEmail:
@@ -81,6 +108,7 @@ class TestPhone:
             "+0123456789",
             "+1",
             "++358401234567",
+            "+١٢٣٤٥٦٧٨",
         ],
     )
     def test_invalid_phone_raises(self, invalid_phone: str) -> None:

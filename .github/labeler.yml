@@ -41,6 +41,7 @@ github-actions:
       - any-glob-to-any-file:
           - '.github/workflows/**'
           - '.github/dependabot.yml'
+          - '.github/zizmor.yml'
 
 feature:
   - head-branch: ['^feature', 'feature']

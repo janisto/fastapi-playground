@@ -18,9 +18,9 @@ class BodySizeLimitMiddleware:
     Reject requests exceeding MAX_REQUEST_SIZE_BYTES with 413 without buffering entire body.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, *, max_request_size_bytes: int | None = None) -> None:
         self.app = app
-        self._max = get_settings().max_request_size_bytes
+        self._max = max_request_size_bytes or get_settings().max_request_size_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
@@ -42,11 +42,10 @@ class BodySizeLimitMiddleware:
         more_body = True
         while more_body:
             message = await receive()
+            if message["type"] == "http.disconnect":
+                return
             if message["type"] != "http.request":  # pragma: no cover
-                # Unexpected ASGI message type; defensive handling
-                buffered.append(b"")
-                more_body = False
-                break
+                return
             chunk = message.get("body", b"")
             if chunk:
                 total += len(chunk)

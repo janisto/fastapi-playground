@@ -28,8 +28,8 @@ Other HTTP methods return 405 without invoking the model. An invalid topic retur
 model-output failures return a sanitized 503, and unexpected failures return a generic 500. Generated setup and
 punchline values must be non-blank strings no longer than 500 characters; missing, non-object, or additional output is
 rejected before constructing the public response.
-The function is configured for 512 MiB memory. Its `TIMEOUT_SEC`, `MIN_INSTANCES`, and `MAX_INSTANCES` parameters
-default to 120, 0, and 2 respectively.
+The function is configured for 512 MiB memory and one concurrent request per instance to bound model quota usage. Its
+`TIMEOUT_SEC`, `MIN_INSTANCES`, and `MAX_INSTANCES` parameters default to 120, 0, and 2 respectively.
 
 ## Vertex AI requirements
 

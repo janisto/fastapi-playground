@@ -117,6 +117,33 @@ class TestCBORRequest:
         body = response.json()
         assert body["title"] == "Invalid CBOR"
 
+    @pytest.mark.parametrize("ambiguity", ["duplicate-key", "trailing-item"])
+    def test_ambiguous_cbor_returns_400_without_mutation(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+        ambiguity: str,
+    ) -> None:
+        """
+        Verify duplicate keys and trailing items are rejected before service execution.
+        """
+        cbor_body = cbor2.dumps(make_profile_payload_dict())
+        if ambiguity == "duplicate-key":
+            body = bytes([cbor_body[0] + 1]) + cbor_body[1:] + cbor2.dumps("first_name") + cbor2.dumps("Replacement")
+        else:
+            body = cbor_body + cbor2.dumps(None)
+
+        response = client.post(
+            BASE_URL,
+            content=body,
+            headers={"Content-Type": "application/cbor"},
+        )
+
+        assert response.status_code == 400
+        assert response.json()["title"] == "Invalid CBOR"
+        mock_profile_service.create_profile.assert_not_awaited()
+
 
 class TestCBORResponse:
     """Tests for CBOR response negotiation."""
@@ -200,6 +227,23 @@ class TestCBORResponse:
 
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/cbor"
+
+    def test_quoted_accept_separator_cannot_smuggle_supported_media_type(
+        self,
+        client: TestClient,
+        with_fake_user: None,
+        mock_profile_service: AsyncMock,
+    ) -> None:
+        """
+        Verify a supported token inside a quoted parameter is not a media range.
+        """
+        response = client.get(
+            BASE_URL,
+            headers={"Accept": 'text/plain;note=",application/json;q=1,"'},
+        )
+
+        assert response.status_code == 406
+        mock_profile_service.get_profile.assert_not_awaited()
 
     def test_delete_with_accept_cbor_returns_empty_body(
         self,

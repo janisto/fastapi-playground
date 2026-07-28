@@ -84,6 +84,22 @@ def test_cbor_routes_document_success_and_problem_representations() -> None:
         }
 
 
+def test_cbor_routes_document_request_representations() -> None:
+    """
+    Verify body-bearing CBOR routes advertise both implemented request formats.
+    """
+    schema = fastapi_app.openapi()
+    for path, method in [
+        ("/v1/hello", "post"),
+        ("/v1/profile", "post"),
+        ("/v1/profile", "patch"),
+    ]:
+        content = schema["paths"][path][method]["requestBody"]["content"]
+
+        assert set(content) == {"application/json", "application/cbor"}
+        assert content["application/cbor"]["schema"] == content["application/json"]["schema"]
+
+
 def test_health_contract_remains_json_only() -> None:
     """
     Verify the liveness endpoint does not advertise unsupported CBOR success responses.

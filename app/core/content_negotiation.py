@@ -20,6 +20,40 @@ _EXACT_MEDIA_RANGE_SPECIFICITY = 2
 _MEDIA_TYPE_PARTS = 2
 
 
+def _split_quoted(value: str, separator: str) -> list[str] | None:
+    """
+    Split an HTTP field value without treating quoted separators as delimiters.
+
+    Return None when the quoted-string syntax is incomplete.
+    """
+    parts: list[str] = []
+    current: list[str] = []
+    quoted = False
+    escaped = False
+
+    for character in value:
+        if escaped:
+            current.append(character)
+            escaped = False
+        elif quoted and character == "\\":
+            current.append(character)
+            escaped = True
+        elif character == '"':
+            current.append(character)
+            quoted = not quoted
+        elif character == separator and not quoted:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(character)
+
+    if quoted or escaped:
+        return None
+
+    parts.append("".join(current))
+    return parts
+
+
 def normalize_media_type(media_type: str) -> str:
     """
     Normalize a media type for case-insensitive comparison.
@@ -83,12 +117,18 @@ def _media_type_quality(accept_header: str, media_type: str, *, explicit_only: b
     best_specificity = -1
     best_quality = 0.0
 
-    for raw_item in accept_header.split(","):
+    raw_items = _split_quoted(accept_header, ",")
+    if raw_items is None:
+        return None
+
+    for raw_item in raw_items:
         item = raw_item.strip()
         if not item:
             continue
 
-        parts = item.split(";")
+        parts = _split_quoted(item, ";")
+        if parts is None:
+            continue
         range_type = normalize_media_type(parts[0])
         quality = _parse_qvalue(parts[1:])
         if quality is None or "/" not in range_type:

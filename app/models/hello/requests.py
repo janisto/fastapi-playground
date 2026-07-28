@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.types import Name
+
 # Supported language codes for greetings
 SupportedLanguage = Literal["en", "fi", "es", "fr", "de"]
 
@@ -25,10 +27,8 @@ class GreetingRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(
+    name: Name = Field(
         ...,
-        min_length=1,
-        max_length=100,
         description="Name for personalized greeting",
         examples=["Alice"],
     )
