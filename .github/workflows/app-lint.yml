@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Repository lint
+    name: Ruff lint and format
     runs-on: ubuntu-latest
 
     steps:
@@ -24,17 +24,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v9.0.0
-        with:
-          python-version: '3.14'
-          enable-cache: true
+      - name: Set up Ruff
+        uses: astral-sh/ruff-action@v4.1.0
 
-      - name: Set up just
-        uses: extractions/setup-just@v4.0.0
+      - name: Run Ruff linter
+        run: ruff check .
 
-      - name: Install dependencies
-        run: just install
-
-      - name: Run repository linters
-        run: just lint
+      - name: Run Ruff formatter
+        run: ruff format --check .

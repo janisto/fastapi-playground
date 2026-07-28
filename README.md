@@ -364,7 +364,7 @@ GitHub Actions workflows in `.github/workflows/`:
 | Workflow | Description |
 |----------|-------------|
 | `app-ci.yml` | App and Functions checks, container build, and app test coverage |
-| `app-lint.yml` | Repository linting and GitHub Actions security gating |
+| `app-lint.yml` | Fast Ruff linting and formatting feedback |
 | `zizmor.yml` | Upload GitHub Actions security findings to code scanning |
 | `labeler.yml` | Automatic PR labeling |
 | `labeler-manual.yml` | Manual labeling for historical PRs |
