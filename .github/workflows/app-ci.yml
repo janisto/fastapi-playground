@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   ci:
-    name: App and Functions checks
+    name: ci
     runs-on: ubuntu-latest
 
     steps:

@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   lint:
-    name: Ruff lint and format
+    name: lint
     runs-on: ubuntu-latest
 
     steps:
