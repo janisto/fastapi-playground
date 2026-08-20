@@ -381,6 +381,109 @@ def test_openapi_application_schema_members_requiredness_and_nullability_are_exa
     assert components["GitHubCommit"]["properties"]["sha"]["pattern"] == "^(?:[0-9a-f]{40}|[0-9a-f]{64})$"
 
 
+def test_public_scalar_schemas_have_descriptions_and_examples(client: TestClient) -> None:
+    components = client.get("/openapi.json").json()["components"]["schemas"]
+    scalar_properties = {
+        "HealthResponse": {"status"},
+        "HelloCreate": {"name"},
+        "Greeting": {"message"},
+        "Money": {"amountMinor", "currency"},
+        "Item": {"id", "name", "category", "inStock", "createdAt", "description"},
+        "ItemPage": {"total"},
+        "ProfileCreate": {
+            "firstName",
+            "lastName",
+            "contactEmail",
+            "phoneNumber",
+            "marketingOptIn",
+            "termsAccepted",
+        },
+        "ProfileUpdate": {"firstName", "lastName", "contactEmail", "phoneNumber", "marketingOptIn"},
+        "Profile": {
+            "id",
+            "firstName",
+            "lastName",
+            "contactEmail",
+            "phoneNumber",
+            "marketingOptIn",
+            "termsAccepted",
+            "createdAt",
+            "updatedAt",
+        },
+        "ProblemResponse": {"title", "status", "detail", "code"},
+        "ValidationIssue": {"detail"},
+        "GitHubOwner": {
+            "id",
+            "login",
+            "type",
+            "name",
+            "avatarUrl",
+            "htmlUrl",
+            "company",
+            "blog",
+            "location",
+            "bio",
+            "publicRepos",
+            "followers",
+            "following",
+            "createdAt",
+            "updatedAt",
+        },
+        "GitHubRepositorySummary": {"id", "name", "fullName", "description", "htmlUrl", "fork"},
+        "GitHubRepository": {
+            "id",
+            "name",
+            "fullName",
+            "description",
+            "htmlUrl",
+            "fork",
+            "language",
+            "stargazersCount",
+            "forksCount",
+            "openIssuesCount",
+            "archived",
+            "createdAt",
+            "updatedAt",
+            "pushedAt",
+            "defaultBranch",
+            "license",
+            "topics",
+            "disabled",
+        },
+        "GitHubActivity": {"id", "actor", "actorAvatarUrl", "ref", "timestamp", "activityType"},
+        "GitHubLanguage": {"name", "bytes"},
+        "GitHubCommit": {"sha"},
+        "GitHubTag": {"name"},
+        "GitHubRepositoryPage": {"count"},
+        "GitHubActivityPage": {"count"},
+        "GitHubTagPage": {"count"},
+    }
+
+    for component_name, property_names in scalar_properties.items():
+        properties = components[component_name]["properties"]
+        for property_name in property_names:
+            schema = properties[property_name]
+            assert schema.get("description"), (component_name, property_name)
+            assert schema.get("examples"), (component_name, property_name)
+
+    for variant in components["ErrorSource"]["oneOf"]:
+        assert len(variant["properties"]) == 1
+        property_name, schema = next(iter(variant["properties"].items()))
+        assert schema.get("description"), ("ErrorSource", property_name)
+        assert schema.get("examples"), ("ErrorSource", property_name)
+
+    operations = _operations(client.get("/openapi.json").json())
+    for operation_key, operation in operations.items():
+        for status, response in operation["responses"].items():
+            if int(status) < 300:
+                continue
+            for media in response["content"].values():
+                properties = media["schema"]["properties"]
+                for property_name in ("title", "status", "detail", "code"):
+                    assert properties[property_name].get("description"), (operation_key, status, property_name)
+                    assert properties[property_name].get("examples"), (operation_key, status, property_name)
+
+
 def test_openapi_discovery_is_local_and_rejects_request_variants_without_dependencies(
     client: TestClient,
     mock_profile_service: AsyncMock,

@@ -115,11 +115,36 @@ def test_retired_document_maps_to_exact_canonical_persistence_shape() -> None:
     assert migrate_profiles._canonical_document(_retired()) == _canonical()
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("contact_email", " Ada@EXAMPLE.COM "),
+        ("phone_number", " +358401234567 "),
+    ],
+)
+def test_canonical_document_rejects_values_that_require_normalization(field: str, value: str) -> None:
+    document = {**_canonical(), field: value}
+
+    with pytest.raises(ValueError, match="canonical profile values are invalid"):
+        migrate_profiles._validate_canonical_document(document)
+
+
 async def test_dry_run_validates_without_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     client = Client([Snapshot("principal", _retired()), Snapshot("canonical", _canonical("canonical"))])
     replacement = _install_client(monkeypatch, client)
 
     assert await migrate_profiles.migrate(apply=False) == (2, 1, 0)
+    replacement.assert_not_awaited()
+
+
+async def test_dry_run_aborts_instead_of_approving_noncanonical_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = Client([Snapshot("principal", {**_canonical(), "contact_email": " Ada@EXAMPLE.COM "})])
+    replacement = _install_client(monkeypatch, client)
+
+    with pytest.raises(ValueError, match="canonical profile values are invalid"):
+        await migrate_profiles.migrate(apply=False)
     replacement.assert_not_awaited()
 
 

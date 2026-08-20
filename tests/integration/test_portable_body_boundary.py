@@ -84,6 +84,17 @@ async def test_streamed_body_stops_on_first_over_limit_chunk() -> None:
     assert calls == 2
 
 
+async def test_streamed_profile_body_is_not_read_before_authentication() -> None:
+    status, headers, body, calls = await _request(
+        _scope("POST", "/v1/profile", headers=[(b"content-type", b"application/json")]),
+        [b"x" * 600_000, b"x" * 400_001],
+    )
+    assert status == 401
+    assert json.loads(body)["code"] == "unauthorized"
+    assert headers["www-authenticate"] == "Bearer"
+    assert calls == 0
+
+
 @pytest.mark.parametrize(
     ("method", "path", "expected_status"),
     [

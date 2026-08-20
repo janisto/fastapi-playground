@@ -71,7 +71,7 @@ def _canonical_document(data: dict[str, object]) -> dict[str, object]:
 def _validate_canonical_document(data: dict[str, object]) -> None:
     if set(data) != _CANONICAL_KEYS:
         raise ValueError("profile is neither the retired nor canonical representation")
-    Profile.model_validate(
+    profile = Profile.model_validate(
         {
             "id": data["id"],
             "firstName": data["first_name"],
@@ -85,6 +85,8 @@ def _validate_canonical_document(data: dict[str, object]) -> None:
         },
         strict=True,
     )
+    if profile.model_dump(by_alias=False) != data:
+        raise ValueError("canonical profile values are invalid")
 
 
 @firestore.async_transactional

@@ -101,8 +101,9 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
 
 ### Resource limits
 
-- The three body-bearing operations accept at most exactly 1,000,000 inbound bytes. Declared and streamed overflow
-  return 413 without invoking the endpoint or persistence.
+- The three body-bearing operations accept at most exactly 1,000,000 inbound bytes. A valid over-limit declared length
+  returns 413 before authentication or content reads. Missing-length and chunked content remains bounded while
+  streaming after any protected-route authentication gate and before decoding or persistence.
 - GitHub responses are limited to exactly 4 MiB, use an overall ten-second deadline, never retry automatically, and
   follow at most three validated same-origin redirects.
 
@@ -282,11 +283,12 @@ The accepted profile contract retires the persisted `email`, `marketing`, and `t
 6. Deploy and verify the new revision with a dedicated synthetic principal before restoring profile traffic.
 
 The command validates every document before dispatching writes and compare-checks each document in a transaction. It
-is dry-run by default and safe to rerun, but Firestore does not make the entire collection migration one transaction;
-if a run is interrupted, keep profile traffic quiesced and rerun to completion. Partial adoption becomes unsafe when
-the first document is migrated: the retired reader and writer must not serve migrated records. Rollback requires the
-backup and retired revision together; do not point the retired revision at forward-migrated data. Do not run the
-migration against live data as part of an ordinary code review or test workflow.
+also requires canonical-key documents to contain already-canonical values instead of approving values normalized only
+in memory. It is dry-run by default and safe to rerun, but Firestore does not make the entire collection migration one
+transaction; if a run is interrupted, keep profile traffic quiesced and rerun to completion. Partial adoption becomes
+unsafe when the first document is migrated: the retired reader and writer must not serve migrated records. Rollback
+requires the backup and retired revision together; do not point the retired revision at forward-migrated data. Do not
+run the migration against live data as part of an ordinary code review or test workflow.
 
 The wire cutover is also breaking for generated clients: operation IDs, lower camel case members, item `Money`, error
 documents, statuses, representations, and the six GitHub operations changed. Regenerate clients from the new runtime

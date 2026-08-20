@@ -6,9 +6,27 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class ErrorSource(BaseModel):
     """One application-owned validation issue source."""
 
-    pointer: str | None = Field(default=None, min_length=1, max_length=256)
-    parameter: str | None = Field(default=None, min_length=1, max_length=256)
-    header: str | None = Field(default=None, min_length=1, max_length=256)
+    pointer: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description="Application-owned JSON Pointer to an invalid body member.",
+        examples=["/firstName"],
+    )
+    parameter: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description="Canonical name of an invalid query or path parameter.",
+        examples=["limit"],
+    )
+    header: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description="Canonical name of an invalid request header.",
+        examples=["Content-Type"],
+    )
     model_config = ConfigDict(extra="forbid", strict=True)
 
     @model_validator(mode="after")
@@ -21,7 +39,12 @@ class ErrorSource(BaseModel):
 class ValidationIssue(BaseModel):
     """Safe normalized validation issue."""
 
-    detail: str = Field(min_length=1, max_length=200)
+    detail: str = Field(
+        min_length=1,
+        max_length=200,
+        description="Safe normalized explanation of one validation issue.",
+        examples=["Value is invalid."],
+    )
     source: ErrorSource | None = None
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -29,9 +52,16 @@ class ValidationIssue(BaseModel):
 class ProblemResponse(BaseModel):
     """Portable GCP Problem Details document."""
 
-    title: str
-    status: int
-    detail: str
-    code: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    title: str = Field(description="Stable human-readable problem title.", examples=["Validation Failed"])
+    status: int = Field(description="HTTP status code for this occurrence.", examples=[422])
+    detail: str = Field(
+        description="Stable human-readable problem explanation.",
+        examples=["Request validation failed"],
+    )
+    code: str = Field(
+        pattern=r"^[a-z][a-z0-9_]*$",
+        description="Stable application-owned machine-readable error code.",
+        examples=["validation_failed"],
+    )
     errors: list[ValidationIssue] | None = Field(default=None, min_length=1, max_length=32)
     model_config = ConfigDict(extra="forbid", strict=True)

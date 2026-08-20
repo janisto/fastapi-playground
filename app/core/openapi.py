@@ -194,10 +194,30 @@ def _error_response(status: int, *, profile: bool, github: bool = False) -> Open
     )
     definition = ERRORS[code]
     properties: dict[str, Any] = {
-        "title": {"type": "string", "const": definition.title},
-        "status": {"type": "integer", "const": status},
-        "detail": {"type": "string", "const": definition.detail},
-        "code": {"type": "string", "const": code},
+        "title": {
+            "type": "string",
+            "const": definition.title,
+            "description": "Stable human-readable problem title.",
+            "examples": [definition.title],
+        },
+        "status": {
+            "type": "integer",
+            "const": status,
+            "description": "HTTP status code for this occurrence.",
+            "examples": [status],
+        },
+        "detail": {
+            "type": "string",
+            "const": definition.detail,
+            "description": "Stable human-readable problem explanation.",
+            "examples": [definition.detail],
+        },
+        "code": {
+            "type": "string",
+            "const": code,
+            "description": "Stable application-owned machine-readable error code.",
+            "examples": [code],
+        },
     }
     required = ["title", "status", "detail", "code"]
     if status == _HTTP_UNPROCESSABLE_CONTENT:
@@ -334,9 +354,21 @@ def build_openapi_document(app: FastAPI) -> dict[str, Any]:  # noqa: C901, PLR09
                 "type": "object",
                 "additionalProperties": False,
                 "required": [name],
-                "properties": {name: {"type": "string", "minLength": 1, "maxLength": 256}},
+                "properties": {
+                    name: {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256,
+                        "description": description,
+                        "examples": [example],
+                    }
+                },
             }
-            for name in ("pointer", "parameter", "header")
+            for name, description, example in (
+                ("pointer", "Application-owned JSON Pointer to an invalid body member.", "/firstName"),
+                ("parameter", "Canonical name of an invalid query or path parameter.", "limit"),
+                ("header", "Canonical name of an invalid request header.", "Content-Type"),
+            )
         ]
     }
     components["ValidationIssue"] = {
@@ -344,7 +376,13 @@ def build_openapi_document(app: FastAPI) -> dict[str, Any]:  # noqa: C901, PLR09
         "additionalProperties": False,
         "required": ["detail"],
         "properties": {
-            "detail": {"type": "string", "minLength": 1, "maxLength": 200},
+            "detail": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Safe normalized explanation of one validation issue.",
+                "examples": ["Value is invalid."],
+            },
             "source": {"$ref": "#/components/schemas/ErrorSource"},
         },
     }
@@ -353,10 +391,27 @@ def build_openapi_document(app: FastAPI) -> dict[str, Any]:  # noqa: C901, PLR09
         "additionalProperties": False,
         "required": ["title", "status", "detail", "code"],
         "properties": {
-            "title": {"type": "string"},
-            "status": {"type": "integer"},
-            "detail": {"type": "string"},
-            "code": {"type": "string", "enum": sorted(ERRORS)},
+            "title": {
+                "type": "string",
+                "description": "Stable human-readable problem title.",
+                "examples": ["Validation Failed"],
+            },
+            "status": {
+                "type": "integer",
+                "description": "HTTP status code for this occurrence.",
+                "examples": [422],
+            },
+            "detail": {
+                "type": "string",
+                "description": "Stable human-readable problem explanation.",
+                "examples": ["Request validation failed"],
+            },
+            "code": {
+                "type": "string",
+                "enum": sorted(ERRORS),
+                "description": "Stable application-owned machine-readable error code.",
+                "examples": ["validation_failed"],
+            },
             "errors": {
                 "type": "array",
                 "minItems": 1,

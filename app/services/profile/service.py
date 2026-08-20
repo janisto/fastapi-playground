@@ -48,7 +48,7 @@ def _profile_from_storage(data: dict[str, Any], *, expected_id: str) -> Profile:
     """Validate the canonical persisted representation at the service boundary."""
     if set(data) != _CANONICAL_PROFILE_KEYS or data.get("id") != expected_id:
         raise ValueError("profile document shape is invalid")
-    return Profile.model_validate(
+    profile = Profile.model_validate(
         {
             "id": data.get("id"),
             "firstName": data.get("first_name"),
@@ -62,6 +62,9 @@ def _profile_from_storage(data: dict[str, Any], *, expected_id: str) -> Profile:
         },
         strict=True,
     )
+    if profile.model_dump(by_alias=False) != data:
+        raise ValueError("profile document shape is invalid")
+    return profile
 
 
 def _profile_to_storage(profile: Profile) -> dict[str, Any]:

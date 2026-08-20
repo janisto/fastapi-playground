@@ -245,7 +245,7 @@ Document response headers that runtime code emits, including `X-Request-ID`, `Li
 - Response models do not inherit strict request bases.
 - Use `model_dump()`; use `exclude_unset=True` for PATCH.
 - PATCH fields may be omitted but explicit null is rejected unless a domain explicitly defines null semantics.
-- Use shared `UTCDateTime`, `NormalizedEmail`, and `Phone` aliases from `app/models/types.py` where applicable.
+- Use shared `UTCDateTime`, `ContactEmail`, and `PhoneNumber` aliases from `app/models/types.py` where applicable.
 - Public timestamps are UTC ISO 8601 with explicit millisecond precision, for example `2025-01-15T10:30:00.000Z`.
 - Scalar fields have useful `Field` descriptions and examples. Nested-model arrays rely on their referenced schemas.
 - Do not use model-level `json_schema_extra` examples.

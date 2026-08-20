@@ -281,8 +281,9 @@ uv run python -m scripts.migrate_profiles --apply
 
 Quiesce all profile traffic, back up Firestore, verify the target project and database, run the dry run, apply, then
 rerun the dry run until it reports `pending=0`. The script compares each document again inside its write transaction
-and is safe to rerun. An interrupted collection-wide run can be partial, so keep the retired revision away from
-migrated records and do not start the new revision until the final dry run is clean. Deploy and verify the new revision
-with a dedicated synthetic principal before restoring profile traffic. Partial adoption becomes unsafe with the first
-migrated document; rollback requires restoring the backup together with the retired revision. The migration is not
-part of `just check`, deployment automation, or application startup.
+and requires canonical-key documents to contain already-canonical values rather than approving in-memory
+normalization. It is safe to rerun. An interrupted collection-wide run can be partial, so keep the retired revision
+away from migrated records and do not start the new revision until the final dry run is clean. Deploy and verify the
+new revision with a dedicated synthetic principal before restoring profile traffic. Partial adoption becomes unsafe
+with the first migrated document; rollback requires restoring the backup together with the retired revision. The
+migration is not part of `just check`, deployment automation, or application startup.

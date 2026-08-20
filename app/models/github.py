@@ -62,78 +62,182 @@ class GitHubModel(BaseModel):
 
 
 class GitHubOwner(GitHubModel):
-    id: SafeInteger
-    login: str = Field(min_length=1, strict=True)
-    type: str = Field(min_length=1, strict=True)
-    name: str | None
-    avatar_url: HttpURL = Field(alias="avatarUrl")
-    html_url: HttpURL = Field(alias="htmlUrl")
-    company: str | None
-    blog: str | None
-    location: str | None
-    bio: str | None
-    public_repos: SafeInteger = Field(alias="publicRepos")
-    followers: SafeInteger
-    following: SafeInteger
-    created_at: CanonicalTimestamp = Field(alias="createdAt")
-    updated_at: CanonicalTimestamp = Field(alias="updatedAt")
+    id: SafeInteger = Field(description="GitHub account identifier.", examples=[583231])
+    login: str = Field(
+        min_length=1,
+        strict=True,
+        description="Canonical GitHub account login.",
+        examples=["octocat"],
+    )
+    type: str = Field(
+        min_length=1,
+        strict=True,
+        description="Provider account type; values are intentionally open.",
+        examples=["User"],
+    )
+    name: str | None = Field(description="Public display name, when present.", examples=["The Octocat"])
+    avatar_url: HttpURL = Field(
+        alias="avatarUrl",
+        description="Absolute HTTP(S) avatar URL.",
+        examples=["https://avatars.example.test/u/583231"],
+    )
+    html_url: HttpURL = Field(
+        alias="htmlUrl",
+        description="Absolute HTTP(S) public account page URL.",
+        examples=["https://example.test/octocat"],
+    )
+    company: str | None = Field(description="Public company text, when present.", examples=["Example Corp"])
+    blog: str | None = Field(
+        description="Public blog text, when present; it is not assumed to be a URI.",
+        examples=["octocat.example"],
+    )
+    location: str | None = Field(description="Public location text, when present.", examples=["Helsinki"])
+    bio: str | None = Field(description="Public biography text, when present.", examples=["Builds portable APIs."])
+    public_repos: SafeInteger = Field(
+        alias="publicRepos",
+        description="Number of public repositories.",
+        examples=[8],
+    )
+    followers: SafeInteger = Field(description="Number of followers.", examples=[100])
+    following: SafeInteger = Field(description="Number of followed accounts.", examples=[9])
+    created_at: CanonicalTimestamp = Field(
+        alias="createdAt",
+        description="Account creation time in canonical UTC millisecond form.",
+        examples=["2026-01-15T10:30:00.000Z"],
+    )
+    updated_at: CanonicalTimestamp = Field(
+        alias="updatedAt",
+        description="Account update time in canonical UTC millisecond form.",
+        examples=["2026-01-16T11:45:00.000Z"],
+    )
 
 
 class GitHubRepositorySummary(GitHubModel):
-    id: SafeInteger
-    name: str = Field(min_length=1, strict=True)
-    full_name: str = Field(alias="fullName", min_length=1, strict=True)
-    description: str | None
-    html_url: HttpURL = Field(alias="htmlUrl")
-    fork: bool = Field(strict=True)
+    id: SafeInteger = Field(description="GitHub repository identifier.", examples=[1296269])
+    name: str = Field(
+        min_length=1,
+        strict=True,
+        description="Repository name.",
+        examples=["portable-api"],
+    )
+    full_name: str = Field(
+        alias="fullName",
+        min_length=1,
+        strict=True,
+        description="Owner-qualified repository name.",
+        examples=["octocat/portable-api"],
+    )
+    description: str | None = Field(
+        description="Public repository description, when present.",
+        examples=["A portable API example."],
+    )
+    html_url: HttpURL = Field(
+        alias="htmlUrl",
+        description="Absolute HTTP(S) public repository page URL.",
+        examples=["https://example.test/octocat/portable-api"],
+    )
+    fork: bool = Field(strict=True, description="Whether the repository is a fork.", examples=[False])
 
 
 class GitHubRepository(GitHubRepositorySummary):
-    language: str | None
-    stargazers_count: SafeInteger = Field(alias="stargazersCount")
-    forks_count: SafeInteger = Field(alias="forksCount")
-    open_issues_count: SafeInteger = Field(alias="openIssuesCount")
-    archived: bool = Field(strict=True)
-    created_at: CanonicalTimestamp = Field(alias="createdAt")
-    updated_at: CanonicalTimestamp = Field(alias="updatedAt")
-    pushed_at: CanonicalTimestamp | None = Field(alias="pushedAt")
-    default_branch: str = Field(alias="defaultBranch", min_length=1, strict=True)
-    license: str | None
-    topics: list[str] = Field(json_schema_extra={"uniqueItems": True})
-    disabled: bool = Field(strict=True)
+    language: str | None = Field(description="Primary repository language, when present.", examples=["Python"])
+    stargazers_count: SafeInteger = Field(
+        alias="stargazersCount",
+        description="Number of repository stars.",
+        examples=[42],
+    )
+    forks_count: SafeInteger = Field(alias="forksCount", description="Number of repository forks.", examples=[3])
+    open_issues_count: SafeInteger = Field(
+        alias="openIssuesCount",
+        description="Number of open issues reported by the provider.",
+        examples=[1],
+    )
+    archived: bool = Field(strict=True, description="Whether the repository is archived.", examples=[False])
+    created_at: CanonicalTimestamp = Field(
+        alias="createdAt",
+        description="Repository creation time in canonical UTC millisecond form.",
+        examples=["2026-01-15T10:30:00.000Z"],
+    )
+    updated_at: CanonicalTimestamp = Field(
+        alias="updatedAt",
+        description="Repository update time in canonical UTC millisecond form.",
+        examples=["2026-01-16T11:45:00.000Z"],
+    )
+    pushed_at: CanonicalTimestamp | None = Field(
+        alias="pushedAt",
+        description="Most recent push time in canonical UTC millisecond form, when present.",
+        examples=["2026-01-16T11:40:00.000Z"],
+    )
+    default_branch: str = Field(
+        alias="defaultBranch",
+        min_length=1,
+        strict=True,
+        description="Default branch name.",
+        examples=["main"],
+    )
+    license: str | None = Field(description="SPDX license identifier, when present.", examples=["MIT"])
+    topics: list[str] = Field(
+        json_schema_extra={"uniqueItems": True},
+        description="Unique repository topics in portable scalar-value order.",
+        examples=[["api", "python"]],
+    )
+    disabled: bool = Field(strict=True, description="Whether the repository is disabled.", examples=[False])
 
 
 class GitHubActivity(GitHubModel):
-    id: SafeInteger
-    actor: str | None
-    actor_avatar_url: HttpURL | None = Field(alias="actorAvatarUrl")
-    ref: str = Field(min_length=1, strict=True)
-    timestamp: CanonicalTimestamp
-    activity_type: str = Field(alias="activityType", min_length=1, strict=True)
+    id: SafeInteger = Field(description="Repository activity identifier.", examples=[123456])
+    actor: str | None = Field(description="Actor login, or null for a deleted actor.", examples=["octocat"])
+    actor_avatar_url: HttpURL | None = Field(
+        alias="actorAvatarUrl",
+        description="Absolute HTTP(S) actor avatar URL, or null for a deleted actor.",
+        examples=["https://avatars.example.test/u/583231"],
+    )
+    ref: str = Field(
+        min_length=1,
+        strict=True,
+        description="Repository reference associated with the activity.",
+        examples=["refs/heads/main"],
+    )
+    timestamp: CanonicalTimestamp = Field(
+        description="Activity time in canonical UTC millisecond form.",
+        examples=["2026-01-16T11:45:00.000Z"],
+    )
+    activity_type: str = Field(
+        alias="activityType",
+        min_length=1,
+        strict=True,
+        description="Provider activity type; values are intentionally open.",
+        examples=["push"],
+    )
 
 
 class GitHubLanguage(GitHubModel):
-    name: str = Field(min_length=1, strict=True)
-    bytes: SafeInteger
+    name: str = Field(min_length=1, strict=True, description="Repository language name.", examples=["Python"])
+    bytes: SafeInteger = Field(description="Number of bytes attributed to the language.", examples=[12345])
 
 
 class GitHubCommit(GitHubModel):
-    sha: str = Field(pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$", strict=True)
+    sha: str = Field(
+        pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+        strict=True,
+        description="Lowercase 40- or 64-character hexadecimal commit identifier.",
+        examples=["0123456789abcdef0123456789abcdef01234567"],
+    )
 
 
 class GitHubTag(GitHubModel):
-    name: str = Field(min_length=1, strict=True)
+    name: str = Field(min_length=1, strict=True, description="Repository tag name.", examples=["v1.0.0"])
     commit: GitHubCommit
 
 
 class GitHubRepositoryPage(GitHubModel):
     repos: list[GitHubRepositorySummary] = Field(max_length=100)
-    count: int = Field(ge=0, le=100, strict=True)
+    count: int = Field(ge=0, le=100, strict=True, description="Number of repositories in this page.", examples=[1])
 
 
 class GitHubActivityPage(GitHubModel):
     activities: list[GitHubActivity] = Field(max_length=100)
-    count: int = Field(ge=0, le=100, strict=True)
+    count: int = Field(ge=0, le=100, strict=True, description="Number of activities in this page.", examples=[1])
 
 
 class GitHubLanguages(GitHubModel):
@@ -142,4 +246,4 @@ class GitHubLanguages(GitHubModel):
 
 class GitHubTagPage(GitHubModel):
     tags: list[GitHubTag] = Field(max_length=100)
-    count: int = Field(ge=0, le=100, strict=True)
+    count: int = Field(ge=0, le=100, strict=True, description="Number of tags in this page.", examples=[1])
