@@ -91,6 +91,8 @@ def test_health_and_hello_exact_json_and_cbor(client: TestClient) -> None:
         (b'{"name":"Ada"}', "text/plain", 415, "unsupported_media_type"),
         (b'{"name":"Ada"}', 'application/json; charset="UTF-8"junk', 415, "unsupported_media_type"),
         (b'{"name":"Ada"}', "application/json; charset=utf-8; charset=utf-8", 415, "unsupported_media_type"),
+        (b'{"name":"Ada"}', "application/json; charset =utf-8", 415, "unsupported_media_type"),
+        (b'{"name":"Ada"}', "application/json; charset= utf-8", 415, "unsupported_media_type"),
         (b'{"name":"Ada"}', "application/cbor; charset=utf-8", 415, "unsupported_media_type"),
         (b'{"name":"Ada"}', None, 415, "unsupported_media_type"),
         (b"", "application/json", 400, "invalid_request"),
@@ -146,6 +148,16 @@ def test_negotiation_specificity_charset_and_error_fallback(client: TestClient) 
     charset = client.get("/health", headers={"Accept": "application/json; charset=UTF-8"})
     assert charset.status_code == 200
     assert charset.headers["Content-Type"].lower() == "application/json; charset=utf-8"
+
+    post_weight_charset = client.get("/health", headers={"Accept": "application/json;q=0.5;charset=utf-8"})
+    assert post_weight_charset.status_code == 200
+    assert post_weight_charset.headers["Content-Type"].lower() == "application/json; charset=utf-8"
+
+    _problem(
+        client.get("/health", headers={"Accept": "application/json;q=0.5;profile=x"}),
+        406,
+        "not_acceptable",
+    )
 
     rejected = client.post(
         "/v1/hello",

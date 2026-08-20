@@ -47,10 +47,15 @@ async def verify_firebase_token(request: Request) -> FirebaseUser:
         raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"})
     token = match.group(1)
     try:
+        firebase_app = get_firebase_app()
+    except Exception:  # noqa: BLE001 - initialization failures are controlled dependency outages
+        logger.error("Firebase verifier initialization failed")  # noqa: TRY400 - do not log provider details
+        raise PortableProblem("dependency_unavailable", headers={"Retry-After": "30"}) from None
+    try:
         decoded_token = await asyncio.to_thread(
             auth.verify_id_token,
             token,
-            app=get_firebase_app(),
+            app=firebase_app,
             check_revoked=True,
         )
     except ValueError, ExpiredIdTokenError, RevokedIdTokenError, UserDisabledError, InvalidIdTokenError:
@@ -63,6 +68,9 @@ async def verify_firebase_token(request: Request) -> FirebaseUser:
         logger.error("Firebase verifier failed")  # noqa: TRY400 - credential failures must not emit traceback text
         raise PortableProblem("dependency_unavailable", headers={"Retry-After": "30"}) from None
 
+    if not isinstance(decoded_token, dict):
+        logger.error("Firebase verifier returned an invalid result")
+        raise PortableProblem("dependency_unavailable", headers={"Retry-After": "30"})
     principal = decoded_token.get("sub")
     if not isinstance(principal, str) or not 1 <= len(principal) <= _OPAQUE_ID_MAX_LENGTH:
         raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"})

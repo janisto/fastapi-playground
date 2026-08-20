@@ -138,9 +138,7 @@ class TestHSTSHeader:
         with TestClient(app, base_url="https://testserver") as client:
             response = client.get("/ping")
             hsts = response.headers.get("strict-transport-security")
-            assert hsts is not None
-            assert "max-age=31536000" in hsts
-            assert "includeSubDomains" in hsts
+            assert hsts == "max-age=31536000; includeSubDomains"
 
     def test_no_hsts_when_disabled(self) -> None:
         """

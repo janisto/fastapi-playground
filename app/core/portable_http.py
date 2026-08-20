@@ -195,8 +195,15 @@ def _request_content_type(value: str) -> str | None:
     if len(parts) == 1:
         return JSON_MEDIA_TYPE
     name, equals, raw_value = parts[1].partition("=")
-    decoded_value = _decoded_parameter_value(raw_value.strip())
-    if not equals or name.strip().lower() != "charset" or decoded_value is None or decoded_value.lower() != "utf-8":
+    decoded_value = _decoded_parameter_value(raw_value)
+    if (
+        not equals
+        or name != name.strip()
+        or raw_value != raw_value.strip()
+        or name.lower() != "charset"
+        or decoded_value is None
+        or decoded_value.lower() != "utf-8"
+    ):
         return None
     return JSON_MEDIA_TYPE
 
@@ -247,10 +254,11 @@ def valid_json_content_type(value: str) -> bool:  # noqa: PLR0911
         return False
     names: set[str] = set()
     for parameter in parts[1:]:
-        name, equals, parameter_value = parameter.partition("=")
-        name = name.strip().lower()
-        parameter_value = parameter_value.strip()
-        if not equals or _TOKEN.fullmatch(name) is None or name in names:
+        raw_name, equals, parameter_value = parameter.partition("=")
+        if not equals or raw_name != raw_name.strip() or parameter_value != parameter_value.strip():
+            return False
+        name = raw_name.lower()
+        if _TOKEN.fullmatch(name) is None or name in names:
             return False
         if _decoded_parameter_value(parameter_value) is None:
             return False

@@ -47,7 +47,7 @@ def _validate_repo(repo: str) -> None:
     if all(character == "." for character in repo):
         raise PortableProblem(
             "validation_failed",
-            errors=[{"detail": "Request field is invalid", "source": {"pointer": "/repo"}}],
+            errors=[{"detail": "Request field is invalid"}],
         )
 
 

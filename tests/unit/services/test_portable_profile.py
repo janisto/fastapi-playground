@@ -230,6 +230,23 @@ async def test_noncanonical_persisted_shape_fails_closed_without_write(corruptio
     assert client.store["principal"]["marketing_opt_in"] is False
 
 
+async def test_existing_empty_document_is_corruption_not_absence() -> None:
+    client = Client()
+    client.store["principal"] = {}
+    service = ProfileService(client=cast("Any", client), clock=lambda: datetime(2026, 1, 1, tzinfo=UTC))
+
+    with pytest.raises(ValueError, match="profile document shape is invalid"):
+        await service.get_profile("principal")
+    with pytest.raises(ValueError, match="profile document shape is invalid"):
+        await service.update_profile(
+            "principal",
+            ProfileUpdate.model_validate({"marketingOptIn": True}, strict=True),
+        )
+
+    assert client.write_count == 0
+    assert client.store["principal"] == {}
+
+
 async def test_concurrent_deletes_return_one_success_and_one_not_found() -> None:
     client = Client()
     service = ProfileService(client=cast("Any", client), clock=lambda: datetime(2026, 1, 1, tzinfo=UTC))

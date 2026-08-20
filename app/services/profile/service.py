@@ -122,8 +122,8 @@ class ProfileService:
         if not snapshot.exists:
             raise ProfileNotFoundError
         data = snapshot.to_dict()
-        if not data:
-            raise ProfileNotFoundError
+        if data is None:
+            raise ValueError("profile document shape is invalid")
         return _profile_from_storage(data, expected_id=user_id)
 
     @staticmethod
@@ -139,8 +139,8 @@ class ProfileService:
         if not snapshot.exists:
             return None, False
         stored = snapshot.to_dict()
-        if not stored:
-            return None, False
+        if stored is None:
+            raise ValueError("profile document shape is invalid")
         current = _profile_from_storage(stored, expected_id=user_id)
         changed = any(getattr(current, name) != value for name, value in updates.items())
         if not changed:

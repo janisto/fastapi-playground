@@ -38,6 +38,7 @@ GITHUB_TIMEOUT_SECONDS = 10.0
 _MAX_REDIRECTS = 3
 _REDIRECTS = frozenset({301, 302, 303, 307, 308})
 _CANONICAL_DECIMAL = re.compile(r"(?:0|[1-9][0-9]*)\Z")
+_BAD_URI_PERCENT = re.compile(r"%(?![0-9A-Fa-f]{2})")
 _LINK_TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
 _PROVIDER_TIMESTAMP = re.compile(
     r"([0-9]{4})-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T"
@@ -287,7 +288,18 @@ def _parse_link_relations(headers: httpx2.Headers) -> dict[str, str]:  # noqa: C
     return relations
 
 
+def _validate_uri_text(value: str) -> None:
+    if (
+        not value.isascii()
+        or "\\" in value
+        or _BAD_URI_PERCENT.search(value)
+        or any(ord(character) <= _ASCII_CONTROL_LIMIT or ord(character) == _ASCII_DELETE for character in value)
+    ):
+        raise GitHubUpstreamError
+
+
 def _origin_tuple(url: str) -> tuple[str, str, int | None]:
+    _validate_uri_text(url)
     try:
         parsed = urlsplit(url)
         port = parsed.port
@@ -311,7 +323,7 @@ def _repository_path(owner: str, repo: str, suffix: str = "") -> str:
     if repo and all(character == "." for character in repo):
         raise PortableProblem(
             "validation_failed",
-            errors=[{"detail": "Request field is invalid", "source": {"pointer": "/repo"}}],
+            errors=[{"detail": "Request field is invalid"}],
         )
     return f"/repos/{quote(owner, safe='')}/{quote(repo, safe='')}{suffix}"
 
@@ -419,6 +431,7 @@ class GitHubClient:
                             locations = _header_values(response.headers, "location")
                             if len(locations) != 1 or not locations[0]:
                                 raise GitHubUpstreamError
+                            _validate_uri_text(locations[0])
                             target = urljoin(canonical_url, locations[0])
                             url = _validate_target(
                                 target,

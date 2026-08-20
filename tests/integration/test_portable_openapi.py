@@ -39,10 +39,28 @@ EXPECTED_STATUSES = {
 COMMON_HEADERS = {
     "X-Request-ID",
     "Cache-Control",
+    "Content-Security-Policy",
+    "Cross-Origin-Opener-Policy",
+    "Cross-Origin-Resource-Policy",
+    "Permissions-Policy",
     "X-Content-Type-Options",
     "X-Frame-Options",
     "Referrer-Policy",
+    "Strict-Transport-Security",
     "Vary",
+}
+SECURITY_HEADER_VALUES = {
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Permissions-Policy": (
+        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+    ),
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
 }
 
 
@@ -103,6 +121,8 @@ def test_runtime_openapi_inventory_security_and_statuses_are_exact(client: TestC
         assert {int(status) for status in operation["responses"]} == expected_statuses
         for status, response_object in operation["responses"].items():
             assert set(response_object["headers"]) >= COMMON_HEADERS, (key, status)
+            for header, value in SECURITY_HEADER_VALUES.items():
+                assert response_object["headers"][header]["schema"]["const"] == value
             if int(status) < 300 and int(status) != 204:
                 assert set(response_object["content"]) == {"application/json", "application/cbor"}
             elif int(status) >= 300:
@@ -116,6 +136,20 @@ def test_runtime_openapi_inventory_security_and_statuses_are_exact(client: TestC
     assert scheme["type"] == "http"
     assert scheme["scheme"] == "bearer"
     assert "Firebase" in scheme["description"]
+
+
+def test_documented_security_headers_match_runtime_and_describe_conditional_hsts(client: TestClient) -> None:
+    document = client.get("/openapi.json").json()
+    headers = document["paths"]["/health"]["get"]["responses"]["200"]["headers"]
+    response = client.get("/health")
+
+    for header, value in SECURITY_HEADER_VALUES.items():
+        assert headers[header]["schema"]["const"] == value
+        if header == "Strict-Transport-Security":
+            assert header not in response.headers
+            assert "production HTTPS" in headers[header]["description"]
+        else:
+            assert response.headers[header] == value
 
 
 def test_request_bodies_parameters_media_and_special_headers_are_exact(client: TestClient) -> None:

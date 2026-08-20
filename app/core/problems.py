@@ -82,7 +82,6 @@ class PortableProblem(Exception):  # noqa: N818 - RFC 9457 names the public abst
 def _known_source(location: tuple[str | int, ...], *, missing: bool = False) -> dict[str, str] | None:
     if not location:
         return None
-    segments = [str(segment) for segment in location if segment not in {"body", "query", "path", "header"}]
     known = {
         "name",
         "firstName",
@@ -97,7 +96,11 @@ def _known_source(location: tuple[str | int, ...], *, missing: bool = False) -> 
         "owner",
         "repo",
     }
-    safe_segments = [segment for segment in segments if segment in known or segment.isdecimal()]
+    safe_segments: list[str] = []
+    for segment in location[1:]:
+        if not isinstance(segment, str) or segment not in known:
+            break
+        safe_segments.append(segment)
     if location[0] == "query" and safe_segments and safe_segments[-1] in known:
         return {"parameter": safe_segments[-1]}
     if location[0] == "header" and safe_segments:

@@ -64,6 +64,28 @@ _REQUEST_ID_PARAMETER = {
 _COMMON_HEADERS = {
     "X-Request-ID": {"description": "Selected request correlation identifier.", "schema": _REQUEST_ID_SCHEMA},
     "Cache-Control": {"description": "Response caching policy.", "schema": {"type": "string", "const": "no-store"}},
+    "Content-Security-Policy": {
+        "description": "Restricts API responses from loading resources or being framed.",
+        "schema": {"type": "string", "const": "default-src 'none'; frame-ancestors 'none'"},
+    },
+    "Cross-Origin-Opener-Policy": {
+        "description": "Browsing-context isolation policy.",
+        "schema": {"type": "string", "const": "same-origin"},
+    },
+    "Cross-Origin-Resource-Policy": {
+        "description": "Cross-origin resource loading policy.",
+        "schema": {"type": "string", "const": "same-origin"},
+    },
+    "Permissions-Policy": {
+        "description": "Disables browser features unused by the API.",
+        "schema": {
+            "type": "string",
+            "const": (
+                "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), "
+                "payment=(), usb=()"
+            ),
+        },
+    },
     "X-Content-Type-Options": {
         "description": "MIME sniffing policy.",
         "schema": {"type": "string", "const": "nosniff"},
@@ -72,6 +94,10 @@ _COMMON_HEADERS = {
     "Referrer-Policy": {
         "description": "Referrer disclosure policy.",
         "schema": {"type": "string", "const": "strict-origin-when-cross-origin"},
+    },
+    "Strict-Transport-Security": {
+        "description": "Emitted only for production HTTPS responses.",
+        "schema": {"type": "string", "const": "max-age=31536000; includeSubDomains"},
     },
     "Vary": {"description": "Representation and optional origin variance.", "schema": {"type": "string"}},
 }

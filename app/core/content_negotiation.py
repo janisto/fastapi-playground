@@ -97,12 +97,17 @@ def _parse_parameters(params: list[str]) -> tuple[float, dict[str, str]] | None:
         param = raw_param.strip()
         if not param:
             return None
-        name, separator, raw_value = param.partition("=")
-        name = name.strip().lower()
-        if not separator or _TOKEN_PATTERN.fullmatch(name) is None:
+        raw_name, separator, raw_value = param.partition("=")
+        name = raw_name.lower()
+        if (
+            not separator
+            or raw_name != raw_name.strip()
+            or raw_value != raw_value.strip()
+            or _TOKEN_PATTERN.fullmatch(name) is None
+        ):
             return None
         if name == "q":
-            value = raw_value.strip()
+            value = raw_value
             if qvalue_seen or _QVALUE_PATTERN.fullmatch(value) is None:
                 return None
             quality = float(value)

@@ -199,7 +199,6 @@ def test_languages_exact_empty_shape(client: TestClient, mock_github_service: As
         "/v1/github/owners/-bad",
         "/v1/github/owners/bad-",
         "/v1/github/owners/å",
-        "/v1/github/repos/octocat/....",
         "/v1/github/repos/octocat/repo!",
     ],
 )
@@ -216,6 +215,16 @@ def test_invalid_path_is_422_without_fetch(
         mock_github_service.list_repository_activity,
     ):
         method.assert_not_awaited()
+
+
+def test_dot_only_repository_error_is_source_free_without_fetch(
+    client: TestClient,
+    mock_github_service: AsyncMock,
+) -> None:
+    response = client.get("/v1/github/repos/octocat/....")
+    _assert_problem(response, 422, "validation_failed")
+    assert response.json()["errors"] == [{"detail": "Request field is invalid"}]
+    mock_github_service.assert_not_called()
 
 
 @pytest.mark.parametrize(

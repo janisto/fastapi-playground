@@ -252,6 +252,43 @@ def test_profile_patch_validation_is_closed_nonempty_and_side_effect_free(
     mock_profile_service.update_profile.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    ("content", "content_type", "rejected_member"),
+    [
+        (
+            ('{"marketingOptIn":true,"' + "9" * 2048 + '":true}').encode(),
+            "application/json",
+            "9" * 2048,
+        ),
+        (
+            cbor2.dumps({"marketingOptIn": True, 987_654_321: True}),
+            "application/cbor",
+            "987654321",
+        ),
+    ],
+    ids=["json-huge-numeric-key", "cbor-integer-key"],
+)
+def test_numeric_unknown_members_are_redacted_bounded_and_side_effect_free(
+    client: TestClient,
+    with_fake_user: None,
+    mock_profile_service: AsyncMock,
+    content: bytes,
+    content_type: str,
+    rejected_member: str,
+) -> None:
+    del with_fake_user
+    response = client.patch(
+        "/v1/profile",
+        content=content,
+        headers={"Authorization": "ignored", "Content-Type": content_type},
+    )
+    problem = _assert_problem(response, 422, "validation_failed")
+    assert problem["errors"] == [{"detail": "Request field is invalid", "source": {"pointer": "/"}}]
+    assert rejected_member.encode() not in response.content
+    assert len(response.content) < 512
+    mock_profile_service.update_profile.assert_not_awaited()
+
+
 def test_profile_duplicate_json_is_400_without_persistence(
     client: TestClient,
     with_fake_user: None,

@@ -530,7 +530,14 @@ async def test_named_to_numeric_redirect_is_followed_once_without_body_parsing()
 
 @pytest.mark.parametrize(
     "location",
-    ["https://evil.example/user/1", "/repos/octocat/private", "/user/01", "/user/1?extra=1", "#fragment"],
+    [
+        "https://evil.example/user/1",
+        "/repos/octocat/private",
+        "/user/01",
+        "/user/1?extra=1",
+        "/us\ter/1",
+        "#fragment",
+    ],
 )
 async def test_unsafe_redirects_fail_closed(location: str) -> None:
     service = _service(lambda _: httpx2.Response(302, headers={"Location": location}))
@@ -546,6 +553,8 @@ async def test_unsafe_redirects_fail_closed(location: str) -> None:
         {"Content-Type": "application/json", "Content-Encoding": "gzip"},
         {"Content-Type": 'application/json; profile="a"b"'},
         {"Content-Type": "application/json; profile=a; profile=b"},
+        {"Content-Type": "application/json; charset =utf-8"},
+        {"Content-Type": "application/json; charset= utf-8"},
         {},
     ],
 )
@@ -584,6 +593,7 @@ async def test_cross_origin_or_nonadvancing_provider_link_is_502() -> None:
     for target in (
         "https://evil.example/users/octocat/repos?type=owner&sort=full_name&direction=asc&per_page=1&page=2",
         "https://api.github.test/users/octocat/repos?type=owner&sort=full_name&direction=asc&per_page=1&page=1",
+        "https://api.github.test/us\ters/octocat/repos?type=owner&sort=full_name&direction=asc&per_page=1&page=2",
     ):
         service = _service(
             lambda _, target=target: httpx2.Response(
@@ -882,6 +892,7 @@ async def test_service_repeats_dot_only_repo_guard_before_url_construction(opera
     with pytest.raises(PortableProblem) as captured:
         await _invoke_repository_operation(service, operation, repo="...")
     assert captured.value.code == "validation_failed"
+    assert captured.value.errors == [{"detail": "Request field is invalid"}]
     assert calls == 0
 
 

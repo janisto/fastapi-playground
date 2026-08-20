@@ -121,6 +121,41 @@ async def test_verifier_dependency_failures_are_safe_503(
     assert "cause-secret" not in caplog.text
 
 
+async def test_firebase_initialization_failure_is_safe_503_before_verification(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    initializer = Mock(side_effect=ValueError("configuration-secret"))
+    verifier = Mock()
+    monkeypatch.setattr("app.auth.firebase.get_firebase_app", initializer)
+    monkeypatch.setattr("app.auth.firebase.auth.verify_id_token", verifier)
+
+    with caplog.at_level(logging.ERROR, logger="app.auth.firebase"), pytest.raises(PortableProblem) as captured:
+        await verify_firebase_token(_request([(b"authorization", b"Bearer caller-secret")]))
+
+    assert captured.value.code == "dependency_unavailable"
+    assert captured.value.headers == {"Retry-After": "30"}
+    initializer.assert_called_once_with()
+    verifier.assert_not_called()
+    assert "caller-secret" not in caplog.text
+    assert "configuration-secret" not in caplog.text
+
+
+async def test_invalid_verifier_result_is_safe_503(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr("app.auth.firebase.get_firebase_app", Mock(return_value=object()))
+    monkeypatch.setattr("app.auth.firebase.auth.verify_id_token", Mock(return_value=None))
+
+    with caplog.at_level(logging.ERROR, logger="app.auth.firebase"), pytest.raises(PortableProblem) as captured:
+        await verify_firebase_token(_request([(b"authorization", b"Bearer caller-secret")]))
+
+    assert captured.value.code == "dependency_unavailable"
+    assert captured.value.headers == {"Retry-After": "30"}
+    assert "caller-secret" not in caplog.text
+
+
 async def test_cancellation_is_not_reclassified_as_dependency_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.auth.firebase.get_firebase_app", Mock())
     monkeypatch.setattr("app.auth.firebase.auth.verify_id_token", Mock(side_effect=asyncio.CancelledError))
