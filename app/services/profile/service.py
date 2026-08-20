@@ -82,7 +82,12 @@ class ProfileService:
         self._clock = clock or (lambda: datetime.now(UTC))
 
     def _get_client(self) -> AsyncClient:
-        return self._client or get_async_firestore_client()
+        if self._client is not None:
+            return self._client
+        try:
+            return get_async_firestore_client()
+        except Exception as error:
+            raise ProfileDependencyError from error
 
     async def create_profile(self, user_id: str, profile_data: ProfileCreate) -> Profile:
         """Conditionally create the complete profile in one native write."""

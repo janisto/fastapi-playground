@@ -13,6 +13,7 @@ from firebase_admin.auth import (
     InvalidIdTokenError,
     RevokedIdTokenError,
     UserDisabledError,
+    UserNotFoundError,
 )
 
 from app.core.firebase import get_firebase_app
@@ -58,7 +59,14 @@ async def verify_firebase_token(request: Request) -> FirebaseUser:
             app=firebase_app,
             check_revoked=True,
         )
-    except ValueError, ExpiredIdTokenError, RevokedIdTokenError, UserDisabledError, InvalidIdTokenError:
+    except (
+        ValueError,
+        ExpiredIdTokenError,
+        RevokedIdTokenError,
+        UserDisabledError,
+        UserNotFoundError,
+        InvalidIdTokenError,
+    ):
         logger.warning("Firebase credential rejected")
         raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"}) from None
     except CertificateFetchError:

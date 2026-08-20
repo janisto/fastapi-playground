@@ -11,6 +11,7 @@ from firebase_admin.auth import (
     InvalidIdTokenError,
     RevokedIdTokenError,
     UserDisabledError,
+    UserNotFoundError,
 )
 from starlette.requests import Request
 
@@ -63,6 +64,7 @@ async def test_valid_token68_is_verified_with_revocation_and_uses_sub(
         ("expired", ExpiredIdTokenError("credential-secret", RuntimeError("cause-secret"))),
         ("revoked", RevokedIdTokenError("credential-secret")),
         ("disabled", UserDisabledError("credential-secret")),
+        ("deleted user", UserNotFoundError("credential-secret")),
         ("wrong audience", InvalidIdTokenError("credential-secret")),
         ("wrong issuer", InvalidIdTokenError("credential-secret")),
         ("none algorithm", InvalidIdTokenError("credential-secret")),

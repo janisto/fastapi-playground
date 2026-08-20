@@ -199,6 +199,7 @@ def _error_response(status: int, *, profile: bool, github: bool = False) -> Open
         "detail": {"type": "string", "const": definition.detail},
         "code": {"type": "string", "const": code},
     }
+    required = ["title", "status", "detail", "code"]
     if status == _HTTP_UNPROCESSABLE_CONTENT:
         properties["errors"] = {
             "type": "array",
@@ -206,10 +207,11 @@ def _error_response(status: int, *, profile: bool, github: bool = False) -> Open
             "maxItems": 32,
             "items": {"$ref": "#/components/schemas/ValidationIssue"},
         }
+        required.append("errors")
     schema = {
         "type": "object",
         "additionalProperties": False,
-        "required": ["title", "status", "detail", "code"],
+        "required": required,
         "properties": properties,
     }
     return {

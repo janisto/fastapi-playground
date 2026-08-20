@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from google.api_core import exceptions as google_exceptions
@@ -331,6 +331,47 @@ async def test_known_persistence_failures_are_dependency_errors(
     monkeypatch.setattr(ProfileService, "_delete_in_transaction", AsyncMock(side_effect=failure))
     with pytest.raises(ProfileDependencyError):
         await service.delete_profile("principal")
+
+
+@pytest.mark.parametrize("operation", ["create", "get", "update", "delete"])
+async def test_client_initialization_failures_are_dependency_errors(
+    operation: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client_factory = Mock(side_effect=RuntimeError("credential-secret"))
+    monkeypatch.setattr("app.services.profile.service.get_async_firestore_client", client_factory)
+    service = ProfileService(clock=lambda: datetime(2026, 1, 1, tzinfo=UTC))
+
+    async def invoke_operation() -> None:
+        if operation == "create":
+            await service.create_profile("principal", _create())
+        elif operation == "get":
+            await service.get_profile("principal")
+        elif operation == "update":
+            await service.update_profile(
+                "principal",
+                ProfileUpdate.model_validate({"marketingOptIn": True}, strict=True),
+            )
+        else:
+            await service.delete_profile("principal")
+
+    with pytest.raises(ProfileDependencyError):
+        await invoke_operation()
+
+    client_factory.assert_called_once_with()
+
+
+async def test_client_initialization_cancellation_is_not_reclassified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.profile.service.get_async_firestore_client",
+        Mock(side_effect=asyncio.CancelledError),
+    )
+    service = ProfileService()
+
+    with pytest.raises(asyncio.CancelledError):
+        await service.get_profile("principal")
 
 
 @pytest.mark.parametrize("failure", [ValueError("unexpected"), asyncio.CancelledError()])

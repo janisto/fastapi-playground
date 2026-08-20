@@ -152,6 +152,18 @@ def test_documented_security_headers_match_runtime_and_describe_conditional_hsts
             assert response.headers[header] == value
 
 
+def test_documented_422_responses_require_runtime_validation_issues(client: TestClient) -> None:
+    document = client.get("/openapi.json").json()
+    operations = _operations(document)
+
+    for key, operation in operations.items():
+        response = operation["responses"].get("422")
+        if response is None:
+            continue
+        for media in response["content"].values():
+            assert "errors" in media["schema"]["required"], key
+
+
 def test_request_bodies_parameters_media_and_special_headers_are_exact(client: TestClient) -> None:
     document = client.get("/openapi.json").json()
     operations = _operations(document)

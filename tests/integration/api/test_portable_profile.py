@@ -1,17 +1,20 @@
 """Real FastAPI boundary tests for the authenticated GCP profile contract."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock, Mock, call
 
 import cbor2
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from firebase_admin.auth import UserNotFoundError
 from starlette.requests import Request
 
 from app.auth.firebase import FirebaseUser, verify_firebase_token
+from app.dependencies import get_profile_service
 from app.exceptions import ProfileAlreadyExistsError, ProfileDependencyError, ProfileNotFoundError
 from app.models.profile import Profile
+from app.services.profile import ProfileService
 
 
 def _profile(*, marketing: bool = False, identifier: str = "test-user-123") -> Profile:
@@ -47,6 +50,10 @@ def _create_body() -> dict[str, object]:
         "phoneNumber": " +358401234567 ",
         "termsAccepted": True,
     }
+
+
+def _real_profile_service() -> ProfileService:
+    return ProfileService()
 
 
 def _assert_problem(response: httpx2.Response, status: int, code: str) -> dict[str, object]:
@@ -142,6 +149,26 @@ def test_profile_authentication_precedes_body_decoding(client: TestClient, mock_
         _assert_problem(response, 401, "unauthorized")
         assert response.headers["WWW-Authenticate"] == "Bearer"
     mock_profile_service.assert_not_called()
+
+
+def test_deleted_firebase_user_is_401_without_persistence(
+    client: TestClient,
+    mock_profile_service: AsyncMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.auth.firebase.get_firebase_app", Mock(return_value=object()))
+    monkeypatch.setattr(
+        "app.auth.firebase.auth.verify_id_token",
+        Mock(side_effect=UserNotFoundError("provider-secret")),
+    )
+
+    response = client.get("/v1/profile", headers={"Authorization": "Bearer caller-secret"})
+
+    problem = _assert_problem(response, 401, "unauthorized")
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert "provider-secret" not in str(problem)
+    assert "caller-secret" not in str(problem)
+    mock_profile_service.get_profile.assert_not_awaited()
 
 
 def test_profile_create_get_patch_delete_wire_contract(
@@ -335,6 +362,40 @@ def test_profile_service_outcomes_map_to_exact_safe_problems(
     _assert_problem(response, status, code)
     if status == 503:
         assert "Retry-After" not in response.headers
+
+
+@pytest.mark.parametrize(
+    ("method", "request_body"),
+    [
+        ("post", _create_body()),
+        ("get", None),
+        ("patch", {"marketingOptIn": True}),
+        ("delete", None),
+    ],
+)
+def test_profile_client_initialization_failure_is_safe_503_for_every_operation(
+    client: TestClient,
+    with_fake_user: None,
+    method: str,
+    request_body: dict[str, object] | None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    del with_fake_user
+    from app.main import fastapi_app
+
+    client_factory = Mock(side_effect=RuntimeError("credential-secret"))
+    monkeypatch.setattr("app.services.profile.service.get_async_firestore_client", client_factory)
+    fastapi_app.dependency_overrides[get_profile_service] = _real_profile_service
+    kwargs: dict[str, object] = {"headers": {"Authorization": "ignored"}}
+    if request_body is not None:
+        kwargs["json"] = request_body
+
+    response = getattr(client, method)("/v1/profile", **kwargs)
+
+    problem = _assert_problem(response, 503, "dependency_unavailable")
+    assert "Retry-After" not in response.headers
+    assert "credential-secret" not in str(problem)
+    client_factory.assert_called_once_with()
 
 
 def test_profile_method_allow_is_complete(client: TestClient) -> None:
