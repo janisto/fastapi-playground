@@ -103,7 +103,8 @@ async def test_body_free_unsupported_and_unmatched_requests_do_not_read_content(
     path: str,
     expected_status: int,
 ) -> None:
-    status, _, _, calls = await _request(_scope(method, path), [b"must-not-be-read"])
+    scope = _scope(method, path, headers=[(b"content-length", b"1000001")])
+    status, _, _, calls = await _request(scope, [b"must-not-be-read"])
     assert status == expected_status
     assert calls == 0
 

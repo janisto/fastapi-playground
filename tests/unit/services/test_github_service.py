@@ -301,6 +301,54 @@ async def test_numbered_collections_cover_first_middle_terminal_and_later_empty_
     assert [query.get("page", "1") for query in requests] == ["1", "2", "3", "4"]
 
 
+@pytest.mark.parametrize(
+    ("relation", "current_page", "target_page"),
+    [("next", 1, 100), ("prev", 100, 2)],
+)
+async def test_numbered_provider_links_require_directional_progress_not_adjacency(
+    relation: str,
+    current_page: int,
+    target_page: int,
+) -> None:
+    fixed = "type=owner&sort=full_name&direction=asc&per_page=1"
+    target = f"https://api.github.test/users/octocat/repos?{fixed}&page={target_page}"
+    requests: list[dict[str, str]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        requests.append(dict(request.url.params))
+        return httpx2.Response(
+            200,
+            headers={"Content-Type": "application/json", "Link": f'<{target}>; rel="{relation}"'},
+            json=[_repo()],
+        )
+
+    cursor = None
+    if current_page != 1:
+        cursor = encode_cursor(
+            {
+                "direction": "next",
+                "limit": 1,
+                "operation": "listGitHubOwnerRepositories",
+                "owner": "octocat",
+                "page": current_page,
+                "version": 1,
+            }
+        )
+    _, next_cursor, prev_cursor = await _service(handler).list_owner_repositories("octocat", 1, cursor)
+
+    navigation_cursor = next_cursor if relation == "next" else prev_cursor
+    assert decode_cursor(navigation_cursor or "")["page"] == target_page
+    assert requests == [
+        {
+            "type": "owner",
+            "sort": "full_name",
+            "direction": "asc",
+            "per_page": "1",
+            **({"page": str(current_page)} if cursor is not None else {}),
+        }
+    ]
+
+
 async def test_numbered_cursor_scope_rejection_performs_no_fetch() -> None:
     calls = 0
 
@@ -445,6 +493,42 @@ async def test_activity_cursors_reconstruct_next_and_prev_and_cover_terminal_and
     assert empty.count == 0
     assert empty_next is None
     assert decode_cursor(previous or "")["value"] == "p3"
+
+
+@pytest.mark.parametrize("relation", ["next", "prev"])
+async def test_unencodable_activity_provider_navigation_is_upstream_failure(relation: str) -> None:
+    activity_url = "https://api.github.test/repos/octocat/hello-world/activity"
+    target_member = "after" if relation == "next" else "before"
+    provider_value = "x" * 2048
+    calls = 0
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        nonlocal calls
+        calls += 1
+        expected_query = {"direction": "desc", "per_page": "1"}
+        if relation == "prev":
+            expected_query["after"] = "current"
+        assert dict(request.url.params) == expected_query
+        link = f'<{activity_url}?direction=desc&per_page=1&{target_member}={provider_value}>; rel="{relation}"'
+        payload = [
+            {
+                "id": 1,
+                "actor": None,
+                "ref": "refs/heads/main",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "activity_type": "push",
+            }
+        ]
+        return httpx2.Response(200, headers={"Content-Type": "application/json", "Link": link}, json=payload)
+
+    cursor = None
+    if relation == "prev":
+        cursor = GitHubService._activity_cursor("next", "octocat", "hello-world", 1, 3, "current")
+
+    with pytest.raises(PortableProblem) as captured:
+        await _service(handler).list_repository_activity("octocat", "hello-world", 1, cursor)
+    assert captured.value.code == "github_upstream"
+    assert calls == 1
 
 
 async def test_languages_sort_by_bytes_then_unicode_scalars() -> None:

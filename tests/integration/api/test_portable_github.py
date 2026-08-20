@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.firebase import verify_firebase_token
 from app.core.problems import PortableProblem
+from app.dependencies import get_github_service
 from app.models.github import (
     GitHubActivityPage,
     GitHubLanguages,
@@ -16,6 +17,7 @@ from app.models.github import (
     GitHubRepositoryPage,
     GitHubTagPage,
 )
+from app.services.github_service import GitHubClient, GitHubService
 
 
 def _owner() -> GitHubOwner:
@@ -133,6 +135,45 @@ def test_paginated_routes_reconstruct_only_relative_public_links(
     tags = client.get("/v1/github/repos/octocat/repo/tags")
     assert tags.status_code == 200
     assert "Link" not in tags.headers
+
+
+def test_unencodable_provider_activity_cursor_is_safe_502(client: TestClient) -> None:
+    from app.main import fastapi_app
+
+    provider_value = "x" * 2048
+    calls = 0
+
+    def handler(_: httpx2.Request) -> httpx2.Response:
+        nonlocal calls
+        calls += 1
+        link = (
+            "<https://api.github.test/repos/octocat/repo/activity"
+            f'?direction=desc&per_page=1&after={provider_value}>; rel="next"'
+        )
+        payload = [
+            {
+                "id": 1,
+                "actor": None,
+                "ref": "refs/heads/main",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "activity_type": "push",
+            }
+        ]
+        return httpx2.Response(200, headers={"Content-Type": "application/json", "Link": link}, json=payload)
+
+    service = GitHubService(
+        GitHubClient(
+            transport=httpx2.MockTransport(handler),
+            base_url="https://api.github.test",
+        )
+    )
+    fastapi_app.dependency_overrides[get_github_service] = lambda: service
+
+    response = client.get("/v1/github/repos/octocat/repo/activity?limit=1")
+    _assert_problem(response, 502, "github_upstream")
+    assert "Link" not in response.headers
+    assert provider_value[:64].encode() not in response.content
+    assert calls == 1
 
 
 @pytest.mark.parametrize(

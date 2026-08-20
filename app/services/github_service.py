@@ -735,18 +735,21 @@ class GitHubService:
     def _activity_cursor(
         direction: Literal["next", "prev"], owner: str, repo: str, limit: int, page: int, value: str
     ) -> str:
-        return encode_cursor(
-            {
-                "direction": direction,
-                "limit": limit,
-                "operation": "listGitHubRepositoryActivity",
-                "owner": owner,
-                "page": page,
-                "repo": repo,
-                "value": value,
-                "version": 1,
-            }
-        )
+        try:
+            return encode_cursor(
+                {
+                    "direction": direction,
+                    "limit": limit,
+                    "operation": "listGitHubRepositoryActivity",
+                    "owner": owner,
+                    "page": page,
+                    "repo": repo,
+                    "value": value,
+                    "version": 1,
+                }
+            )
+        except InvalidCursorError as error:
+            raise GitHubUpstreamError from error
 
     @staticmethod
     def decode_activity_cursor(
