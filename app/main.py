@@ -3,13 +3,16 @@ FastAPI application with Firebase Authentication and Firestore integration.
 """
 
 import logging
+import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import cast
+from typing import Any, cast, override
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi_problem.handler import add_exception_handler
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import HTMLResponse
 from fastapi_request_observability import (
     AccessLogConfig,
     AccessLogMiddleware,
@@ -18,22 +21,41 @@ from fastapi_request_observability import (
     RequestContextMiddleware,
     TraceContextLevel,
 )
-from starlette.types import ASGIApp
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, ExceptionHandler
 
-from app.api import business_routers, health, schemas
+from app.api import business_routers, health, openapi_document, schemas
 from app.api.schemas import populate_schema_cache
 from app.core.config import Settings, get_settings
-from app.core.exception_handler import exception_handler
-from app.core.firebase import close_async_firestore_client, initialize_firebase
+from app.core.firebase import close_async_firestore_client
 from app.core.logging import configure_logging
-from app.core.openapi import register_cbor_request_bodies, register_schema_components
+from app.core.openapi import build_openapi_document
+from app.core.problems import (
+    PortableProblem,
+    http_exception_handler,
+    portable_problem_handler,
+    request_validation_handler,
+    unhandled_exception_handler,
+)
 from app.middleware import (
     BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.pagination import InvalidCursorError
 
 _TRACE_CONTEXT_LEVEL = TraceContextLevel.LEVEL_1
+_REQUEST_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")
+
+
+def _validate_request_id(value: str) -> bool:
+    return _REQUEST_ID.fullmatch(value) is not None
+
+
+class PortableFastAPI(FastAPI):
+    """FastAPI application whose generated document is the portable projection."""
+
+    @override
+    def openapi(self) -> dict[str, Any]:
+        return build_openapi_document(self)
 
 
 @asynccontextmanager
@@ -43,8 +65,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     # Startup
     configure_logging()
-    initialize_firebase()
-
     try:
         yield
     finally:
@@ -52,51 +72,57 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 # Create the FastAPI application before wrapping it with response-wide ASGI middleware.
-fastapi_app = FastAPI(
+fastapi_app = PortableFastAPI(
     title="FastAPI Playground",
     description="A FastAPI application with Firebase Authentication and Firestore",
     version="0.1.0",
     docs_url="/api-docs",
     redoc_url="/api-redoc",
+    openapi_url=None,
     redirect_slashes=False,
     lifespan=lifespan,
 )
+
+
+@fastapi_app.get("/api-docs", include_in_schema=False, response_class=HTMLResponse)
+async def swagger_ui() -> HTMLResponse:
+    """Render Swagger UI against the strict runtime OpenAPI route."""
+    return get_swagger_ui_html(openapi_url="/openapi.json", title=f"{fastapi_app.title} - Swagger UI")
+
+
+@fastapi_app.get("/api-redoc", include_in_schema=False, response_class=HTMLResponse)
+async def redoc_ui() -> HTMLResponse:
+    """Render ReDoc against the strict runtime OpenAPI route."""
+    return get_redoc_html(openapi_url="/openapi.json", title=f"{fastapi_app.title} - ReDoc")
+
 
 # Include routers
 for business_router in business_routers:
     fastapi_app.include_router(business_router)
 fastapi_app.include_router(health.router)  # /health (unversioned)
+fastapi_app.include_router(openapi_document.router)
 fastapi_app.include_router(schemas.router)  # /schemas (unversioned)
 
-# Populate schema cache from OpenAPI spec (must be after all routers are registered)
-openapi_schema = fastapi_app.openapi()
-register_schema_components(openapi_schema)
-register_cbor_request_bodies(fastapi_app, openapi_schema)
-populate_schema_cache(openapi_schema)
+populate_schema_cache(fastapi_app.openapi())
 
-# Register RFC 9457 Problem Details exception handler
-add_exception_handler(fastapi_app, exception_handler)
-# This expected non-HTTP exception needs a specific registration so Starlette
-# handles it inside ExceptionMiddleware instead of re-raising it as a server error.
-fastapi_app.add_exception_handler(InvalidCursorError, exception_handler)
+fastapi_app.add_exception_handler(PortableProblem, cast("ExceptionHandler", portable_problem_handler))
+fastapi_app.add_exception_handler(RequestValidationError, cast("ExceptionHandler", request_validation_handler))
+fastapi_app.add_exception_handler(StarletteHTTPException, cast("ExceptionHandler", http_exception_handler))
+fastapi_app.add_exception_handler(Exception, cast("ExceptionHandler", unhandled_exception_handler))
 
 
 def _build_application(inner_app: ASGIApp, application_settings: Settings) -> RequestContextMiddleware:
     """
     Compose the response-wide middleware stack from explicit settings.
     """
-    application: ASGIApp = BodySizeLimitMiddleware(
-        inner_app,
-        max_request_size_bytes=application_settings.max_request_size_bytes,
-    )
+    application: ASGIApp = BodySizeLimitMiddleware(inner_app)
 
     # CORS wraps the body limit and FastAPI recovery so preflights and error responses retain CORS headers.
     if application_settings.cors_origins:
-        allow_credentials = "*" not in application_settings.cors_origins
         application = CORSMiddleware(
             application,
             allow_origins=application_settings.cors_origins,
-            allow_credentials=allow_credentials,
+            allow_credentials=True,
             allow_methods=application_settings.cors_methods,
             allow_headers=application_settings.cors_headers,
             expose_headers=application_settings.cors_expose_headers,
@@ -124,7 +150,10 @@ def _build_application(inner_app: ASGIApp, application_settings: Settings) -> Re
     # Request context remains outermost so every final response receives X-Request-ID.
     return RequestContextMiddleware(
         security_headers,
-        config=RequestContextConfig(trace_context_level=_TRACE_CONTEXT_LEVEL),
+        config=RequestContextConfig(
+            trace_context_level=_TRACE_CONTEXT_LEVEL,
+            request_id_validator=_validate_request_id,
+        ),
     )
 
 

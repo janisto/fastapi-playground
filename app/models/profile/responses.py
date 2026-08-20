@@ -1,74 +1,31 @@
-"""
-Profile response models.
+"""Portable profile response model and persistence collection."""
 
-Constants
----------
-`PROFILE_COLLECTION` is the canonical Firestore collection name for profile documents. It is
-intentionally hard-coded (instead of configurable via environment variable) to reduce
-configuration surface and enforce a single collection naming convention across environments.
-Change here if a rename is ever required; update related tests accordingly.
-"""
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.types import Name, NormalizedEmail, Phone, UTCDateTime
+from app.models.types import BoundedName, ContactEmail, OpaqueId, PhoneNumber, UTCDateTime
 
-# Firestore collection name for profiles
 PROFILE_COLLECTION = "profiles"
 
 
 class Profile(BaseModel):
-    """
-    Complete profile model with metadata.
+    """Complete current-principal profile."""
 
-    Note: Does not inherit from ProfileBase to avoid extra="forbid" which is
-    inappropriate for response models.
-    """
+    id: OpaqueId
+    first_name: BoundedName = Field(alias="firstName")
+    last_name: BoundedName = Field(alias="lastName")
+    contact_email: ContactEmail = Field(alias="contactEmail")
+    phone_number: PhoneNumber = Field(alias="phoneNumber")
+    marketing_opt_in: bool = Field(alias="marketingOptIn", strict=True)
+    terms_accepted: Literal[True] = Field(alias="termsAccepted")
+    created_at: UTCDateTime = Field(alias="createdAt")
+    updated_at: UTCDateTime = Field(alias="updatedAt")
+    model_config = ConfigDict(extra="forbid", strict=True, serialize_by_alias=True)
 
-    id: str = Field(
-        ...,
-        min_length=1,
-        max_length=128,
-        description="Unique identifier",
-        examples=["user-abc123"],
-    )
-    first_name: Name = Field(
-        ...,
-        description="First name",
-        examples=["John"],
-    )
-    last_name: Name = Field(
-        ...,
-        description="Last name",
-        examples=["Doe"],
-    )
-    email: NormalizedEmail = Field(
-        ...,
-        description="Email address (auto-lowercased)",
-        examples=["user@example.com"],
-    )
-    phone_number: Phone = Field(
-        ...,
-        description="Phone number",
-        examples=["+358401234567"],
-    )
-    marketing: bool = Field(
-        default=False,
-        description="Marketing opt-in",
-        examples=[False],
-    )
-    terms: bool = Field(
-        ...,
-        description="Terms acceptance",
-        examples=[True],
-    )
-    created_at: UTCDateTime = Field(
-        ...,
-        description="Creation timestamp",
-        examples=["2025-01-15T10:30:00.000Z"],
-    )
-    updated_at: UTCDateTime = Field(
-        ...,
-        description="Last update timestamp",
-        examples=["2025-01-15T10:30:00.000Z"],
-    )
+    @model_validator(mode="after")
+    def timestamps_are_ordered(self) -> Profile:
+        """Reject persisted data whose update predates creation."""
+        if self.updated_at < self.created_at:
+            raise ValueError("updated timestamp predates creation")
+        return self

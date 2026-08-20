@@ -1,19 +1,15 @@
-"""
-Generic cursor-based pagination helper.
-"""
+"""Deterministic local item cursor pagination."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from app.pagination.cursor import Cursor, InvalidCursorError, decode_cursor
+from app.pagination.cursor import InvalidCursorError, decode_cursor, encode_cursor
 from app.pagination.link import build_link_header
 
 
 @dataclass(frozen=True, slots=True)
 class PaginationResult[T]:
-    """
-    Result of pagination operation.
-    """
+    """A page plus RFC 8288 navigation metadata."""
 
     items: list[T]
     total: int
@@ -22,77 +18,77 @@ class PaginationResult[T]:
     prev_cursor: str | None
 
 
+def _item_cursor(*, direction: str, limit: int, category: str | None, anchor: str) -> str:
+    return encode_cursor(
+        {
+            "anchor": anchor,
+            "category": category,
+            "direction": direction,
+            "limit": limit,
+            "operation": "listItems",
+            "version": 1,
+        }
+    )
+
+
 def paginate[T](
     items: Sequence[T],
     cursor: str | None,
     limit: int,
-    cursor_type: str,
     get_id: Callable[[T], str],
     base_url: str,
     query_params: dict[str, str] | None = None,
 ) -> PaginationResult[T]:
-    """
-    Apply cursor-based pagination to a sequence of items.
-
-    Args:
-        items: Full sequence of items to paginate
-        cursor: Opaque cursor string (base64 encoded type:value)
-        limit: Maximum items per page
-        cursor_type: Type identifier for cursor (e.g., "item", "user")
-        get_id: Function to extract ID from an item
-        base_url: Base URL path for Link header
-        query_params: Additional query params to preserve in links
-
-    Returns:
-        PaginationResult with sliced items, total count, and Link header
-    """
+    """Paginate the fixed catalog in both directions with fully scoped cursors."""
     query_params = query_params or {}
+    category = query_params.get("category")
+    start = 0
+    if cursor is not None:
+        state = decode_cursor(cursor)
+        if set(state) != {"anchor", "category", "direction", "limit", "operation", "version"}:
+            raise InvalidCursorError("cursor scope is invalid")
+        if (
+            state["operation"] != "listItems"
+            or type(state["version"]) is not int
+            or state["version"] != 1
+            or type(state["limit"]) is not int
+            or state["limit"] != limit
+            or state["category"] != category
+            or state["direction"] not in {"next", "prev"}
+            or not isinstance(state["anchor"], str)
+        ):
+            raise InvalidCursorError("cursor scope is invalid")
+        ids = [get_id(item) for item in items]
+        try:
+            anchor_index = ids.index(state["anchor"])
+        except ValueError as error:
+            raise InvalidCursorError("cursor position is stale") from error
+        start = anchor_index + 1 if state["direction"] == "next" else anchor_index
 
-    # Decode cursor to determine starting position
-    start_idx = 0
-    if cursor:
-        decoded = decode_cursor(cursor)
-        if decoded.cursor_type != cursor_type:
-            raise InvalidCursorError(f"invalid cursor type: expected '{cursor_type}'")
-        if not decoded.value:
-            raise InvalidCursorError("cursor value cannot be empty")
-        for i, item in enumerate(items):
-            if get_id(item) == decoded.value:
-                start_idx = i + 1
-                break
-        else:
-            raise InvalidCursorError("cursor references unknown item")
-
-    # Get page of items
-    end_idx = start_idx + limit
-    page_items = list(items[start_idx:end_idx])
-
-    # Build pagination cursors
+    page_items = list(items[start : start + limit])
     next_cursor = None
     prev_cursor = None
-
-    if end_idx < len(items) and page_items:
-        next_cursor = Cursor(cursor_type=cursor_type, value=get_id(page_items[-1])).encode()
-
-    if start_idx > 0:
-        if start_idx <= limit:
-            prev_cursor = ""
+    if page_items and start + len(page_items) < len(items):
+        next_cursor = _item_cursor(direction="next", limit=limit, category=category, anchor=get_id(page_items[-1]))
+    if start > 0:
+        previous_start = max(0, start - limit)
+        if previous_start > 0:
+            prev_cursor = _item_cursor(
+                direction="prev", limit=limit, category=category, anchor=get_id(items[previous_start])
+            )
         else:
-            prev_last_idx = start_idx - 1
-            prev_cursor = Cursor(cursor_type=cursor_type, value=get_id(items[prev_last_idx - limit])).encode()
+            prev_cursor = ""
 
-    # Build Link header
     link_header = build_link_header(
         base_url=base_url,
         query_params={**query_params, "limit": str(limit)},
         next_cursor=next_cursor,
         prev_cursor=prev_cursor,
     )
-
     return PaginationResult(
         items=page_items,
         total=len(items),
-        link_header=link_header,
+        link_header=link_header or None,
         next_cursor=next_cursor,
         prev_cursor=prev_cursor,
     )

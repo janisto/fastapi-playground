@@ -1,98 +1,137 @@
 """
-ASGI middleware to enforce maximum request body size with early abort.
+Route-aware ASGI request policy and streaming body limit.
 """
 
-import json
+import re
 
-import cbor2
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.core.config import get_settings
-from app.core.constants import PROBLEM_SCHEMA_PATH
-from app.core.content_negotiation import CBOR_MEDIA_TYPE, negotiate_problem_media_type
-from app.core.schema_links import build_described_by_link
+from app.core.portable_http import validate_closed_query
+from app.core.problems import PortableProblem, render_problem
+
+MAX_REQUEST_BODY_BYTES = 1_000_000
+_BODY_ROUTES = {("POST", "/v1/hello"), ("POST", "/v1/profile"), ("PATCH", "/v1/profile")}
+_EXACT_METHODS: dict[str, frozenset[str]] = {
+    "/health": frozenset({"GET"}),
+    "/v1/hello": frozenset({"GET", "POST"}),
+    "/v1/items": frozenset({"GET"}),
+    "/v1/profile": frozenset({"GET", "POST", "PATCH", "DELETE"}),
+    "/openapi.json": frozenset({"GET"}),
+}
+_GITHUB_PATTERNS = (
+    re.compile(r"/v1/github/owners/[^/]+\Z"),
+    re.compile(r"/v1/github/owners/[^/]+/repos\Z"),
+    re.compile(r"/v1/github/repos/[^/]+/[^/]+\Z"),
+    re.compile(r"/v1/github/repos/[^/]+/[^/]+/(?:activity|languages|tags)\Z"),
+)
+_PAGINATED_GITHUB = (
+    re.compile(r"/v1/github/owners/[^/]+/repos\Z"),
+    re.compile(r"/v1/github/repos/[^/]+/[^/]+/(?:activity|tags)\Z"),
+)
+_DECIMAL_LENGTH = re.compile(r"[0-9]+\Z")
+_MAX_CONTENT_LENGTH = 9_223_372_036_854_775_807
+
+
+def _content_length(value: str) -> int | None:
+    if _DECIMAL_LENGTH.fullmatch(value) is None:
+        return None
+    normalized = value.lstrip("0") or "0"
+    maximum = str(_MAX_CONTENT_LENGTH)
+    if len(normalized) > len(maximum) or (len(normalized) == len(maximum) and normalized > maximum):
+        return None
+    return int(normalized)
+
+
+def _allowed_methods(path: str) -> frozenset[str] | None:
+    methods = _EXACT_METHODS.get(path)
+    if methods is not None:
+        return methods
+    if any(pattern.fullmatch(path) for pattern in _GITHUB_PATTERNS):
+        return frozenset({"GET"})
+    return None
+
+
+def _allowed_query(path: str) -> frozenset[str]:
+    if path == "/v1/items":
+        return frozenset({"limit", "cursor", "category"})
+    if any(pattern.fullmatch(path) for pattern in _PAGINATED_GITHUB):
+        return frozenset({"limit", "cursor"})
+    return frozenset()
+
+
+def _accept(scope: Scope) -> str:
+    return ",".join(value.decode("latin1") for key, value in scope.get("headers", []) if key.lower() == b"accept")
+
+
+async def _empty_receive() -> Message:
+    return {"type": "http.request", "body": b"", "more_body": False}
+
+
+async def _send_problem(scope: Scope, send: Send, problem: PortableProblem) -> None:
+    response = render_problem(_accept(scope), problem)
+    await response(scope, _empty_receive, send)
 
 
 class BodySizeLimitMiddleware:
     """
-    Reject requests exceeding MAX_REQUEST_SIZE_BYTES with 413 without buffering entire body.
+    Select a portable route and method before enforcing the exact inbound limit.
     """
 
-    def __init__(self, app: ASGIApp, *, max_request_size_bytes: int | None = None) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        self._max = max_request_size_bytes or get_settings().max_request_size_bytes
+        self._max = MAX_REQUEST_BODY_BYTES
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
 
-        headers = {k.decode("latin1").lower(): v.decode("latin1") for k, v in scope.get("headers", [])}
-        content_length = headers.get("content-length")
-        try:
-            declared_size = int(content_length) if content_length is not None else None
-        except ValueError:
-            declared_size = None
-        if declared_size is not None and declared_size > self._max:
-            await self._send_body_rejection(send, scope)
+        path = str(scope.get("path", ""))
+        method = str(scope.get("method", ""))
+        allowed_methods = _allowed_methods(path)
+        if allowed_methods is not None and method not in allowed_methods:
+            await _send_problem(
+                scope,
+                send,
+                PortableProblem("method_not_allowed", headers={"Allow": ", ".join(sorted(allowed_methods))}),
+            )
             return
 
-        total = 0
-        buffered: list[bytes] = []
-        more_body = True
-        while more_body:
+        if allowed_methods is not None:
+            try:
+                scope["portable.query"] = validate_closed_query(scope.get("query_string", b""), _allowed_query(path))
+            except PortableProblem as problem:
+                await _send_problem(scope, send, problem)
+                return
+
+        if (method, path) not in _BODY_ROUTES:
+            await self.app(scope, receive, send)
+            return
+
+        content_lengths = [
+            value.decode("latin1").strip()
+            for key, value in scope.get("headers", [])
+            if key.lower() == b"content-length"
+        ]
+        if content_lengths:
+            values = [part.strip() for value in content_lengths for part in value.split(",")]
+            parsed_lengths = [_content_length(value) for value in values]
+            if not values or any(value is None for value in parsed_lengths) or len(set(parsed_lengths)) != 1:
+                await _send_problem(scope, send, PortableProblem("invalid_request"))
+                return
+            if parsed_lengths[0] is not None and parsed_lengths[0] > self._max:
+                await _send_problem(scope, send, PortableProblem("payload_too_large"))
+                return
+
+        received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received
             message = await receive()
-            if message["type"] == "http.disconnect":
-                return
-            if message["type"] != "http.request":  # pragma: no cover
-                return
-            chunk = message.get("body", b"")
-            if chunk:
-                total += len(chunk)
-                if total > self._max:
-                    await self._send_body_rejection(send, scope)
-                    return
-                buffered.append(chunk)
-            more_body = message.get("more_body", False)
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self._max:
+                    raise PortableProblem("payload_too_large")
+            return message
 
-        body = b"".join(buffered)
-        # Replay buffered body to downstream app via a custom receive
-        sent = False
-
-        async def replay_receive() -> Message:
-            nonlocal sent
-            if not sent:
-                sent = True
-                return {"type": "http.request", "body": body, "more_body": False}
-            # No more body
-            return {"type": "http.request", "body": b"", "more_body": False}
-
-        await self.app(scope, replay_receive, send)
-
-    async def _send_body_rejection(self, send: Send, scope: Scope) -> None:
-        accept = ",".join(value.decode("latin1") for key, value in scope.get("headers", []) if key.lower() == b"accept")
-        response_media_type = negotiate_problem_media_type(accept)
-        status_code = 413
-        problem = {
-            "title": "Payload Too Large",
-            "status": status_code,
-            "detail": "Request body too large",
-        }
-
-        payload = (
-            cbor2.dumps(problem) if response_media_type == CBOR_MEDIA_TYPE else json.dumps(problem).encode("utf-8")
-        )
-
-        await send(
-            {
-                "type": "http.response.start",
-                "status": status_code,
-                "headers": [
-                    (b"content-type", response_media_type.encode("latin1")),
-                    (b"content-length", str(len(payload)).encode("latin1")),
-                    (b"link", build_described_by_link(PROBLEM_SCHEMA_PATH).encode("latin1")),
-                    (b"vary", b"Accept"),
-                ],
-            }
-        )
-        await send({"type": "http.response.body", "body": payload, "more_body": False})
+        await self.app(scope, limited_receive, send)

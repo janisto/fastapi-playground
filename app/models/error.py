@@ -1,63 +1,37 @@
-"""
-RFC 9457 Problem Details response models.
-"""
+"""Closed portable RFC 9457 Problem Details models."""
 
-from typing import Any
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class ValidationErrorDetail(BaseModel):
-    """
-    Single validation error detail.
-    """
+class ErrorSource(BaseModel):
+    """One application-owned validation issue source."""
 
-    location: str = Field(..., description="Dot-notation path to the invalid field", examples=["body.email"])
-    message: str = Field(
-        ..., description="Human-readable error message", examples=["value is not a valid email address"]
-    )
-    value: Any | None = Field(
-        default=None,
-        description="The invalid input value (omitted for sensitive fields)",
-        examples=["not-an-email"],
-    )
+    pointer: str | None = Field(default=None, min_length=1, max_length=256)
+    parameter: str | None = Field(default=None, min_length=1, max_length=256)
+    header: str | None = Field(default=None, min_length=1, max_length=256)
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    @model_validator(mode="after")
+    def exactly_one_member(self) -> ErrorSource:
+        if sum(value is not None for value in (self.pointer, self.parameter, self.header)) != 1:
+            raise ValueError("exactly one source member is required")
+        return self
+
+
+class ValidationIssue(BaseModel):
+    """Safe normalized validation issue."""
+
+    detail: str = Field(min_length=1, max_length=200)
+    source: ErrorSource | None = None
+    model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class ProblemResponse(BaseModel):
-    """
-    RFC 9457 Problem Details response schema.
+    """Portable GCP Problem Details document."""
 
-    Used for OpenAPI documentation of error responses.
-    Per RFC 9457, when type is omitted it defaults to "about:blank".
-    """
-
-    title: str = Field(..., description="Short human-readable summary of the problem", examples=["Not Found"])
-    status: int = Field(..., description="HTTP status code", examples=[404])
-    detail: str = Field(..., description="Human-readable explanation", examples=["Profile not found"])
-
-
-class ValidationProblemResponse(BaseModel):
-    """
-    RFC 9457 Problem Details with validation errors.
-
-    Used for 422 Unprocessable Entity responses.
-    Does not include 'type' field per RFC 9457 (defaults to about:blank).
-    """
-
-    title: str = Field(
-        default="Unprocessable Entity",
-        description="Short human-readable summary of the problem",
-        examples=["Unprocessable Entity"],
-    )
-    status: int = Field(default=422, description="HTTP status code", examples=[422])
-    detail: str = Field(
-        default="validation failed", description="Human-readable explanation", examples=["validation failed"]
-    )
-    errors: list[ValidationErrorDetail] = Field(
-        default_factory=list,
-        description="List of validation errors with location, message, and value",
-    )
-    errors_truncated: bool = Field(
-        default=False,
-        description="Whether additional validation errors were omitted from the response",
-    )
+    title: str
+    status: int
+    detail: str
+    code: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    errors: list[ValidationIssue] | None = Field(default=None, min_length=1, max_length=32)
+    model_config = ConfigDict(extra="forbid", strict=True)

@@ -1,187 +1,126 @@
-"""
-Profile router for user profile management.
-"""
+"""Authenticated portable current-principal profile routes."""
 
-import logging
+from fastapi import APIRouter, Request, Response, status
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
-
-from app.core.cbor import CBORRoute
 from app.core.constants import API_V1_PREFIX
-from app.core.openapi import COMMON_CBOR_ERROR_RESPONSES, empty_response, problem_response, success_response
-from app.core.schema_links import build_described_by_link
+from app.core.portable_http import PortableRoute, parse_request_model
+from app.core.problems import PortableProblem
 from app.dependencies import CurrentUser, ProfileServiceDependency
-from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
-from app.models.error import ValidationProblemResponse
+from app.exceptions import (
+    ProfileAlreadyExistsError,
+    ProfileDependencyError,
+    ProfileNotFoundError,
+    ProfileTimestampOverflowError,
+)
 from app.models.profile import Profile, ProfileCreate, ProfileUpdate
 
-logger = logging.getLogger(__name__)
-PROFILE_SCHEMA_PATH = "/schemas/Profile.json"
-_PROFILE_BASE_ERROR_RESPONSES = {
-    status_code: response
-    for status_code, response in COMMON_CBOR_ERROR_RESPONSES.items()
-    if status_code != status.HTTP_406_NOT_ACCEPTABLE
+router = APIRouter(prefix=f"{API_V1_PREFIX}/profile", tags=["Profile"], route_class=PortableRoute)
+
+_CREATE_BODY = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/ProfileCreate"}},
+            "application/cbor": {"schema": {"$ref": "#/components/schemas/ProfileCreate"}},
+        },
+    }
 }
-_PROFILE_NEGOTIATION_ERROR_RESPONSE = COMMON_CBOR_ERROR_RESPONSES[status.HTTP_406_NOT_ACCEPTABLE]
-
-router = APIRouter(
-    prefix=f"{API_V1_PREFIX}/profile",
-    tags=["Profile"],
-    route_class=CBORRoute,
-    responses={
-        **_PROFILE_BASE_ERROR_RESPONSES,
-        401: problem_response("Unauthorized", authenticate=True),
-        503: problem_response("Authentication service unavailable", retry_after=True),
-    },
-)
+_UPDATE_BODY = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/ProfileUpdate"}},
+            "application/cbor": {"schema": {"$ref": "#/components/schemas/ProfileUpdate"}},
+        },
+    }
+}
 
 
-def _profile_response(response: Response, profile: Profile) -> Profile:
-    """
-    Add profile schema discovery metadata to a response model.
-    """
-    response.headers["Link"] = build_described_by_link(PROFILE_SCHEMA_PATH)
-    return profile
+def _map_profile_error(error: Exception) -> PortableProblem:
+    if isinstance(error, ProfileAlreadyExistsError):
+        return PortableProblem("profile_exists")
+    if isinstance(error, ProfileNotFoundError):
+        return PortableProblem("profile_not_found")
+    if isinstance(error, ProfileDependencyError):
+        return PortableProblem("dependency_unavailable")
+    if isinstance(error, ProfileTimestampOverflowError):
+        return PortableProblem("internal_error")
+    return PortableProblem("internal_error")
 
 
 @router.post(
     "",
+    response_model=Profile,
     status_code=status.HTTP_201_CREATED,
-    summary="Create user profile",
-    description="Create a new profile for the authenticated user.",
-    operation_id="profile_create",
-    responses={
-        201: success_response("Profile created successfully", "Profile", location=True),
-        406: _PROFILE_NEGOTIATION_ERROR_RESPONSE,
-        409: problem_response("Profile already exists"),
-        422: problem_response("Validation error", model=ValidationProblemResponse),
-    },
+    summary="Create the current profile",
+    description="Atomically creates the authenticated principal's sole profile.",
+    operation_id="createProfile",
+    openapi_extra=_CREATE_BODY,
 )
 async def create_profile(
     request: Request,
-    profile_data: ProfileCreate,
     current_user: CurrentUser,
     profile_service: ProfileServiceDependency,
     response: Response,
 ) -> Profile:
-    """
-    Create a new profile for the authenticated user.
-
-    Stores the profile data in Firestore under the user's UID.
-    Returns 409 Conflict if a profile already exists.
-    """
+    """Authenticate, strictly validate, and conditionally create one profile."""
+    profile_data = await parse_request_model(request, ProfileCreate)
     try:
         profile = await profile_service.create_profile(current_user.uid, profile_data)
-        response.headers["Location"] = str(request.url.path)
-        return _profile_response(response, profile)
-    except HTTPException, ProfileAlreadyExistsError:
-        raise
-    except Exception:
-        logger.exception("Error creating profile", extra={"user_id": current_user.uid})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create profile"
-        ) from None
+    except (ProfileAlreadyExistsError, ProfileDependencyError, ProfileTimestampOverflowError) as error:
+        raise _map_profile_error(error) from error
+    response.headers["Location"] = "/v1/profile"
+    return profile
 
 
 @router.get(
     "",
-    summary="Get user profile",
-    description="Get the profile of the authenticated user.",
-    operation_id="profile_get",
-    responses={
-        200: success_response("Profile retrieved successfully", "Profile"),
-        406: _PROFILE_NEGOTIATION_ERROR_RESPONSE,
-        404: problem_response("Profile not found"),
-    },
+    response_model=Profile,
+    summary="Get the current profile",
+    description="Reads the authenticated principal's profile without mutation.",
+    operation_id="getProfile",
 )
-async def get_profile(
-    response: Response,
-    current_user: CurrentUser,
-    profile_service: ProfileServiceDependency,
-) -> Profile:
-    """
-    Retrieve the profile of the authenticated user.
-
-    Returns 404 Not Found if no profile exists for the user.
-    """
+async def get_profile(current_user: CurrentUser, profile_service: ProfileServiceDependency) -> Profile:
+    """Return the current principal profile."""
     try:
-        profile = await profile_service.get_profile(current_user.uid)
-        return _profile_response(response, profile)
-    except HTTPException, ProfileNotFoundError:
-        raise
-    except Exception:
-        logger.exception("Error getting profile", extra={"user_id": current_user.uid})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve profile"
-        ) from None
+        return await profile_service.get_profile(current_user.uid)
+    except (ProfileNotFoundError, ProfileDependencyError) as error:
+        raise _map_profile_error(error) from error
 
 
 @router.patch(
     "",
     response_model=Profile,
-    response_model_exclude_unset=True,
-    summary="Update user profile",
-    description="Partially update the profile of the authenticated user.",
-    operation_id="profile_update",
-    responses={
-        200: success_response("Profile updated successfully", "Profile"),
-        406: _PROFILE_NEGOTIATION_ERROR_RESPONSE,
-        404: problem_response("Profile not found"),
-        422: problem_response("Validation error", model=ValidationProblemResponse),
-    },
+    summary="Update the current profile",
+    description="Atomically applies a non-empty profile patch and preserves no-op timestamps.",
+    operation_id="updateProfile",
+    openapi_extra=_UPDATE_BODY,
 )
 async def update_profile(
-    response: Response,
-    profile_data: ProfileUpdate,
+    request: Request,
     current_user: CurrentUser,
     profile_service: ProfileServiceDependency,
 ) -> Profile:
-    """
-    Partially update the profile of the authenticated user.
-
-    Only the fields explicitly provided in the request are updated.
-    Omitted fields retain their existing values.
-    Returns 404 Not Found if no profile exists for the user.
-    """
+    """Authenticate, validate the whole patch, and commit it atomically."""
+    profile_data = await parse_request_model(request, ProfileUpdate)
     try:
-        profile = await profile_service.update_profile(current_user.uid, profile_data)
-        return _profile_response(response, profile)
-    except HTTPException, ProfileNotFoundError:
-        raise
-    except Exception:
-        logger.exception("Error updating profile", extra={"user_id": current_user.uid})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update profile"
-        ) from None
+        return await profile_service.update_profile(current_user.uid, profile_data)
+    except (ProfileNotFoundError, ProfileDependencyError, ProfileTimestampOverflowError) as error:
+        raise _map_profile_error(error) from error
 
 
 @router.delete(
     "",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete user profile",
-    description="Delete the profile of the authenticated user.",
-    operation_id="profile_delete",
-    responses={
-        204: empty_response("Profile deleted successfully"),
-        404: problem_response("Profile not found"),
-    },
+    response_class=Response,
+    summary="Delete the current profile",
+    description="Atomically removes the authenticated principal's existing profile.",
+    operation_id="deleteProfile",
 )
-async def delete_profile(
-    current_user: CurrentUser,
-    profile_service: ProfileServiceDependency,
-) -> None:
-    """
-    Delete the profile of the authenticated user.
-
-    Permanently removes the profile from Firestore.
-    Returns 404 Not Found if no profile exists for the user.
-    """
+async def delete_profile(current_user: CurrentUser, profile_service: ProfileServiceDependency) -> Response:
+    """Delete one current-principal profile without a success representation."""
     try:
         await profile_service.delete_profile(current_user.uid)
-    except HTTPException, ProfileNotFoundError:
-        raise
-    except Exception:
-        logger.exception("Error deleting profile", extra={"user_id": current_user.uid})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete profile"
-        ) from None
+    except (ProfileNotFoundError, ProfileDependencyError) as error:
+        raise _map_profile_error(error) from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -5,7 +5,9 @@
 [![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/github/license/janisto/fastapi-playground)](LICENSE)
 
-A FastAPI application demonstrating Firebase Authentication, Firestore CRUD operations, and modern Python development workflow using `uv` (dependency & virtualenv manager) and `just` (task runner).
+A FastAPI reference application for the accepted portable playground API. It demonstrates strict JSON and CBOR
+contracts, Firebase-authenticated Firestore profile lifecycle operations, a credential-free GitHub REST projection,
+and a modern Python workflow using `uv` and `just`.
 
 <img src="assets/python.svg" alt="Python logo" width="400">
 
@@ -15,12 +17,13 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 
 - Layered middleware architecture with security headers, CORS, request IDs, and structured access logs via [`fastapi-request-observability`](https://pypi.org/project/fastapi-request-observability/)
 - Request-scoped logging with incoming [W3C Trace Context](https://www.w3.org/TR/trace-context/) correlation metadata
-- [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) for FastAPI error responses, including field-level validation errors
-- JSON and CBOR request/response content negotiation using `Content-Type` and `Accept`
+- [RFC 9457 Problem Details](https://datatracker.ietf.org/doc/html/rfc9457) with stable error codes and value-free validation issues
+- Strict JSON and CBOR parsing and RFC 9110 content negotiation using `Content-Type`, `Content-Encoding`, and `Accept`
 - Cursor-based pagination with [RFC 8288 Link](https://datatracker.ietf.org/doc/html/rfc8288) headers
-- [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) documentation with Swagger UI and ReDoc
+- Runtime [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) discovery at `/openapi.json`, with Swagger UI and ReDoc
 - Firebase Authentication with ID token verification and revocation checks
-- Firestore persistence with async transactional operations
+- Atomic Firestore profile creation, patching, and deletion
+- Six public GitHub operations through a fixed-origin, anonymous, bounded HTTP client
 - Health check endpoint (`/health`) for liveness probes
 
 ## API Design Principles
@@ -30,7 +33,8 @@ A FastAPI application demonstrating Firebase Authentication, Firestore CRUD oper
 - Use plural nouns for collections (`/items`, not `/item`)
 - Avoid verbs in URIs; let HTTP methods convey the action
 - Return resources directly without wrapper envelopes
-- Use `snake_case` consistently for public JSON and CBOR properties, request parameters, and persisted Firestore fields
+- Use the exact lower camel case contract for public JSON and CBOR domain properties
+- Keep implementation identifiers and persisted Firestore fields idiomatic `snake_case`; persistence names are not wire aliases
 
 ### HTTP Methods & Status Codes
 
@@ -50,7 +54,8 @@ Errors follow [RFC 9457 Problem Details](https://www.rfc-editor.org/rfc/rfc9457.
 {
   "title": "Not Found",
   "status": 404,
-  "detail": "Profile not found"
+  "detail": "Profile not found",
+  "code": "profile_not_found"
 }
 ```
 
@@ -58,23 +63,24 @@ Validation errors (422) include detailed field locations:
 
 ```json
 {
-  "title": "Unprocessable Entity",
+  "title": "Unprocessable Content",
   "status": 422,
-  "detail": "validation failed",
+  "detail": "Request validation failed",
+  "code": "validation_failed",
   "errors": [
-    {"location": "body.email", "message": "value is not a valid email address", "value": "invalid"}
+    {"detail": "Request field is invalid", "source": {"pointer": "/contactEmail"}}
   ]
 }
 ```
 
-Modeled responses advertise their standalone JSON Schema through an RFC 8288
-`Link: </schemas/Model.json>; rel="describedBy"` header. `$schema` belongs to the schema document itself, not to each
-API response instance.
+Validation documents identify only application-owned structure; they do not echo rejected values or unknown
+attacker-controlled names. Standalone JSON Schema routes are a sibling extension. When a response advertises one, it
+uses the registered lowercase relation, for example `Link: </schemas/Profile.json>; rel="describedby"`.
 
 ### Content Negotiation
 
-- API responses with a body default to `application/json`. CBOR is optional and selected only by an explicit
-  `Accept: application/cbor`; wildcards and equal quality values keep JSON.
+- Portable API successes with a body default to `application/json`. CBOR is selected only when its effective quality
+  is higher after RFC 9110 matching; wildcards and ties keep JSON.
 - An explicit `Accept` value that excludes every supported success representation returns 406 before a
   representation-bearing endpoint executes. A 204 response has no representation, so `Accept` does not gate it.
 - Schema discovery returns only `application/schema+json`. Strict clients must accept that media type or a matching
@@ -82,21 +88,30 @@ API response instance.
 - Errors keep their original status. They use RFC 9457 `application/problem+json` by default, or registered
   `application/cbor` when explicitly preferred. Unsupported error preferences fall back to JSON; the unregistered
   `application/problem+cbor` media type is not implemented.
-- JSON and CBOR request bodies are selected independently with `Content-Type`.
-- `/openapi.json`, `/api-docs`, and `/api-redoc` are fixed FastAPI documentation assets outside optional CBOR
-  negotiation.
+- JSON request bodies accept the base media type or one `charset=utf-8` parameter. CBOR accepts no media parameters;
+  both reject ambiguous content fields, content coding other than `identity`, duplicate members, and trailing data.
+- `/openapi.json` has a strict JSON-only success representation. `/api-docs` and `/api-redoc` are optional HTML UIs
+  that render that same runtime document.
 
 ### Pagination
 
-- Cursor-based tokens for stability
-- Links provided via HTTP `Link` header per [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html)
+- Opaque cursors are scoped to the operation, effective limit, filters, direction, and position.
+- `limit` defaults to 20 and is constrained to 1 through 100. Navigation is exposed only through relative HTTP
+  `Link` targets per [RFC 8288](https://www.rfc-editor.org/rfc/rfc8288.html).
+
+### Resource limits
+
+- The three body-bearing operations accept at most exactly 1,000,000 inbound bytes. Declared and streamed overflow
+  return 413 without invoking the endpoint or persistence.
+- GitHub responses are limited to exactly 4 MiB, use an overall ten-second deadline, never retry automatically, and
+  follow at most three validated same-origin redirects.
 
 ## Requirements
 
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) package manager (the minimum supported version is enforced in both project manifests)
 - [just](https://github.com/casey/just) command runner
-- Firebase project with Authentication and Firestore enabled
+- Firebase project with Authentication and Firestore enabled when using profile operations
 - [Firebase CLI](https://firebase.google.com/docs/cli) for emulators and Functions deployment
 
 ## Quick Start
@@ -105,10 +120,12 @@ API response instance.
 git clone <repository-url>
 cd fastapi-playground
 cp .env.example .env
-# Set FIREBASE_PROJECT_ID in .env
 just install        # Install dependencies via uv
 just serve          # Start dev server at http://127.0.0.1:8080
 ```
+
+Public routes and OpenAPI discovery start without Firebase. Set `FIREBASE_PROJECT_ID` and Application Default
+Credentials before using the authenticated profile lifecycle.
 
 Then visit:
 - `http://localhost:8080/health` - service health probe
@@ -136,8 +153,7 @@ cp .env.example .env
 | `FIREBASE_PROJECT_ID` | Firebase/GCP project ID | - |
 | `FIRESTORE_DATABASE` | Firestore database ID | `(default)` |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Service account JSON path (local dev) | - |
-| `CORS_ORIGINS` | JSON array or comma-separated allowed origins | - |
-| `MAX_REQUEST_SIZE_BYTES` | Request body size limit | `1000000` |
+| `CORS_ORIGINS` | JSON array or comma-separated explicit allowed origins; `*` is rejected | - |
 
 ### Firebase and Cloud Logging MCP clients
 
@@ -172,32 +188,32 @@ token. See [GCP.md](GCP.md) for IAM and troubleshooting details.
 .github/agents/       Evidence-based security review profile for GitHub Copilot
 app/
   main.py              # FastAPI composition, lifespan, and outer ASGI middleware
-  dependencies.py      # Dependency injection (CurrentUser, ProfileServiceDependency)
+  dependencies.py      # Typed profile and GitHub dependency injection
   api/                 # API route handlers
     health.py          # Health check endpoint
     hello.py           # Hello greeting endpoints
     items.py           # Items with pagination
     profile.py         # Profile CRUD (Firebase Auth protected)
+    github.py          # Public GitHub projections
+    openapi_document.py  # Local runtime OpenAPI discovery
   auth/                # Firebase authentication
     firebase.py        # Token verification, FirebaseUser
   core/                # Configuration and infrastructure
     config.py          # Settings class (pydantic-settings)
     logging.py         # Structured JSON logging configuration
     firebase.py        # Firebase Admin SDK and async Firestore client
-    exception_handler.py  # RFC 9457 Problem Details
     content_negotiation.py  # RFC 9110 media-type selection
-    cbor.py            # CBOR request and response adaptation
-    openapi.py         # Reusable response contract metadata
-    schema_links.py    # RFC 8288 schema links
-    validation.py      # Validation error formatting and redaction
-  exceptions/          # Domain exceptions using fastapi-problem
+    openapi.py         # Generated portable OpenAPI projection
+    portable_http.py   # Route-bound parsing, negotiation, and query policy
+    problems.py        # Stable RFC 9457 errors and handlers
+  exceptions/          # Profile domain exceptions
     profile.py         # ProfileNotFoundError, ProfileAlreadyExistsError
   middleware/          # ASGI middleware stack
     body_limit.py      # Request size guard (413 on oversized)
     security.py        # Security headers (HSTS, X-Frame-Options)
   models/              # Pydantic schemas
     error.py           # ProblemResponse schema
-    types.py           # Shared types (NormalizedEmail, Phone, UTCDateTime)
+    types.py           # Shared types (ContactEmail, PhoneNumber, UTCDateTime)
     health/            # Health response models
     hello/             # Hello response models
     items/             # Items response models
@@ -208,6 +224,9 @@ app/
     paginator.py       # Pagination helper
   services/            # Business logic layer
     profile/           # ProfileService with Firestore operations
+    github_service.py  # Bounded anonymous GitHub client and projection
+scripts/
+  migrate_profiles.py  # Dry-run-first one-time persisted-profile migration
 tests/
   unit/                # Unit tests (mocked dependencies)
   integration/         # API route tests (TestClient)
@@ -238,9 +257,40 @@ All routes use paths without trailing slashes (`redirect_slashes=False`).
 | GET | `/v1/profile` | Yes | Get user profile |
 | PATCH | `/v1/profile` | Yes | Update user profile |
 | DELETE | `/v1/profile` | Yes | Delete user profile |
-| GET | `/schemas/{schema_name}` | No | Retrieve a generated JSON Schema |
+| GET | `/v1/github/owners/{owner}` | No | Get a projected public GitHub owner |
+| GET | `/v1/github/owners/{owner}/repos` | No | List projected public repositories |
+| GET | `/v1/github/repos/{owner}/{repo}` | No | Get a projected public repository |
+| GET | `/v1/github/repos/{owner}/{repo}/activity` | No | List projected repository activity |
+| GET | `/v1/github/repos/{owner}/{repo}/languages` | No | List projected repository languages |
+| GET | `/v1/github/repos/{owner}/{repo}/tags` | No | List projected repository tags |
+| GET | `/openapi.json` | No | Retrieve the runtime OpenAPI 3.1 document |
+| GET | `/schemas/{Model}.json` | No | Optional standalone JSON Schema extension |
 
-Protected routes require `Authorization: Bearer <Firebase ID token>` header.
+Protected routes require `Authorization: Bearer <Firebase ID token>`. GitHub routes are deliberately anonymous: the
+application neither reads an ambient GitHub token nor forwards caller credentials.
+
+## Persisted profile migration
+
+The accepted profile contract retires the persisted `email`, `marketing`, and `terms` keys in favor of
+`contact_email`, `marketing_opt_in`, and `terms_accepted`. Before deploying this revision over existing profile data:
+
+1. Quiesce all profile traffic, take a Firestore backup, and keep the retired revision from reading migrated records.
+2. Point ADC, `FIREBASE_PROJECT_ID`, and optional `FIRESTORE_DATABASE` at the intended environment.
+3. Run `uv run python -m scripts.migrate_profiles` and review `validated`, `pending`, and `written=0`.
+4. With separate operational authorization, run `uv run python -m scripts.migrate_profiles --apply`.
+5. Rerun the dry run and require `pending=0` before starting the new application revision.
+6. Deploy and verify the new revision with a dedicated synthetic principal before restoring profile traffic.
+
+The command validates every document before dispatching writes and compare-checks each document in a transaction. It
+is dry-run by default and safe to rerun, but Firestore does not make the entire collection migration one transaction;
+if a run is interrupted, keep profile traffic quiesced and rerun to completion. Partial adoption becomes unsafe when
+the first document is migrated: the retired reader and writer must not serve migrated records. Rollback requires the
+backup and retired revision together; do not point the retired revision at forward-migrated data. Do not run the
+migration against live data as part of an ordinary code review or test workflow.
+
+The wire cutover is also breaking for generated clients: operation IDs, lower camel case members, item `Money`, error
+documents, statuses, representations, and the six GitHub operations changed. Regenerate clients from the new runtime
+`/openapi.json` and release them with the server cutover; do not treat the retired and accepted clients as compatible.
 
 ## Development
 

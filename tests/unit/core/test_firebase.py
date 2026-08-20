@@ -2,6 +2,7 @@
 Unit tests for Firebase initialization and configuration.
 """
 
+import logging
 from collections.abc import Generator
 from unittest.mock import MagicMock
 
@@ -39,12 +40,19 @@ class TestGetFirebaseApp:
     Tests for get_firebase_app function.
     """
 
-    def test_raises_when_not_initialized(self) -> None:
+    def test_initializes_lazily_when_not_initialized(self, mocker: MockerFixture) -> None:
         """
-        Verify RuntimeError is raised when Firebase is not initialized.
+        Verify protected operations initialize Firebase without gating public startup.
         """
-        with pytest.raises(RuntimeError, match="Firebase not initialized"):
-            get_firebase_app()
+        app = MagicMock()
+        initialize = mocker.patch("app.core.firebase.initialize_firebase")
+
+        def install() -> None:
+            firebase_mod._firebase_app = app
+
+        initialize.side_effect = install
+        assert get_firebase_app() is app
+        initialize.assert_called_once_with()
 
     def test_returns_app_when_initialized(self) -> None:
         """
@@ -124,6 +132,27 @@ class TestInitializeFirebase:
 
         with pytest.raises(RuntimeError, match="ADC unavailable"):
             initialize_firebase()
+
+    def test_missing_project_fails_only_at_firebase_boundary_without_sensitive_log(
+        self,
+        mocker: MockerFixture,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        mocker.patch(
+            "app.core.firebase.get_settings",
+            return_value=MagicMock(firebase_project_id=None, google_application_credentials="credential-secret"),
+        )
+        with (
+            caplog.at_level(logging.ERROR, logger="app.core.firebase"),
+            pytest.raises(
+                RuntimeError,
+                match="not configured",
+            ),
+        ):
+            initialize_firebase()
+
+        assert "credential-secret" not in caplog.text
+        assert caplog.records[-1].getMessage() == "Firebase initialization failed"
 
 
 class TestGetAsyncFirestoreClient:

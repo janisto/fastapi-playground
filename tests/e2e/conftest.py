@@ -85,7 +85,7 @@ def e2e_client() -> Generator[TestClient]:
     """
 
     async def authenticated_user() -> FirebaseUser:
-        return FirebaseUser(uid="e2e-user", email="e2e@example.com", email_verified=True)
+        return FirebaseUser(uid="e2e-user")
 
     fastapi_app.dependency_overrides[verify_firebase_token] = authenticated_user
     try:

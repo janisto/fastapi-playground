@@ -1,36 +1,38 @@
-"""
-Items response models.
-"""
+"""Portable item response models."""
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.types import UTCDateTime
+from app.models.types import BoundedName, OpaqueId, SafeInteger, UTCDateTime
 
 ItemCategory = Literal["electronics", "tools", "accessories", "robotics", "power", "components"]
 
 
+class Money(BaseModel):
+    """Exact USD amount in integer minor units."""
+
+    amount_minor: SafeInteger = Field(alias="amountMinor", description="Amount in US cents", examples=[2999])
+    currency: Literal["USD"] = Field(description="ISO currency", examples=["USD"])
+    model_config = ConfigDict(extra="forbid", strict=True, serialize_by_alias=True)
+
+
 class Item(BaseModel):
-    """
-    An item in the inventory.
-    """
+    """One fixed-catalog item."""
 
-    id: str = Field(..., description="Unique item identifier", examples=["item-001"])
-    name: str = Field(..., description="Item name", examples=["Alpha Widget"])
-    category: ItemCategory = Field(..., description="Item category", examples=["electronics"])
-    price: float = Field(..., ge=0, description="Item price in USD", examples=[29.99])
-    in_stock: bool = Field(..., description="Availability status", examples=[True])
-    created_at: UTCDateTime = Field(..., description="Creation timestamp", examples=["2024-01-15T10:30:00.000Z"])
-    description: str = Field(
-        ..., description="Detailed description of the item", examples=["A versatile electronic widget for everyday use"]
-    )
+    id: OpaqueId
+    name: BoundedName
+    category: ItemCategory
+    price: Money
+    in_stock: bool = Field(alias="inStock", strict=True)
+    created_at: UTCDateTime = Field(alias="createdAt")
+    description: str = Field(min_length=1, max_length=500, strict=True)
+    model_config = ConfigDict(extra="forbid", strict=True, serialize_by_alias=True)
 
 
-class ItemList(BaseModel):
-    """
-    Paginated list of items.
-    """
+class ItemPage(BaseModel):
+    """Current item page and filtered total."""
 
-    items: list[Item] = Field(..., description="List of items in current page")
-    total: int = Field(..., ge=0, description="Total number of items matching filter", examples=[30])
+    items: list[Item] = Field(max_length=100)
+    total: SafeInteger
+    model_config = ConfigDict(extra="forbid", strict=True, serialize_by_alias=True)

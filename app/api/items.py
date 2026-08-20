@@ -1,94 +1,54 @@
-"""
-Items router demonstrating pagination and filtering.
+"""Portable deterministic item collection."""
 
-This router provides example endpoints showing:
-- Cursor-based pagination
-- RFC 8288 Link headers for navigation
-- Literal type for category filter
-- Limit validation with min/max
-- CBOR content negotiation
-"""
+from fastapi import APIRouter, Request, Response
 
-from typing import Annotated
-
-from fastapi import APIRouter, Query, Request, Response
-
-from app.core.cbor import CBORRoute
 from app.core.constants import API_V1_PREFIX
-from app.core.openapi import COMMON_CBOR_ERROR_RESPONSES, problem_response, success_response
-from app.core.schema_links import build_described_by_link
-from app.models.error import ValidationProblemResponse
-from app.models.items import MOCK_ITEMS, ItemCategory, ItemList
-from app.pagination import CursorParam, LimitParam, paginate
+from app.core.portable_http import PortableRoute, request_query
+from app.core.problems import PortableProblem
+from app.models.items import MOCK_ITEMS, ItemPage
+from app.pagination import InvalidCursorError, paginate
 
-router = APIRouter(
-    prefix=f"{API_V1_PREFIX}/items",
-    tags=["Items"],
-    route_class=CBORRoute,
-    responses={
-        **COMMON_CBOR_ERROR_RESPONSES,
-        400: problem_response("Invalid pagination cursor"),
-        422: problem_response("Validation error", model=ValidationProblemResponse),
-    },
-)
+_CATEGORIES = frozenset({"electronics", "tools", "accessories", "robotics", "power", "components"})
+_MAX_LIMIT = 100
 
-ITEM_LIST_SCHEMA_PATH = "/schemas/ItemList.json"
+router = APIRouter(prefix=f"{API_V1_PREFIX}/items", tags=["Items"], route_class=PortableRoute)
 
 
 @router.get(
     "",
-    summary="List items",
-    description="Returns a paginated list of items with optional category filter.",
-    operation_id="items_list",
-    responses={
-        200: success_response("Items retrieved successfully", "ItemList"),
-    },
+    response_model=ItemPage,
+    summary="List catalog items",
+    description="Filters and cursor-paginates the fixed portable catalog.",
+    operation_id="listItems",
 )
-async def list_items(
-    request: Request,
-    response: Response,
-    cursor: CursorParam = None,
-    limit: LimitParam = 20,
-    category: Annotated[
-        ItemCategory | None,
-        Query(description="Filter by category"),
-    ] = None,
-) -> ItemList:
-    """
-    List items with cursor-based pagination.
-
-    Demonstrates:
-    - Cursor-based pagination with type:value format
-    - RFC 8288 Link headers for prev/next navigation
-    - Literal type for category filter validation
-    - Limit validation (1-100 range)
-    """
-    # Filter items by category if specified
-    filtered_items = MOCK_ITEMS
-    if category:
-        filtered_items = [item for item in MOCK_ITEMS if item.category == category]
-
-    # Build query params to preserve in pagination links
-    query_params: dict[str, str] = {}
-    if category:
-        query_params["category"] = category
-
-    # Apply pagination
-    result = paginate(
-        items=filtered_items,
-        cursor=cursor,
-        limit=limit,
-        cursor_type="item",
-        get_id=lambda item: item.id,
-        base_url=str(request.url.path).rstrip("/"),
-        query_params=query_params,
-    )
-
-    # Build Link headers (pagination + describedBy for JSON Schema)
-    links: list[str] = []
+async def list_items(request: Request, response: Response) -> ItemPage:
+    """Return one deterministic item page and navigation links."""
+    query = request_query(request)
+    limit = int(query.get("limit", "20"))
+    if not 1 <= limit <= _MAX_LIMIT:
+        raise PortableProblem(
+            "validation_failed",
+            errors=[{"detail": "Request field is invalid", "source": {"parameter": "limit"}}],
+        )
+    category_value = query.get("category")
+    if category_value is not None and category_value not in _CATEGORIES:
+        raise PortableProblem(
+            "validation_failed",
+            errors=[{"detail": "Request field is invalid", "source": {"parameter": "category"}}],
+        )
+    category = category_value
+    filtered_items = [item for item in MOCK_ITEMS if category is None or item.category == category]
+    try:
+        result = paginate(
+            items=filtered_items,
+            cursor=query.get("cursor"),
+            limit=limit,
+            get_id=lambda item: item.id,
+            base_url="/v1/items",
+            query_params={"category": category} if category is not None else {},
+        )
+    except InvalidCursorError as error:
+        raise PortableProblem("invalid_request") from error
     if result.link_header:
-        links.append(result.link_header)
-    links.append(build_described_by_link(ITEM_LIST_SCHEMA_PATH))
-    response.headers["Link"] = ", ".join(links)
-
-    return ItemList(items=result.items, total=result.total)
+        response.headers["Link"] = result.link_header
+    return ItemPage(items=result.items, total=result.total)

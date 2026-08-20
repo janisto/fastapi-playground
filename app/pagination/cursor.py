@@ -1,55 +1,42 @@
-"""
-Cursor encoding/decoding for pagination.
-"""
+"""Canonical opaque Base64URL pagination cursors."""
 
 import base64
 import binascii
-from dataclasses import dataclass
+import json
+import re
+from typing import Any
 
-_BASE64_BLOCK_SIZE = 4
 MAX_CURSOR_LENGTH = 2048
+_CANONICAL_BASE64URL = re.compile(r"[A-Za-z0-9_-]+\Z")
 
 
 class InvalidCursorError(Exception):
-    """
-    Raised when cursor cannot be decoded.
-    """
+    """Raised when a cursor is malformed, noncanonical, stale, or out of scope."""
 
 
-@dataclass(frozen=True, slots=True)
-class Cursor:
-    """
-    Pagination cursor with type and value.
-    """
-
-    cursor_type: str
-    value: str
-
-    def encode(self) -> str:
-        """
-        Encode as URL-safe base64 without padding.
-        """
-        data = f"{self.cursor_type}:{self.value}"
-        return base64.urlsafe_b64encode(data.encode()).rstrip(b"=").decode()
-
-
-def decode_cursor(encoded_cursor: str) -> Cursor:
-    """
-    Decode URL-safe base64 cursor.
-    """
-    if len(encoded_cursor) > MAX_CURSOR_LENGTH:
+def encode_cursor(state: dict[str, Any]) -> str:
+    """Encode a validated public cursor state canonically."""
+    payload = json.dumps(state, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("ascii")
+    cursor = base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
+    if len(cursor) > MAX_CURSOR_LENGTH:
         raise InvalidCursorError("cursor exceeds maximum length")
-    if not encoded_cursor:
-        return Cursor(cursor_type="", value="")
-    padding = _BASE64_BLOCK_SIZE - len(encoded_cursor) % _BASE64_BLOCK_SIZE
-    if padding != _BASE64_BLOCK_SIZE:
-        encoded_cursor += "=" * padding
+    return cursor
+
+
+def decode_cursor(encoded_cursor: str) -> dict[str, Any]:
+    """Decode and canonicalize a public cursor object."""
+    if (
+        not encoded_cursor
+        or len(encoded_cursor) > MAX_CURSOR_LENGTH
+        or _CANONICAL_BASE64URL.fullmatch(encoded_cursor) is None
+    ):
+        raise InvalidCursorError("invalid cursor format")
+    padding = "=" * (-len(encoded_cursor) % 4)
     try:
-        decoded = base64.b64decode(encoded_cursor.encode("ascii"), altchars=b"-_", validate=True).decode()
-    except (binascii.Error, UnicodeError) as e:
-        raise InvalidCursorError("invalid cursor format") from e
-    try:
-        cursor_type, value = decoded.split(":", maxsplit=1)
-    except ValueError as e:
-        raise InvalidCursorError("invalid cursor format") from e
-    return Cursor(cursor_type=cursor_type, value=value)
+        raw = base64.b64decode((encoded_cursor + padding).encode("ascii"), altchars=b"-_", validate=True)
+        state = json.loads(raw.decode("utf-8"))
+    except (binascii.Error, UnicodeError, ValueError) as error:
+        raise InvalidCursorError("invalid cursor format") from error
+    if not isinstance(state, dict) or encode_cursor(state) != encoded_cursor:
+        raise InvalidCursorError("invalid cursor format")
+    return state

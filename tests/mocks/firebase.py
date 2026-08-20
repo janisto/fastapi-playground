@@ -14,7 +14,7 @@ def mock_verify_id_token_ok(
     """
     Return a fake decoded token payload.
     """
-    return {"uid": uid, "email": email, "email_verified": True}
+    return {"sub": uid, "email": email, "email_verified": True}
 
 
 def patch_firebase_verify_ok(

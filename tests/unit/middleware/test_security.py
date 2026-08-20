@@ -461,7 +461,7 @@ class TestContentSecurityPolicyHeader:
         """
         with TestClient(_create_app()) as client:
             response = client.get("/ping")
-            assert response.headers.get("content-security-policy") == "frame-ancestors 'none'"
+            assert response.headers.get("content-security-policy") == "default-src 'none'; frame-ancestors 'none'"
 
     def test_custom_csp(self) -> None:
         """
@@ -546,7 +546,7 @@ class TestCSPDocumentationExemption:
         with TestClient(app) as client:
             response = client.get("/api/users")
             assert response.status_code == 200
-            assert response.headers.get("content-security-policy") == "frame-ancestors 'none'"
+            assert response.headers.get("content-security-policy") == "default-src 'none'; frame-ancestors 'none'"
 
     def test_other_security_headers_still_applied_for_documentation_paths(self) -> None:
         """

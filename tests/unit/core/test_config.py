@@ -11,7 +11,7 @@ from pydantic import ValidationError
 from app.core.config import Settings, get_settings, parse_cors_origins
 
 
-def _create_settings(**kwargs: Any) -> Settings:  # noqa: ANN401
+def _create_settings(**kwargs: Any) -> Settings:
     """
     Create Settings instance without reading .env file.
 
@@ -36,11 +36,11 @@ def clear_settings_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "FIREBASE_PROJECT_ID",
         "GOOGLE_APPLICATION_CREDENTIALS",
         "FIRESTORE_DATABASE",
-        "MAX_REQUEST_SIZE_BYTES",
         "CORS_ORIGINS",
     ]
     for var in env_vars:
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("CORS_ORIGINS", "[]")
 
 
 class TestParseCORSOrigins:
@@ -129,6 +129,11 @@ class TestParseCORSOrigins:
 
         assert result == ["http://localhost:3000", "https://example.com"]
 
+    @pytest.mark.parametrize("value", ["*", '["https://example.com", "*"]', ["*"]])
+    def test_rejects_wildcard_origin(self, value: object) -> None:
+        with pytest.raises(ValueError, match="explicit origins"):
+            parse_cors_origins(value)
+
     def test_invalid_json_is_rejected(self) -> None:
         """
         Verify invalid JSON starting with an array marker is rejected.
@@ -182,20 +187,13 @@ class TestSettings:
 
         assert settings.is_production is expected
 
-    def test_firebase_project_id_is_required(self) -> None:
+    def test_missing_firebase_project_id_keeps_public_configuration_constructible(self) -> None:
         """
-        Verify startup configuration fails without a Firebase project ID.
+        Verify profile provider configuration is checked lazily at the protected boundary.
         """
-        with pytest.raises(ValidationError):
-            cast("Any", Settings)(_env_file=None)
+        settings = _create_settings(firebase_project_id=None)
 
-    def test_default_max_request_size(self) -> None:
-        """
-        Verify default max request size.
-        """
-        settings = _create_settings()
-
-        assert settings.max_request_size_bytes == 1_000_000
+        assert settings.firebase_project_id is None
 
     def test_default_cors_origins_empty(self) -> None:
         """
@@ -204,6 +202,17 @@ class TestSettings:
         settings = _create_settings()
 
         assert settings.cors_origins == []
+
+    def test_default_cors_policy_exposes_only_portable_methods_and_headers(self) -> None:
+        settings = _create_settings()
+        assert settings.cors_methods == ["GET", "POST", "PATCH", "DELETE"]
+        assert settings.cors_expose_headers == [
+            "Link",
+            "Location",
+            "Retry-After",
+            "X-RateLimit-Reset",
+            "X-Request-ID",
+        ]
 
 
 class TestSettingsFromEnv:
@@ -240,16 +249,6 @@ class TestSettingsFromEnv:
         settings = _create_settings()
 
         assert settings.firebase_project_id == "my-project"
-
-    def test_max_request_size_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """
-        Verify max request size is loaded from env var.
-        """
-        monkeypatch.setenv("MAX_REQUEST_SIZE_BYTES", "2000000")
-
-        settings = _create_settings()
-
-        assert settings.max_request_size_bytes == 2_000_000
 
     def test_cors_origins_from_env_json_array(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """
@@ -334,11 +333,6 @@ class TestSettingsFromEnv:
 
         with pytest.raises(ValidationError):
             _create_settings()
-
-    def test_non_positive_request_size_is_rejected(self) -> None:
-        """Request size limits must be strictly positive."""
-        with pytest.raises(ValidationError):
-            _create_settings(max_request_size_bytes=0)
 
 
 class TestSettingsIgnoreExtra:

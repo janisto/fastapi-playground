@@ -12,8 +12,8 @@ task-specific skills.
 ## Sources of truth
 
 - application and middleware: `app/main.py`, `app/core/config.py`, and affected `app/api/` modules;
-- public contracts: response models, `app/core/content_negotiation.py`, `app/core/cbor.py`,
-  `app/core/exception_handler.py`, `app/core/schema_links.py`, `app/core/validation.py`, and integration tests;
+- public contracts: response models, `app/core/content_negotiation.py`, `app/core/portable_http.py`,
+  `app/core/problems.py`, `app/core/openapi.py`, and integration tests;
 - persistence and authentication: `app/core/firebase.py`, `app/auth/firebase.py`, and `app/services/`;
 - commands and containers: `Justfile`, `Dockerfile`, `.env.example`, and `firebase.json`;
 - separate function project: `functions/main.py`, `functions/pyproject.toml`, and `functions/README.md`;
@@ -24,9 +24,14 @@ task-specific skills.
 - Require every named path, command, route, default, and environment variable to exist.
 - Describe `/health` as dependency-free liveness, not Firebase readiness.
 - State that JSON is the default and CBOR requires explicit `Accept` negotiation.
-- State that public JSON and CBOR properties, request parameters, and persisted Firestore fields use `snake_case`.
+- State that public JSON and CBOR domain properties use exact lower camel case names while source and persisted
+  Firestore fields use explicit `snake_case`; query and path parameters use their exact contract spelling.
 - State that quality weights are honored, JSON wins ties, and unsupported explicit response formats return 406.
 - Describe request observability according to `fastapi-request-observability`; do not document deleted local helpers.
+- Describe the GitHub routes as anonymous, fixed-origin, public-data-only projections; do not suggest configuring an
+  ambient token for route traffic.
+- When a persisted field changes, document the dry-run/apply migration, quiescing and backup prerequisites, rerun
+  behavior, deployment ordering, and the boundary between repository validation and authorized live execution.
 - Keep the root app and `functions/` dependency environments distinct.
 - Describe the model-backed Function as private IAM-authenticated infrastructure and keep its ID-token examples aligned
   with `functions/README.md` and `GCP.md`.
