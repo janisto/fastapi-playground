@@ -264,9 +264,11 @@ def _parse_link_relations(headers: httpx2.Headers) -> dict[str, str]:  # noqa: C
             if any(_link_parameter_name(parameter) == "anchor" for parameter in parameters):
                 continue
             relevant: list[str] = []
+            seen_rel = False
             for parameter in parameters:
-                if _link_parameter_name(parameter) != "rel":
+                if _link_parameter_name(parameter) != "rel" or seen_rel:
                     continue
+                seen_rel = True
                 _, equals, raw_value = parameter.partition("=")
                 value = strip_http_ows(raw_value)
                 if not equals:

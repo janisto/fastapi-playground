@@ -917,6 +917,33 @@ async def test_provider_link_parser_handles_multiple_fields_quoted_delimiters_an
 
 
 @pytest.mark.parametrize(
+    ("relation_parameters", "expected_next_page"),
+    [
+        ('REL="alternate"; rel="next"', None),
+        ('rel="next"; REL="prev"', 2),
+    ],
+)
+async def test_provider_link_parser_uses_only_first_relation_parameter(
+    relation_parameters: str,
+    expected_next_page: int | None,
+) -> None:
+    target = "https://api.github.test/users/octocat/repos?type=owner&sort=full_name&direction=asc&per_page=1&page=2"
+    service = _service(
+        lambda _: httpx2.Response(
+            200,
+            headers={"Content-Type": "application/json", "Link": f"<{target}>; {relation_parameters}"},
+            json=[_repo()],
+        )
+    )
+
+    _, next_cursor, prev_cursor = await service.list_owner_repositories("octocat", 1, None)
+
+    next_page = decode_cursor(next_cursor)["page"] if next_cursor is not None else None
+    assert next_page == expected_next_page
+    assert prev_cursor is None
+
+
+@pytest.mark.parametrize(
     "link",
     [
         '<https://api.github.test/users/octocat/repos?page=2>; rel="next',
