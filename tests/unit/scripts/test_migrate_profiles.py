@@ -205,6 +205,35 @@ async def test_apply_rekeys_legacy_storage_key_without_changing_public_id(monkey
     assert expected == canonical == _canonical("~principal")
 
 
+async def test_rekey_chain_moves_targets_before_their_predecessors(monkeypatch: pytest.MonkeyPatch) -> None:
+    predecessor = Snapshot("~a", _canonical("~a"))
+    successor = Snapshot("~fmE", _canonical("~fmE"))
+    client = Client([predecessor, successor])
+    replacement = _install_client(monkeypatch, client)
+
+    assert await migrate_profiles.migrate(apply=False) == (2, 2, 0)
+    replacement.assert_not_awaited()
+
+    assert await migrate_profiles.migrate(apply=True) == (2, 2, 2)
+    assert [(call.args[1].id, call.args[2].id) for call in replacement.await_args_list] == [
+        ("~fmE", "~fmZtRQ"),
+        ("~a", "~fmE"),
+    ]
+
+
+async def test_rekey_chain_rerun_finishes_after_successor_already_moved(monkeypatch: pytest.MonkeyPatch) -> None:
+    predecessor = Snapshot("~a", _canonical("~a"))
+    moved_successor = Snapshot("~fmZtRQ", _canonical("~fmE"))
+    client = Client([predecessor, moved_successor])
+    replacement = _install_client(monkeypatch, client)
+
+    assert await migrate_profiles.migrate(apply=True) == (2, 1, 1)
+    replacement.assert_awaited_once()
+    assert replacement.await_args is not None
+    _, source, target, _, _ = replacement.await_args.args
+    assert (source.id, target.id) == ("~a", "~fmE")
+
+
 async def test_dry_run_aborts_instead_of_approving_noncanonical_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

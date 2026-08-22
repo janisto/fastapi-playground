@@ -249,7 +249,7 @@ def _decoded_quoted_string(value: str) -> str | None:
     return None if escaped else "".join(result)
 
 
-def _parse_link_relations(headers: httpx2.Headers) -> dict[str, str]:  # noqa: C901, PLR0912
+def _parse_link_relations(headers: httpx2.Headers) -> dict[str, str]:
     relations: dict[str, str] = {}
     for field in _header_values(headers, "link"):
         for link_value in _split_link_values(field):
@@ -403,7 +403,7 @@ class GitHubClient:
         self.transport = transport
         self.now = now or time.time
 
-    async def get_json(  # noqa: C901, PLR0912, PLR0915 - one bounded transport state machine
+    async def get_json(  # noqa: PLR0915 - one bounded transport state machine
         self,
         path: str,
         query: dict[str, str],
@@ -797,7 +797,7 @@ class GitHubService:
     ) -> tuple[GitHubActivityPage, str | None, str | None]:
         return await self._run(self._list_repository_activity(owner, repo, limit, cursor))
 
-    async def _list_repository_activity(  # noqa: C901, PLR0912 - projection and link validation are one boundary
+    async def _list_repository_activity(
         self, owner: str, repo: str, limit: int, cursor: str | None
     ) -> tuple[GitHubActivityPage, str | None, str | None]:
         page, member, value = self.decode_activity_cursor(cursor, owner=owner, repo=repo, limit=limit)

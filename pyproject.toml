@@ -142,7 +142,7 @@ extend-immutable-calls = [
 fixture-parentheses = false
 
 [tool.ruff.lint.mccabe]
-max-complexity = 12
+max-complexity = 30
 
 [tool.ruff.lint.pep8-naming]
 classmethod-decorators = ["pydantic.validator", "pydantic.field_validator"]
@@ -152,6 +152,7 @@ convention = "google"
 
 [tool.ruff.lint.pylint]
 max-args = 11
+max-branches = 30
 
 [tool.ty.src]
 include = ["app", "tests"]

@@ -621,6 +621,7 @@ async def test_named_to_numeric_redirect_is_followed_once_without_body_parsing()
     "location",
     [
         "https://evil.example/user/1",
+        "https://[::1",
         "/repos/octocat/private",
         "/user/01",
         "/user/1?extra=1",
@@ -633,6 +634,7 @@ async def test_unsafe_redirects_fail_closed(location: str) -> None:
     with pytest.raises(PortableProblem) as captured:
         await service.get_owner("octocat")
     assert captured.value.code == "github_upstream"
+    assert captured.value.definition.status == 502
 
 
 @pytest.mark.parametrize(

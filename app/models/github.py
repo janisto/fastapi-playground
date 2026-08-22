@@ -16,6 +16,7 @@ _TIMESTAMP = re.compile(rf"{_TIMESTAMP_BODY}\Z")
 _ASCII_SPACE = 0x20
 _ASCII_DELETE = 0x7F
 _BAD_PERCENT = re.compile(r"%(?![0-9A-Fa-f]{2})")
+_HTTP_URL_PATTERN = r"^[Hh][Tt][Tt][Pp][Ss]?://"
 
 
 def _http_url(value: str) -> str:
@@ -48,7 +49,11 @@ def _timestamp(value: str) -> str:
     return value
 
 
-HttpURL = Annotated[str, AfterValidator(_http_url), WithJsonSchema({"type": "string", "format": "uri"})]
+HttpURL = Annotated[
+    str,
+    AfterValidator(_http_url),
+    WithJsonSchema({"type": "string", "format": "uri", "pattern": _HTTP_URL_PATTERN}),
+]
 CanonicalTimestamp = Annotated[
     str,
     AfterValidator(_timestamp),
@@ -76,7 +81,7 @@ class GitHubOwner(GitHubModel):
         description="Provider account type; values are intentionally open.",
         examples=["User"],
     )
-    name: str | None = Field(description="Public display name, when present.", examples=["The Octocat"])
+    name: str | None = Field(min_length=1, description="Public display name, when present.", examples=["The Octocat"])
     avatar_url: HttpURL = Field(
         alias="avatarUrl",
         description="Absolute HTTP(S) avatar URL.",
@@ -87,13 +92,22 @@ class GitHubOwner(GitHubModel):
         description="Absolute HTTP(S) public account page URL.",
         examples=["https://example.test/octocat"],
     )
-    company: str | None = Field(description="Public company text, when present.", examples=["Example Corp"])
+    company: str | None = Field(
+        min_length=1,
+        description="Public company text, when present.",
+        examples=["Example Corp"],
+    )
     blog: str | None = Field(
+        min_length=1,
         description="Public blog text, when present; it is not assumed to be a URI.",
         examples=["octocat.example"],
     )
-    location: str | None = Field(description="Public location text, when present.", examples=["Helsinki"])
-    bio: str | None = Field(description="Public biography text, when present.", examples=["Builds portable APIs."])
+    location: str | None = Field(min_length=1, description="Public location text, when present.", examples=["Helsinki"])
+    bio: str | None = Field(
+        min_length=1,
+        description="Public biography text, when present.",
+        examples=["Builds portable APIs."],
+    )
     public_repos: SafeInteger = Field(
         alias="publicRepos",
         description="Number of public repositories.",
@@ -129,6 +143,7 @@ class GitHubRepositorySummary(GitHubModel):
         examples=["octocat/portable-api"],
     )
     description: str | None = Field(
+        min_length=1,
         description="Public repository description, when present.",
         examples=["A portable API example."],
     )
@@ -176,7 +191,11 @@ class GitHubRepository(GitHubRepositorySummary):
         description="Default branch name.",
         examples=["main"],
     )
-    license: str | None = Field(description="SPDX license identifier, when present.", examples=["MIT"])
+    license: str | None = Field(
+        min_length=1,
+        description="SPDX license identifier, when present.",
+        examples=["MIT"],
+    )
     topics: list[str] = Field(
         json_schema_extra={"uniqueItems": True},
         description="Unique repository topics in portable scalar-value order.",
@@ -187,7 +206,11 @@ class GitHubRepository(GitHubRepositorySummary):
 
 class GitHubActivity(GitHubModel):
     id: SafeInteger = Field(description="Repository activity identifier.", examples=[123456])
-    actor: str | None = Field(description="Actor login, or null for a deleted actor.", examples=["octocat"])
+    actor: str | None = Field(
+        min_length=1,
+        description="Actor login, or null for a deleted actor.",
+        examples=["octocat"],
+    )
     actor_avatar_url: HttpURL | None = Field(
         alias="actorAvatarUrl",
         description="Absolute HTTP(S) actor avatar URL, or null for a deleted actor.",

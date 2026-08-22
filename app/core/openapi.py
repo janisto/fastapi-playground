@@ -333,7 +333,7 @@ def _tighten_component_schemas(components: dict[str, Any]) -> None:
     profile_properties["phoneNumber"]["pattern"] = _CANONICAL_PHONE_PATTERN
 
 
-def build_openapi_document(app: FastAPI) -> dict[str, Any]:  # noqa: C901, PLR0912
+def build_openapi_document(app: FastAPI) -> dict[str, Any]:
     """Generate and cache the semantic contract from the registered routes."""
     if app.openapi_schema is not None:
         return app.openapi_schema

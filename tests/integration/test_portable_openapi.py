@@ -94,6 +94,12 @@ def _resolve(document: dict[str, Any], reference: str) -> Any:
     return value
 
 
+def _string_variant(schema: dict[str, Any]) -> dict[str, Any]:
+    if schema.get("type") == "string":
+        return schema
+    return next(choice for choice in schema["anyOf"] if choice.get("type") == "string")
+
+
 def test_runtime_openapi_inventory_security_and_statuses_are_exact(client: TestClient) -> None:
     response = client.get("/openapi.json", headers={"Accept": "application/json"})
     assert response.status_code == 200
@@ -254,6 +260,41 @@ def test_reachable_component_schemas_are_closed_and_constrained(client: TestClie
     assert "\\Z" not in components["GitHubOwner"]["properties"]["createdAt"]["pattern"]
     assert components["GitHubRepository"]["properties"]["topics"]["uniqueItems"] is True
     assert components["ErrorSource"]["oneOf"]
+
+    for component_name, property_name in (
+        ("GitHubOwner", "avatarUrl"),
+        ("GitHubOwner", "htmlUrl"),
+        ("GitHubRepositorySummary", "htmlUrl"),
+        ("GitHubRepository", "htmlUrl"),
+        ("GitHubActivity", "actorAvatarUrl"),
+    ):
+        url_schema = _string_variant(components[component_name]["properties"][property_name])
+        assert url_schema["format"] == "uri"
+        assert re.search(url_schema["pattern"], "https://example.test/resource")
+        assert re.search(url_schema["pattern"], "HtTp://example.test/resource")
+        assert re.search(url_schema["pattern"], "ftp://example.test/resource") is None
+
+    for component_name, property_name in (
+        ("GitHubOwner", "name"),
+        ("GitHubOwner", "company"),
+        ("GitHubOwner", "blog"),
+        ("GitHubOwner", "location"),
+        ("GitHubOwner", "bio"),
+        ("GitHubRepositorySummary", "description"),
+        ("GitHubRepository", "description"),
+        ("GitHubRepository", "license"),
+        ("GitHubActivity", "actor"),
+    ):
+        assert _string_variant(components[component_name]["properties"][property_name])["minLength"] == 1
+
+    standalone_owner = client.get(
+        "/schemas/GitHubOwner.json",
+        headers={"Accept": "application/schema+json"},
+    ).json()
+    assert (
+        standalone_owner["properties"]["avatarUrl"]["pattern"]
+        == (components["GitHubOwner"]["properties"]["avatarUrl"]["pattern"])
+    )
 
     operations = _operations(document)
     for key in (

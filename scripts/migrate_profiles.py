@@ -150,13 +150,30 @@ async def migrate(*, apply: bool) -> tuple[int, int, int]:
 
     for source, target_id, expected, replacement, fields_changed in planned:
         rekey = source.id != target_id
-        if rekey and target_id in source_ids:
-            raise ValueError("profile storage target already exists")
         if fields_changed or rekey:
             target = collection.document(target_id) if rekey else None
             candidates.append((source, target, expected, replacement))
+
+    moving_source_ids = {source.id for source, target, _, _ in candidates if target is not None}
+    for _, target, _, _ in candidates:
+        if target is not None and target.id in source_ids and target.id not in moving_source_ids:
+            raise ValueError("profile storage target already exists")
+
+    ordered_candidates: list[
+        tuple[AsyncDocumentReference, AsyncDocumentReference | None, dict[str, object], dict[str, object]]
+    ] = []
+    pending = candidates
+    while pending:
+        pending_rekeys = {source.id for source, target, _, _ in pending if target is not None}
+        ready = [candidate for candidate in pending if candidate[1] is None or candidate[1].id not in pending_rekeys]
+        if not ready:
+            raise ValueError("profile storage targets form a cycle")
+        ordered_candidates.extend(ready)
+        ready_source_ids = {source.id for source, _, _, _ in ready}
+        pending = [candidate for candidate in pending if candidate[0].id not in ready_source_ids]
+
     if apply:
-        for source, target, expected, replacement in candidates:
+        for source, target, expected, replacement in ordered_candidates:
             await _replace_document(client.transaction(), source, target, expected, replacement)
     return validated, len(candidates), len(candidates) if apply else 0
 

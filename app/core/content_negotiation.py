@@ -165,7 +165,7 @@ def _media_range_specificity(range_type: str, target: str, target_parts: list[st
     return None
 
 
-def _media_type_quality(  # noqa: C901 - RFC media-range precedence is clearer as one selection pass
+def _media_type_quality(
     accept_header: str | None,
     media_type: str,
     *,
