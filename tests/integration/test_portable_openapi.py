@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import cbor2
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth.firebase import verify_firebase_token
@@ -521,3 +522,14 @@ def test_openapi_discovery_is_local_and_rejects_request_variants_without_depende
         mock_github_service.get_repository,
     ):
         service_method.assert_not_awaited()
+
+
+@pytest.mark.parametrize("query", ["unknown=1", "unknown=1&unknown=2", "unknown=%FF"])
+def test_standalone_schema_discovery_rejects_unknown_repeated_and_malformed_query(
+    client: TestClient,
+    query: str,
+) -> None:
+    response = client.get(f"/schemas/Profile.json?{query}")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_request"

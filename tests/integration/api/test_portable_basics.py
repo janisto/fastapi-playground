@@ -178,6 +178,15 @@ def test_negotiation_specificity_charset_and_error_fallback(client: TestClient) 
     assert cbor_error.headers["Content-Type"] == "application/cbor"
     assert cbor2.loads(cbor_error.content)["code"] == "validation_failed"
 
+    charset_error = client.get(
+        "/missing",
+        headers={
+            "Accept": "application/problem+json;charset=utf-8;q=1, application/problem+json;q=0",
+        },
+    )
+    _problem(charset_error, 404, "not_found")
+    assert charset_error.headers["Content-Type"].lower() == "application/problem+json; charset=utf-8"
+
 
 @pytest.mark.parametrize("size", [999_999, 1_000_000])
 def test_hello_accepts_exact_inbound_boundaries(client: TestClient, size: int) -> None:

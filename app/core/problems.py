@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
-from app.core.content_negotiation import CBOR_MEDIA_TYPE, PROBLEM_JSON_MEDIA_TYPE, negotiate_problem_media_type
+from app.core.content_negotiation import CBOR_MEDIA_TYPE, negotiate_problem_media_type
 
 logger = logging.getLogger(__name__)
 _MAX_VALIDATION_ISSUES = 32
@@ -160,7 +160,6 @@ def render_problem(accept: str, problem: PortableProblem) -> Response:
     if media_type == CBOR_MEDIA_TYPE:
         content = cbor2.dumps(document)
     else:
-        media_type = PROBLEM_JSON_MEDIA_TYPE
         content = json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return Response(
         content=content, status_code=problem.definition.status, headers=problem.headers, media_type=media_type

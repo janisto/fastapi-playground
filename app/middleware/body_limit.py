@@ -25,6 +25,7 @@ _GITHUB_PATTERNS = (
     re.compile(r"/v1/github/repos/[^/]+/[^/]+\Z"),
     re.compile(r"/v1/github/repos/[^/]+/[^/]+/(?:activity|languages|tags)\Z"),
 )
+_SCHEMA_PATTERN = re.compile(r"/schemas/[^/]+\Z")
 _PAGINATED_GITHUB = (
     re.compile(r"/v1/github/owners/[^/]+/repos\Z"),
     re.compile(r"/v1/github/repos/[^/]+/[^/]+/(?:activity|tags)\Z"),
@@ -47,7 +48,7 @@ def _allowed_methods(path: str) -> frozenset[str] | None:
     methods = _EXACT_METHODS.get(path)
     if methods is not None:
         return methods
-    if any(pattern.fullmatch(path) for pattern in _GITHUB_PATTERNS):
+    if _SCHEMA_PATTERN.fullmatch(path) or any(pattern.fullmatch(path) for pattern in _GITHUB_PATTERNS):
         return frozenset({"GET"})
     return None
 

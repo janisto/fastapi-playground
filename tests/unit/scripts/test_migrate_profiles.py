@@ -159,6 +159,21 @@ def test_canonical_document_rejects_hidden_firestore_submillisecond_precision() 
         migrate_profiles._validate_canonical_document(document)
 
 
+async def test_retired_document_rejects_inverted_timestamps_before_truncation_without_writing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created_at = datetime(2026, 7, 30, 12, 0, 0, 123900, tzinfo=UTC)
+    updated_at = datetime(2026, 7, 30, 12, 0, 0, 123100, tzinfo=UTC)
+    document = {**_retired(), "created_at": created_at, "updated_at": updated_at}
+    client = Client([Snapshot("principal", document)])
+    replacement = _install_client(monkeypatch, client)
+
+    with pytest.raises(ValueError, match="updated timestamp predates creation"):
+        await migrate_profiles.migrate(apply=True)
+
+    replacement.assert_not_awaited()
+
+
 async def test_dry_run_validates_without_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     client = Client([Snapshot("principal", _retired()), Snapshot("canonical", _canonical("canonical"))])
     replacement = _install_client(monkeypatch, client)

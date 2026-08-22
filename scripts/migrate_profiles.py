@@ -52,6 +52,8 @@ def _canonical_document(data: dict[str, object]) -> dict[str, object]:
     updated_at = data["updated_at"]
     if not isinstance(created_at, datetime) or not isinstance(updated_at, datetime):
         raise TypeError("profile timestamps are invalid")
+    if updated_at < created_at:
+        raise ValueError("updated timestamp predates creation")
     profile = Profile.model_validate(
         {
             "id": data["id"],
