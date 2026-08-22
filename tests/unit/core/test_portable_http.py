@@ -106,6 +106,9 @@ def test_closed_query_splits_malformed_and_typed_failures() -> None:
         ("application/json;q=1.0000", None),
         ("application/json;q=.5", None),
         ('application/json;q="0.5"', None),
+        ("application/json\xa0", None),
+        ("application/json;\xa0q=1", None),
+        ("application/cbor\xa0", None),
     ],
 )
 def test_success_negotiation_honors_specificity_qvalue_and_exact_cbor_opt_in(
@@ -121,6 +124,7 @@ def test_problem_negotiation_preserves_error_with_json_fallback() -> None:
     assert negotiate_problem_media_type("text/plain") == PROBLEM_JSON_MEDIA_TYPE
     assert negotiate_problem_media_type("application/cbor;q=1, application/problem+json;q=0.5") == CBOR_MEDIA_TYPE
     assert negotiate_problem_media_type("application/json;q=1, application/cbor;q=0.5") == CBOR_MEDIA_TYPE
+    assert negotiate_problem_media_type("application/cbor\xa0") == PROBLEM_JSON_MEDIA_TYPE
     assert (
         negotiate_problem_media_type("application/problem+json; charset=UTF-8")
         == "application/problem+json; charset=utf-8"

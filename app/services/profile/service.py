@@ -17,6 +17,7 @@ from app.exceptions.profile import (
 )
 from app.models.profile import PROFILE_COLLECTION, Profile, ProfileCreate, ProfileUpdate
 from app.models.types import truncate_clock_milliseconds
+from app.services.profile.document_id import firestore_profile_document_id
 
 if TYPE_CHECKING:
     from google.cloud.firestore import AsyncClient, AsyncDocumentReference, AsyncTransaction
@@ -94,8 +95,9 @@ class ProfileService:
 
     async def create_profile(self, user_id: str, profile_data: ProfileCreate) -> Profile:
         """Conditionally create the complete profile in one native write."""
+        document_id = firestore_profile_document_id(user_id)
         client = self._get_client()
-        document = client.collection(self.collection_name).document(user_id)
+        document = client.collection(self.collection_name).document(document_id)
         now = truncate_clock_milliseconds(self._clock())
         profile = Profile.model_validate(
             {
@@ -122,7 +124,8 @@ class ProfileService:
 
     async def get_profile(self, user_id: str) -> Profile:
         """Read the current principal profile without writing."""
-        document = self._get_client().collection(self.collection_name).document(user_id)
+        document_id = firestore_profile_document_id(user_id)
+        document = self._get_client().collection(self.collection_name).document(document_id)
         try:
             snapshot = await document.get()
         except (google_exceptions.GoogleAPICallError, google_exceptions.RetryError, TimeoutError) as error:
@@ -165,8 +168,9 @@ class ProfileService:
         """Atomically apply one validated non-empty patch or perform no write."""
         updates = profile_data.model_dump(exclude_unset=True, by_alias=False)
         now = truncate_clock_milliseconds(self._clock())
+        document_id = firestore_profile_document_id(user_id)
         client = self._get_client()
-        document = client.collection(self.collection_name).document(user_id)
+        document = client.collection(self.collection_name).document(document_id)
         try:
             profile, changed = await self._update_in_transaction(client.transaction(), document, user_id, updates, now)
         except ProfileTimestampOverflowError:
@@ -193,8 +197,9 @@ class ProfileService:
 
     async def delete_profile(self, user_id: str) -> None:
         """Atomically distinguish one successful deletion from absence."""
+        document_id = firestore_profile_document_id(user_id)
         client = self._get_client()
-        document = client.collection(self.collection_name).document(user_id)
+        document = client.collection(self.collection_name).document(document_id)
         try:
             deleted = await self._delete_in_transaction(client.transaction(), document)
         except (google_exceptions.GoogleAPICallError, google_exceptions.RetryError, TimeoutError) as error:

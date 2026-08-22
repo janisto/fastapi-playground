@@ -649,6 +649,24 @@ async def test_success_requires_json_media_and_identity_encoding(headers: dict[s
     assert captured.value.code == "github_upstream"
 
 
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [(b"Content-Type", b"application/json\xa0")],
+        [(b"Content-Type", b"application/json;\xa0charset=utf-8")],
+        [(b"Content-Type", b"application/json"), (b"Content-Encoding", b"identity\xa0")],
+        [(b"Content-Type", b"application/json"), (b"Content-Length", b"128\xa0")],
+    ],
+)
+async def test_provider_protocol_fields_reject_non_ows_whitespace(
+    headers: list[tuple[bytes, bytes]],
+) -> None:
+    service = _service(lambda _: httpx2.Response(200, headers=headers, content=json.dumps(_owner()).encode()))
+    with pytest.raises(PortableProblem) as captured:
+        await service.get_owner("octocat")
+    assert captured.value.code == "github_upstream"
+
+
 async def test_exact_four_mibibyte_body_is_allowed_and_next_byte_is_rejected() -> None:
     base = json.dumps(_owner(), separators=(",", ":")).encode()
     exact = base + b" " * (GITHUB_RESPONSE_LIMIT - len(base))
@@ -910,6 +928,17 @@ async def test_malformed_relevant_provider_link_is_502(link: str) -> None:
             json=[_repo()],
         )
     )
+    with pytest.raises(PortableProblem, match="github_upstream"):
+        await service.list_owner_repositories("octocat", 1, None)
+
+
+async def test_provider_link_relation_rejects_non_ascii_separator() -> None:
+    target = "https://api.github.test/users/octocat/repos?type=owner&sort=full_name&direction=asc&per_page=1&page=2"
+    headers = [
+        (b"Content-Type", b"application/json"),
+        (b"Link", f'<{target}>; rel="next\xa0last"'.encode("latin1")),
+    ]
+    service = _service(lambda _: httpx2.Response(200, headers=headers, json=[_repo()]))
     with pytest.raises(PortableProblem, match="github_upstream"):
         await service.list_owner_repositories("octocat", 1, None)
 

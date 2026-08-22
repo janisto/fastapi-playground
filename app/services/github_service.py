@@ -13,6 +13,7 @@ from urllib.parse import quote, urljoin, urlsplit
 import httpx2
 from pydantic import ValidationError
 
+from app.core.content_negotiation import strip_http_ows
 from app.core.portable_http import parse_query_string, parse_strict_json, valid_json_content_type
 from app.core.problems import PortableProblem
 from app.models.github import (
@@ -182,9 +183,9 @@ def _split_link_values(value: str) -> list[str]:
         elif character == ">":
             angled = False
         elif character == "," and not angled:
-            parts.append(value[start:index].strip())
+            parts.append(strip_http_ows(value[start:index]))
             start = index + 1
-    parts.append(value[start:].strip())
+    parts.append(strip_http_ows(value[start:]))
     return [part for part in parts if part]
 
 
@@ -226,7 +227,7 @@ def _split_link_parameters(value: str) -> list[str]:
 
 
 def _link_parameter_name(parameter: str) -> str:
-    name = parameter.partition("=")[0].strip().lower()
+    name = strip_http_ows(parameter.partition("=")[0]).lower()
     return name if _LINK_TOKEN.fullmatch(name) else ""
 
 
@@ -258,7 +259,8 @@ def _parse_link_relations(headers: httpx2.Headers) -> dict[str, str]:  # noqa: C
                 if re.search(r"(?:^|;)\s*rel\s*=", link_value, re.IGNORECASE):
                     raise GitHubUpstreamError from error
                 continue
-            parameters = [parameter.strip() for parameter in parts[1:] if parameter.strip()]
+            parameters = [strip_http_ows(parameter) for parameter in parts[1:]]
+            parameters = [parameter for parameter in parameters if parameter]
             if any(_link_parameter_name(parameter) == "anchor" for parameter in parameters):
                 continue
             relevant: list[str] = []
@@ -266,18 +268,26 @@ def _parse_link_relations(headers: httpx2.Headers) -> dict[str, str]:  # noqa: C
                 if _link_parameter_name(parameter) != "rel":
                     continue
                 _, equals, raw_value = parameter.partition("=")
-                value = raw_value.strip()
+                value = strip_http_ows(raw_value)
                 if not equals:
                     raise GitHubUpstreamError
                 decoded = value if _LINK_TOKEN.fullmatch(value) else _decoded_quoted_string(value)
                 if not decoded:
                     raise GitHubUpstreamError
+                if (
+                    decoded.startswith(" ")
+                    or decoded.endswith(" ")
+                    or any(character.isspace() and character != " " for character in decoded)
+                ):
+                    raise GitHubUpstreamError
                 relevant.extend(
-                    relation for relation in (part.lower() for part in decoded.split()) if relation in {"next", "prev"}
+                    relation
+                    for relation in (part.lower() for part in decoded.split(" ") if part)
+                    if relation in {"next", "prev"}
                 )
             if not relevant:
                 continue
-            target_match = re.fullmatch(r"<([^>]*)>", parts[0].strip())
+            target_match = re.fullmatch(r"<([^>]*)>", strip_http_ows(parts[0]))
             if target_match is None or len(relevant) != len(set(relevant)):
                 raise GitHubUpstreamError
             target = target_match.group(1)
@@ -423,7 +433,7 @@ class GitHubClient:
                     visited.add(canonical_url)
                     async with client.stream("GET", request_url, headers=headers) as response:
                         encodings = _header_values(response.headers, "content-encoding")
-                        if len(encodings) > 1 or (encodings and encodings[0].strip().lower() != "identity"):
+                        if len(encodings) > 1 or (encodings and strip_http_ows(encodings[0]).lower() != "identity"):
                             raise GitHubUpstreamError
                         if response.status_code in _REDIRECTS:
                             if redirects >= _MAX_REDIRECTS:
@@ -453,7 +463,7 @@ class GitHubClient:
                             raise GitHubUpstreamError
                         lengths = _header_values(response.headers, "content-length")
                         if lengths:
-                            raw_lengths = [part.strip() for value in lengths for part in value.split(",")]
+                            raw_lengths = [strip_http_ows(part) for value in lengths for part in value.split(",")]
                             parsed_lengths = [_provider_content_length(value) for value in raw_lengths]
                             if (
                                 not raw_lengths

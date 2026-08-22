@@ -54,6 +54,9 @@ class Collection:
         self.client = client
 
     def document(self, identifier: str) -> Document:
+        reserved = identifier.startswith("__") and identifier.endswith("__")
+        if "/" in identifier or identifier in {".", ".."} or reserved:
+            raise ValueError("invalid Firestore document ID")
         return Document(self.client, identifier)
 
 
@@ -144,6 +147,25 @@ async def test_create_is_conditional_complete_and_millisecond_normalized() -> No
         await service.create_profile("principal-123", _create("Grace"))
     assert client.store["principal-123"] == original
     assert client.write_count == 1
+
+
+async def test_firestore_incompatible_principals_use_distinct_hardened_document_keys() -> None:
+    client = Client()
+    service = ProfileService(client=cast("Any", client), clock=lambda: datetime(2026, 7, 30, tzinfo=UTC))
+    principals = ["tenant/user", ".", "..", "__reserved__", "~dGVuYW50L3VzZXI"]
+
+    profiles = [await service.create_profile(principal, _create()) for principal in principals]
+
+    assert [profile.id for profile in profiles] == principals
+    assert len(client.store) == len(principals)
+    assert all(
+        "/" not in document_id
+        and document_id not in {".", ".."}
+        and not (document_id.startswith("__") and document_id.endswith("__"))
+        for document_id in client.store
+    )
+    assert "~dGVuYW50L3VzZXI" in client.store
+    assert client.store["~dGVuYW50L3VzZXI"]["id"] == "tenant/user"
 
 
 async def test_two_synchronized_creates_have_one_winner_and_one_conflict() -> None:

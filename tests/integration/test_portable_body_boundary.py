@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Iterable
+from unittest.mock import AsyncMock
 
 import pytest
 from starlette.types import Message, Scope
@@ -171,3 +172,64 @@ async def test_declared_length_accepts_decimal_leading_zeroes_and_rejects_overfl
     assert status == 400
     assert json.loads(body)["code"] == "invalid_request"
     assert calls == 0
+
+
+async def test_declared_length_rejects_non_ows_whitespace_without_reading_content() -> None:
+    scope = _scope(
+        "POST",
+        "/v1/hello",
+        headers=[(b"content-type", b"application/json"), (b"content-length", b"14\xa0")],
+    )
+    status, _, body, calls = await _request(scope, [b'{"name":"Ada"}'])
+    assert status == 400
+    assert json.loads(body)["code"] == "invalid_request"
+    assert calls == 0
+
+
+@pytest.mark.parametrize(
+    ("headers", "expected_status", "expected_code", "expected_reads"),
+    [
+        ([(b"content-type", b"application/json\xa0")], 415, "unsupported_media_type", 1),
+        ([(b"content-type", b"application/json;\xa0charset=utf-8")], 415, "unsupported_media_type", 1),
+        (
+            [(b"content-type", b"application/json"), (b"content-encoding", b"identity\xa0")],
+            415,
+            "unsupported_media_type",
+            1,
+        ),
+        (
+            [(b"content-type", b"application/json"), (b"accept", b"application/json\xa0")],
+            406,
+            "not_acceptable",
+            0,
+        ),
+    ],
+)
+async def test_non_ows_representation_fields_fail_before_profile_mutation(
+    headers: list[tuple[bytes, bytes]],
+    expected_status: int,
+    expected_code: str,
+    expected_reads: int,
+) -> None:
+    from app.auth.firebase import FirebaseUser, verify_firebase_token
+    from app.dependencies import get_profile_service
+    from app.main import fastapi_app
+    from app.services.profile import ProfileService
+
+    profile_service = AsyncMock(spec=ProfileService)
+    profile_service.update_profile.side_effect = AssertionError("persistence must not run")
+    fastapi_app.dependency_overrides[verify_firebase_token] = lambda: FirebaseUser(uid="principal")
+    fastapi_app.dependency_overrides[get_profile_service] = lambda: profile_service
+    try:
+        status, _, body, calls = await _request(
+            _scope("PATCH", "/v1/profile", headers=headers),
+            [b'{"marketingOptIn":true}'],
+        )
+    finally:
+        fastapi_app.dependency_overrides.pop(verify_firebase_token, None)
+        fastapi_app.dependency_overrides.pop(get_profile_service, None)
+
+    assert status == expected_status
+    assert json.loads(body)["code"] == expected_code
+    assert calls == expected_reads
+    profile_service.update_profile.assert_not_awaited()

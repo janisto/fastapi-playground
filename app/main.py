@@ -39,6 +39,7 @@ from app.core.problems import (
 )
 from app.middleware import (
     BodySizeLimitMiddleware,
+    HandledExceptionMiddleware,
     SecurityHeadersMiddleware,
 )
 
@@ -115,7 +116,8 @@ def _build_application(inner_app: ASGIApp, application_settings: Settings) -> Re
     """
     Compose the response-wide middleware stack from explicit settings.
     """
-    application: ASGIApp = BodySizeLimitMiddleware(inner_app)
+    application: ASGIApp = HandledExceptionMiddleware(inner_app)
+    application = BodySizeLimitMiddleware(application)
 
     # CORS wraps the body limit and FastAPI recovery so preflights and error responses retain CORS headers.
     if application_settings.cors_origins:

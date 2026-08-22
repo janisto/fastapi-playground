@@ -6,6 +6,7 @@ import re
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.core.content_negotiation import strip_http_ows
 from app.core.portable_http import validate_closed_query
 from app.core.problems import PortableProblem, render_problem
 
@@ -109,12 +110,12 @@ class BodySizeLimitMiddleware:
             return
 
         content_lengths = [
-            value.decode("latin1").strip()
+            strip_http_ows(value.decode("latin1"))
             for key, value in scope.get("headers", [])
             if key.lower() == b"content-length"
         ]
         if content_lengths:
-            values = [part.strip() for value in content_lengths for part in value.split(",")]
+            values = [strip_http_ows(part) for value in content_lengths for part in value.split(",")]
             parsed_lengths = [_content_length(value) for value in values]
             if not values or any(value is None for value in parsed_lengths) or len(set(parsed_lengths)) != 1:
                 await _send_problem(scope, send, PortableProblem("invalid_request"))

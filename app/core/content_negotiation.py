@@ -22,6 +22,14 @@ _MEDIA_TYPE_PARTS = 2
 _MIN_QUOTED_VALUE_LENGTH = 2
 _ASCII_CONTROL_BOUNDARY = 0x20
 _ASCII_DELETE = 0x7F
+_HTTP_OWS = " \t"
+
+
+def strip_http_ows(value: str) -> str:
+    """
+    Strip only HTTP optional whitespace: space and horizontal tab.
+    """
+    return value.strip(_HTTP_OWS)
 
 
 def _split_quoted(value: str, separator: str) -> list[str] | None:
@@ -62,11 +70,11 @@ def normalize_media_type(media_type: str) -> str:
     """
     Normalize a media type for case-insensitive comparison.
     """
-    return media_type.split(";", maxsplit=1)[0].strip().lower()
+    return strip_http_ows(media_type.split(";", maxsplit=1)[0]).lower()
 
 
 def _parameter_value(value: str) -> str | None:
-    value = value.strip()
+    value = strip_http_ows(value)
     if _TOKEN_PATTERN.fullmatch(value):
         return value
     if len(value) < _MIN_QUOTED_VALUE_LENGTH or not value.startswith('"') or not value.endswith('"'):
@@ -94,15 +102,15 @@ def _parse_parameters(params: list[str]) -> tuple[float, dict[str, str]] | None:
     qvalue_seen = False
     media_parameters: dict[str, str] = {}
     for raw_param in params:
-        param = raw_param.strip()
+        param = strip_http_ows(raw_param)
         if not param:
             return None
         raw_name, separator, raw_value = param.partition("=")
         name = raw_name.lower()
         if (
             not separator
-            or raw_name != raw_name.strip()
-            or raw_value != raw_value.strip()
+            or raw_name != strip_http_ows(raw_name)
+            or raw_value != strip_http_ows(raw_value)
             or _TOKEN_PATTERN.fullmatch(name) is None
         ):
             return None
@@ -126,7 +134,7 @@ def _parse_media_value(value: str) -> tuple[str, dict[str, str]] | None:
     parts = _split_quoted(value, ";")
     if parts is None or not parts:
         return None
-    base = parts[0].strip().lower()
+    base = strip_http_ows(parts[0]).lower()
     type_parts = base.split("/")
     if (
         len(type_parts) != _MEDIA_TYPE_PARTS
@@ -185,14 +193,14 @@ def _media_type_quality(  # noqa: C901 - RFC media-range precedence is clearer a
         return None
 
     for raw_item in raw_items:
-        item = raw_item.strip()
+        item = strip_http_ows(raw_item)
         if not item:
             continue
 
         parts = _split_quoted(item, ";")
         if parts is None or not parts:
             continue
-        range_type = parts[0].strip().lower()
+        range_type = strip_http_ows(parts[0]).lower()
         range_parts = range_type.split("/")
         if (
             len(range_parts) != _MEDIA_TYPE_PARTS

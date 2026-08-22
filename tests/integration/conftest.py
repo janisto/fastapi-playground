@@ -59,7 +59,7 @@ def client(mock_profile_service: AsyncMock, mock_github_service: AsyncMock) -> G
         fastapi_app.dependency_overrides[get_github_service] = lambda: mock_github_service
         with TestClient(
             app,
-            raise_server_exceptions=False,
+            raise_server_exceptions=True,
             client=("203.0.113.10", 50000),
         ) as c:
             yield c

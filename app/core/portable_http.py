@@ -15,7 +15,12 @@ from fastapi.routing import APIRoute
 from fastapi.utils import is_body_allowed_for_status_code
 from pydantic import BaseModel, ValidationError
 
-from app.core.content_negotiation import CBOR_MEDIA_TYPE, JSON_MEDIA_TYPE, negotiate_api_media_type
+from app.core.content_negotiation import (
+    CBOR_MEDIA_TYPE,
+    JSON_MEDIA_TYPE,
+    negotiate_api_media_type,
+    strip_http_ows,
+)
 from app.core.problems import PortableProblem, validation_issues
 
 _BAD_PERCENT = re.compile(rb"%(?![0-9A-Fa-f]{2})")
@@ -149,13 +154,13 @@ def _split_media_type(value: str) -> list[str] | None:
             current.append(character)
             quoted = not quoted
         elif character == ";" and not quoted:
-            parts.append("".join(current).strip())
+            parts.append(strip_http_ows("".join(current)))
             current = []
         else:
             current.append(character)
     if quoted or escaped:
         return None
-    parts.append("".join(current).strip())
+    parts.append(strip_http_ows("".join(current)))
     return None if any(not part for part in parts) else parts
 
 
@@ -198,8 +203,8 @@ def _request_content_type(value: str) -> str | None:
     decoded_value = _decoded_parameter_value(raw_value)
     if (
         not equals
-        or name != name.strip()
-        or raw_value != raw_value.strip()
+        or name != strip_http_ows(name)
+        or raw_value != strip_http_ows(raw_value)
         or name.lower() != "charset"
         or decoded_value is None
         or decoded_value.lower() != "utf-8"
@@ -212,14 +217,15 @@ def _request_media_type(request: Request, body: bytes) -> str:
     content_types = _header_values(request, b"content-type")
     content_encodings = _header_values(request, b"content-encoding")
     if len(content_encodings) > 1 or (
-        content_encodings and ("," in content_encodings[0] or content_encodings[0].strip().lower() != "identity")
+        content_encodings
+        and ("," in content_encodings[0] or strip_http_ows(content_encodings[0]).lower() != "identity")
     ):
         raise PortableProblem("unsupported_media_type")
     if len(content_types) != 1:
         if body or content_types:
             raise PortableProblem("unsupported_media_type")
         raise PortableProblem("invalid_request")
-    content_type = _request_content_type(content_types[0].strip())
+    content_type = _request_content_type(strip_http_ows(content_types[0]))
     if content_type is not None:
         return content_type
     raise PortableProblem("unsupported_media_type")
@@ -255,7 +261,7 @@ def valid_json_content_type(value: str) -> bool:  # noqa: PLR0911
     names: set[str] = set()
     for parameter in parts[1:]:
         raw_name, equals, parameter_value = parameter.partition("=")
-        if not equals or raw_name != raw_name.strip() or parameter_value != parameter_value.strip():
+        if not equals or raw_name != strip_http_ows(raw_name) or parameter_value != strip_http_ows(parameter_value):
             return False
         name = raw_name.lower()
         if _TOKEN.fullmatch(name) is None or name in names:

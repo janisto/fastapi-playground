@@ -64,6 +64,9 @@ class Collection:
         for snapshot in self._snapshots:
             yield snapshot
 
+    def document(self, identifier: str) -> Reference:
+        return Reference(identifier)
+
 
 class Client:
     def __init__(self, snapshots: list[Snapshot]) -> None:
@@ -81,9 +84,17 @@ class Client:
 class ReplacementTransaction:
     def __init__(self) -> None:
         self.set_calls: list[tuple[object, dict[str, object]]] = []
+        self.create_calls: list[tuple[object, dict[str, object]]] = []
+        self.delete_calls: list[object] = []
 
     def set(self, document: object, replacement: dict[str, object]) -> None:
         self.set_calls.append((document, replacement))
+
+    def create(self, document: object, replacement: dict[str, object]) -> None:
+        self.create_calls.append((document, replacement))
+
+    def delete(self, document: object) -> None:
+        self.delete_calls.append(document)
 
 
 class ReplacementSnapshot:
@@ -156,6 +167,29 @@ async def test_dry_run_validates_without_writes(monkeypatch: pytest.MonkeyPatch)
     replacement.assert_not_awaited()
 
 
+async def test_dry_run_marks_legacy_storage_key_for_rewrite(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Client([Snapshot("~principal", _canonical("~principal"))])
+    replacement = _install_client(monkeypatch, client)
+
+    assert await migrate_profiles.migrate(apply=False) == (1, 1, 0)
+    replacement.assert_not_awaited()
+
+
+async def test_apply_rekeys_legacy_storage_key_without_changing_public_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    source = Snapshot("~principal", _canonical("~principal"))
+    client = Client([source])
+    replacement = _install_client(monkeypatch, client)
+
+    assert await migrate_profiles.migrate(apply=True) == (1, 1, 1)
+    replacement.assert_awaited_once()
+    assert replacement.await_args is not None
+    transaction, actual_source, target, expected, canonical = replacement.await_args.args
+    assert transaction is client.transaction_value
+    assert actual_source is source.reference
+    assert target.id == "~fnByaW5jaXBhbA"
+    assert expected == canonical == _canonical("~principal")
+
+
 async def test_dry_run_aborts_instead_of_approving_noncanonical_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -179,6 +213,7 @@ async def test_apply_writes_only_retired_documents_and_canonical_rerun_is_empty(
     replacement.assert_awaited_once_with(
         client.transaction_value,
         reference.reference,
+        None,
         retired,
         _canonical(),
     )
@@ -195,15 +230,38 @@ async def test_compare_before_write_rejects_missing_or_changed_document() -> Non
 
     matching = ReplacementTransaction()
     document = ReplacementDocument(ReplacementSnapshot(expected))
-    await _REPLACE_BODY(matching, document, expected, replacement)
+    await _REPLACE_BODY(matching, document, None, expected, replacement)
     assert matching.set_calls == [(document, replacement)]
+    assert matching.create_calls == []
+    assert matching.delete_calls == []
 
     for current in (None, {**expected, "first_name": "Changed"}):
         transaction = ReplacementTransaction()
         changed_document = ReplacementDocument(ReplacementSnapshot(current))
         with pytest.raises(RuntimeError, match="profile changed during migration"):
-            await _REPLACE_BODY(transaction, changed_document, expected, replacement)
+            await _REPLACE_BODY(transaction, changed_document, None, expected, replacement)
         assert transaction.set_calls == []
+
+
+async def test_compare_before_write_rekeys_only_when_target_is_absent() -> None:
+    expected = _canonical("~principal")
+    source = ReplacementDocument(ReplacementSnapshot(expected))
+    target = ReplacementDocument(ReplacementSnapshot(None))
+    transaction = ReplacementTransaction()
+
+    await _REPLACE_BODY(transaction, source, target, expected, expected)
+
+    assert transaction.set_calls == []
+    assert transaction.create_calls == [(target, expected)]
+    assert transaction.delete_calls == [source]
+
+    occupied = ReplacementDocument(ReplacementSnapshot(_canonical("other")))
+    transaction = ReplacementTransaction()
+    with pytest.raises(RuntimeError, match="profile storage target already exists"):
+        await _REPLACE_BODY(transaction, source, occupied, expected, expected)
+    assert transaction.set_calls == []
+    assert transaction.create_calls == []
+    assert transaction.delete_calls == []
 
 
 @pytest.mark.parametrize(

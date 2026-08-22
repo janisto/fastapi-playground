@@ -211,6 +211,7 @@ app/
     profile.py         # ProfileNotFoundError, ProfileAlreadyExistsError
   middleware/          # ASGI middleware stack
     body_limit.py      # Request size guard (413 on oversized)
+    recovery.py        # Contains post-response FastAPI exception re-raises
     security.py        # Security headers (HSTS, X-Frame-Options)
   models/              # Pydantic schemas
     error.py           # ProblemResponse schema
@@ -224,7 +225,7 @@ app/
     link.py            # RFC 8288 Link header builder
     paginator.py       # Pagination helper
   services/            # Business logic layer
-    profile/           # ProfileService with Firestore operations
+    profile/           # ProfileService and Firestore-safe principal keys
     github_service.py  # Bounded anonymous GitHub client and projection
 scripts/
   migrate_profiles.py  # Dry-run-first one-time persisted-profile migration
@@ -273,7 +274,9 @@ application neither reads an ambient GitHub token nor forwards caller credential
 ## Persisted profile migration
 
 The accepted profile contract retires the persisted `email`, `marketing`, and `terms` keys in favor of
-`contact_email`, `marketing_opt_in`, and `terms_accepted`. Before deploying this revision over existing profile data:
+`contact_email`, `marketing_opt_in`, and `terms_accepted`. It also hardens Firestore document keys for principals that
+cannot be used safely as one document-ID segment while leaving the public `Profile.id` unchanged. Before deploying
+this revision over existing profile data:
 
 1. Quiesce all profile traffic, take a Firestore backup, and keep the retired revision from reading migrated records.
 2. Point ADC, `FIREBASE_PROJECT_ID`, and optional `FIRESTORE_DATABASE` at the intended environment.
@@ -282,13 +285,16 @@ The accepted profile contract retires the persisted `email`, `marketing`, and `t
 5. Rerun the dry run and require `pending=0` before starting the new application revision.
 6. Deploy and verify the new revision with a dedicated synthetic principal before restoring profile traffic.
 
-The command validates every document before dispatching writes and compare-checks each document in a transaction. It
-also requires canonical-key documents to contain already-canonical values instead of approving values normalized only
-in memory. It is dry-run by default and safe to rerun, but Firestore does not make the entire collection migration one
-transaction; if a run is interrupted, keep profile traffic quiesced and rerun to completion. Partial adoption becomes
-unsafe when the first document is migrated: the retired reader and writer must not serve migrated records. Rollback
-requires the backup and retired revision together; do not point the retired revision at forward-migrated data. Do not
-run the migration against live data as part of an ordinary code review or test workflow.
+The command validates every document before dispatching writes and compare-checks each source and any new target in a
+transaction. A key move uses create-if-absent plus source deletion in that transaction, so it cannot overwrite another
+profile. The command also requires canonical-key documents to contain already-canonical values instead of approving
+values normalized only in memory. It is dry-run by default and safe to rerun, but Firestore does not make the entire
+collection migration one transaction; if a run is interrupted, keep profile traffic quiesced and rerun to completion.
+If an earlier deployment admitted a custom Firebase UID containing `/`, inventory those principals from the backup
+before cutover: the retired raw path may have addressed a nested document that a top-level collection scan cannot find.
+Partial adoption becomes unsafe when the first document is migrated: the retired reader and writer must not serve
+migrated records. Rollback requires the backup and retired revision together; do not point the retired revision at
+forward-migrated data. Do not run the migration against live data as part of an ordinary code review or test workflow.
 
 The wire cutover is also breaking for generated clients: operation IDs, lower camel case members, item `Money`, error
 documents, statuses, representations, and the six GitHub operations changed. Regenerate clients from the new runtime

@@ -139,11 +139,13 @@ OpenAPI inspection; send test and production traffic to `app`.
 The request flow is:
 
 ```text
-RequestContext -> SecurityHeaders -> AccessLog -> CORS (when configured) -> BodySizeLimit -> FastAPI
+RequestContext -> SecurityHeaders -> AccessLog -> CORS (when configured) -> BodySizeLimit -> HandledException -> FastAPI
 ```
 
 Keep request context outermost so every response, including recovery and limit responses, receives `X-Request-ID`.
 Keep access logging outside FastAPI recovery so failures emit one correlated access record.
+Contain FastAPI's post-response exception re-raise only after a complete response, before it reaches the ASGI server
+logger. Propagate failures that occur before response completion.
 
 Use the lifespan context manager for startup and shutdown. Configure logging on startup and initialize Firebase lazily
 at the protected profile boundary so public routes and OpenAPI discovery remain dependency-free. Close the async

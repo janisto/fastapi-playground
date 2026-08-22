@@ -197,4 +197,5 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> Response:
     logger.error("Unhandled application failure", extra={"failure_type": type(exc).__name__})
+    request.scope["portable.handled_exception"] = True
     return render_problem(",".join(request.headers.getlist("accept")), PortableProblem("internal_error"))

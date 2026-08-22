@@ -268,8 +268,10 @@ Production checklist:
 ## One-time profile data migration
 
 Existing documents written by the retired contract use `email`, `marketing`, and `terms`. The accepted representation
-uses `contact_email`, `marketing_opt_in`, and `terms_accepted` in Firestore while the public API uses camelCase.
-Deployment of this revision over existing data therefore requires the checked-in migration:
+uses `contact_email`, `marketing_opt_in`, and `terms_accepted` in Firestore while the public API uses camelCase. The
+same migration hardens document keys for principals that are not one safe Firestore document-ID segment, without
+changing the public principal ID. Deployment of this revision over existing data therefore requires the checked-in
+migration:
 
 ```bash
 # Read-only validation; requires explicit target configuration and ADC.
@@ -282,8 +284,11 @@ uv run python -m scripts.migrate_profiles --apply
 Quiesce all profile traffic, back up Firestore, verify the target project and database, run the dry run, apply, then
 rerun the dry run until it reports `pending=0`. The script compares each document again inside its write transaction
 and requires canonical-key documents to contain already-canonical values rather than approving in-memory
-normalization. It is safe to rerun. An interrupted collection-wide run can be partial, so keep the retired revision
-away from migrated records and do not start the new revision until the final dry run is clean. Deploy and verify the
-new revision with a dedicated synthetic principal before restoring profile traffic. Partial adoption becomes unsafe
-with the first migrated document; rollback requires restoring the backup together with the retired revision. The
-migration is not part of `just check`, deployment automation, or application startup.
+normalization. Key moves create an absent target and delete the source in the same transaction. It is safe to rerun. An
+interrupted collection-wide run can be partial, so keep the retired revision away from migrated records and do not
+start the new revision until the final dry run is clean. If an earlier deployment admitted a custom Firebase UID
+containing `/`, inventory those principals from the backup before cutover because the retired raw path may have
+addressed a nested document that a top-level collection scan cannot find. Deploy and verify the new revision with a
+dedicated synthetic principal before restoring profile traffic. Partial adoption becomes unsafe with the first
+migrated document; rollback requires restoring the backup together with the retired revision. The migration is not
+part of `just check`, deployment automation, or application startup.
