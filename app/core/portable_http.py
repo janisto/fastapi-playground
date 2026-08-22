@@ -127,6 +127,7 @@ def validate_closed_query(raw_query: bytes, allowed: frozenset[str]) -> dict[str
                 "validation_failed",
                 errors=[{"detail": "Request field is invalid", "source": {"parameter": "limit"}}],
             )
+        query["limit"] = normalized
     return query
 
 

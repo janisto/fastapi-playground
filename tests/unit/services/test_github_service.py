@@ -183,6 +183,8 @@ async def test_owner_projection_fails_closed_on_missing_wrong_or_unsafe_values(f
         {"private": True},
         {"visibility": "private"},
         {"topics": ["duplicate", "duplicate"]},
+        {"license": {"spdx_id": []}},
+        {"license": {"spdx_id": {}}},
         {"stargazers_count": -1},
         {"updated_at": "2020-01-02T00:00:00.0001Z"},
         {"html_url": "javascript:alert(1)"},
@@ -349,7 +351,8 @@ async def test_numbered_provider_links_require_directional_progress_not_adjacenc
     ]
 
 
-async def test_numbered_cursor_scope_rejection_performs_no_fetch() -> None:
+@pytest.mark.parametrize("mutation", [{"owner": "other"}, {"direction": []}])
+async def test_numbered_cursor_scope_rejection_performs_no_fetch(mutation: dict[str, object]) -> None:
     calls = 0
 
     def handler(_: httpx2.Request) -> httpx2.Response:
@@ -357,16 +360,16 @@ async def test_numbered_cursor_scope_rejection_performs_no_fetch() -> None:
         calls += 1
         return httpx2.Response(500)
 
-    cursor = encode_cursor(
-        {
-            "direction": "next",
-            "limit": 20,
-            "operation": "listGitHubOwnerRepositories",
-            "owner": "other",
-            "page": 2,
-            "version": 1,
-        }
-    )
+    state: dict[str, object] = {
+        "direction": "next",
+        "limit": 20,
+        "operation": "listGitHubOwnerRepositories",
+        "owner": "octocat",
+        "page": 2,
+        "version": 1,
+    }
+    state.update(mutation)
+    cursor = encode_cursor(state)
     with pytest.raises(InvalidCursorError):
         await _service(handler).list_owner_repositories("octocat", 20, cursor)
     assert calls == 0
@@ -1013,6 +1016,7 @@ async def test_service_repeats_dot_only_repo_guard_before_url_construction(opera
     "mutation",
     [
         {"direction": "sideways"},
+        {"direction": []},
         {"limit": 21},
         {"owner": "other"},
         {"repo": "other"},

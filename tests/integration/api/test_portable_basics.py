@@ -278,6 +278,15 @@ def test_items_closed_query_and_typed_split(client: TestClient, query: str, stat
     _problem(client.get(f"/v1/items?{query}"), status, code)
 
 
+def test_items_normalizes_overlong_zero_padding_before_handler_conversion(client: TestClient) -> None:
+    response = client.get(f"/v1/items?limit={'0' * 5000}1")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["items"]] == ["item-001"]
+    next_target = _link_target(response.headers["Link"], "next")
+    assert parse_qs(urlsplit(next_target).query)["limit"] == ["1"]
+
+
 def test_known_method_trailing_path_and_request_id_replacement(client: TestClient) -> None:
     method = client.put("/v1/hello", content=b"must-not-be-read")
     body = _problem(method, 405, "method_not_allowed")

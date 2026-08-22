@@ -54,7 +54,7 @@ def test_three_pages_traverse_forward_and_backward_without_duplicate_or_skip() -
     second = _page(_cursor_from_link(first.link_header or "", "next"))
     third = _page(_cursor_from_link(second.link_header or "", "next"))
     assert [item.id for item in first.items + second.items + third.items] == [item.id for item in MOCK_ITEMS]
-    assert _cursor_from_link(first.link_header or "", "prev") is None if "prev" in (first.link_header or "") else True
+    assert 'rel="prev"' not in (first.link_header or "")
 
     previous_second = _page(_cursor_from_link(third.link_header or "", "prev"))
     previous_first = _page(_cursor_from_link(previous_second.link_header or "", "prev"))
@@ -74,6 +74,7 @@ def test_cursor_binds_operation_limit_filter_direction_and_anchor() -> None:
     for mutation in (
         {**state, "operation": "other"},
         {**state, "direction": "sideways"},
+        {**state, "direction": []},
         {**state, "anchor": "item-999"},
         {**state, "extra": True},
     ):

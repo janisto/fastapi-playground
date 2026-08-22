@@ -584,7 +584,7 @@ class GitHubService:
         if license_data is not None:
             license_object = _object(license_data)
             spdx = license_object.get("spdx_id")
-            if spdx not in {None, "", "NOASSERTION"}:
+            if spdx not in (None, "", "NOASSERTION"):
                 license_value = _strict_string(spdx)
         language = data.get("language")
         if language is not None and not isinstance(language, str):
@@ -659,7 +659,7 @@ class GitHubService:
             or state.get("repo") != repo
             or type(state.get("limit")) is not int
             or state.get("limit") != limit
-            or state.get("direction") not in {"next", "prev"}
+            or state.get("direction") not in ("next", "prev")
             or type(page) is not int
             or not 1 <= page <= SAFE_INTEGER_MAX
             or (state.get("direction") == "next" and page == 1)
@@ -781,7 +781,7 @@ class GitHubService:
             or state.get("repo") != repo
             or type(state.get("limit")) is not int
             or state.get("limit") != limit
-            or direction not in {"next", "prev"}
+            or direction not in ("next", "prev")
             or type(page) is not int
             or not _MIN_ACTIVITY_CURSOR_PAGE <= page <= SAFE_INTEGER_MAX
             or not isinstance(value, str)

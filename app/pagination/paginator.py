@@ -54,7 +54,7 @@ def paginate[T](
             or type(state["limit"]) is not int
             or state["limit"] != limit
             or state["category"] != category
-            or state["direction"] not in {"next", "prev"}
+            or state["direction"] not in ("next", "prev")
             or not isinstance(state["anchor"], str)
         ):
             raise InvalidCursorError("cursor scope is invalid")
