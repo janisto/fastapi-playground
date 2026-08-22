@@ -163,6 +163,7 @@ async def test_owner_request_uses_fixed_anonymous_headers_and_closed_projection(
         ("id", 9_007_199_254_740_992),
         ("login", ""),
         ("avatar_url", "javascript:alert(1)"),
+        ("avatar_url", "https://avatars.example/octocat?token=provider-secret"),
         ("created_at", "2011-01-25T18:44:36.0001Z"),
     ],
 )
@@ -188,6 +189,7 @@ async def test_owner_projection_fails_closed_on_missing_wrong_or_unsafe_values(f
         {"stargazers_count": -1},
         {"updated_at": "2020-01-02T00:00:00.0001Z"},
         {"html_url": "javascript:alert(1)"},
+        {"html_url": "https://example.test/repo?token=provider-secret"},
         {"html_url": "https://éxample.test/repo"},
         {"html_url": "https://example.test/%ZZ"},
         {"html_url": "https://example.test\\attacker"},
@@ -1147,6 +1149,21 @@ async def test_quota_header_boundaries_and_ambiguity(
                 {
                     "id": 1,
                     "actor": {"login": "octocat"},
+                    "ref": "refs/heads/main",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "activity_type": "push",
+                }
+            ],
+            "activity",
+        ),
+        (
+            [
+                {
+                    "id": 1,
+                    "actor": {
+                        "login": "octocat",
+                        "avatar_url": "https://avatars.example/octocat?token=provider-secret",
+                    },
                     "ref": "refs/heads/main",
                     "timestamp": "2026-01-01T00:00:00Z",
                     "activity_type": "push",

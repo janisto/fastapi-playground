@@ -36,6 +36,7 @@ def _http_url(value: str) -> str:
         or not parsed.hostname
         or parsed.username is not None
         or parsed.password is not None
+        or parsed.query
     ):
         raise ValueError("invalid HTTP URL")
     return value

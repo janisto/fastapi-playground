@@ -1,5 +1,6 @@
 """Real FastAPI boundary tests for the public GitHub operation family."""
 
+import logging
 from unittest.mock import AsyncMock
 
 import httpx2
@@ -173,6 +174,43 @@ def test_unencodable_provider_activity_cursor_is_safe_502(client: TestClient) ->
     _assert_problem(response, 502, "github_upstream")
     assert "Link" not in response.headers
     assert provider_value[:64].encode() not in response.content
+    assert calls == 1
+
+
+def test_query_bearing_provider_projection_url_is_safe_502(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.main import fastapi_app
+
+    provider_url = "https://avatars.example/octocat?token=provider-secret"
+    payload = _owner().model_dump()
+    payload["avatar_url"] = provider_url
+    calls = 0
+
+    def handler(_: httpx2.Request) -> httpx2.Response:
+        nonlocal calls
+        calls += 1
+        return httpx2.Response(
+            200,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+        )
+
+    service = GitHubService(
+        GitHubClient(
+            transport=httpx2.MockTransport(handler),
+            base_url="https://api.github.test",
+        )
+    )
+    fastapi_app.dependency_overrides[get_github_service] = lambda: service
+
+    with caplog.at_level(logging.INFO):
+        response = client.get("/v1/github/owners/octocat")
+
+    _assert_problem(response, 502, "github_upstream")
+    assert b"provider-secret" not in response.content
+    assert provider_url not in caplog.text
     assert calls == 1
 
 
