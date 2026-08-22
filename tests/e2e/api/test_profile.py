@@ -1,131 +1,75 @@
-"""
-E2E tests for profile endpoints against Firebase emulators.
-
-These tests verify the complete flow including real Firestore operations.
-Requires Firebase emulators to be running.
-"""
+"""Firestore-emulator evidence for the portable profile lifecycle."""
 
 import asyncio
 
-import pytest
-from fastapi import status
 from fastapi.testclient import TestClient
 
 from app.core.firebase import close_async_firestore_client
-from app.exceptions import ProfileAlreadyExistsError
-from app.models.profile import Profile
+from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
+from app.models.profile import Profile, ProfileCreate
 from app.services.profile import ProfileService
-from tests.helpers.profiles import make_profile_create
 
-BASE_URL = "/v1/profile"
-
-
-class TestProfileE2EFlow:
-    """
-    End-to-end tests for profile CRUD operations.
-
-    These tests use real Firebase emulators and verify data persistence.
-    Note: Auth is still mocked since we need valid Firebase tokens.
-    """
-
-    def test_profile_crud_flow(self, e2e_client: TestClient) -> None:
-        """
-        Persist, retrieve, update, and delete a profile through the API.
-        """
-        profile = {
-            "first_name": "E2E",
-            "last_name": "User",
-            "email": "E2E@EXAMPLE.COM",
-            "phone_number": "+358401234567",
-            "marketing": False,
-            "terms": True,
-        }
-
-        created = e2e_client.post(BASE_URL, json=profile)
-        assert created.status_code == status.HTTP_201_CREATED
-        created_body = created.json()
-        assert created_body["id"] == "e2e-user"
-        assert created_body["email"] == "e2e@example.com"
-
-        retrieved = e2e_client.get(BASE_URL)
-        assert retrieved.status_code == status.HTTP_200_OK
-        assert retrieved.json()["first_name"] == "E2E"
-
-        updated = e2e_client.patch(BASE_URL, json={"first_name": "Updated", "marketing": True})
-        assert updated.status_code == status.HTTP_200_OK
-        updated_body = updated.json()
-        assert updated_body["first_name"] == "Updated"
-        assert updated_body["last_name"] == "User"
-        assert updated_body["email"] == "e2e@example.com"
-        assert updated_body["marketing"] is True
-        assert updated_body["created_at"] == created_body["created_at"]
-
-        deleted = e2e_client.delete(BASE_URL)
-        assert deleted.status_code == status.HTTP_204_NO_CONTENT
-
-        missing = e2e_client.get(BASE_URL)
-        assert missing.status_code == status.HTTP_404_NOT_FOUND
-
-    def test_duplicate_create_preserves_original_profile(self, e2e_client: TestClient) -> None:
-        """
-        Reject a duplicate create without overwriting the existing document.
-        """
-        original = {
-            "first_name": "Original",
-            "last_name": "User",
-            "email": "original@example.com",
-            "phone_number": "+358401234567",
-            "marketing": False,
-            "terms": True,
-        }
-        replacement = {**original, "first_name": "Replacement"}
-
-        assert e2e_client.post(BASE_URL, json=original).status_code == status.HTTP_201_CREATED
-        duplicate = e2e_client.post(BASE_URL, json=replacement)
-
-        assert duplicate.status_code == status.HTTP_409_CONFLICT
-        retrieved = e2e_client.get(BASE_URL)
-        assert retrieved.status_code == status.HTTP_200_OK
-        assert retrieved.json()["first_name"] == "Original"
-
-    @pytest.mark.parametrize(
-        ("method", "payload"),
-        [
-            ("patch", {"first_name": "Missing"}),
-            ("delete", None),
-        ],
-    )
-    def test_missing_profile_mutations_return_not_found(
-        self,
-        e2e_client: TestClient,
-        method: str,
-        payload: dict[str, str] | None,
-    ) -> None:
-        """
-        Return 404 when a transaction targets a missing profile.
-        """
-        response = e2e_client.request(method, BASE_URL, json=payload)
-
-        assert response.status_code == status.HTTP_404_NOT_FOUND
+PROFILE_PATH = "/v1/profile"
 
 
-async def test_concurrent_profile_creates_have_one_winner() -> None:
-    """
-    Verify the Firestore transaction prevents concurrent duplicate creation.
-    """
+def _payload(first_name: str = "E2E") -> dict[str, object]:
+    return {
+        "firstName": first_name,
+        "lastName": "User",
+        "contactEmail": " E2E@EXAMPLE.COM ",
+        "phoneNumber": " +358401234567 ",
+        "termsAccepted": True,
+    }
+
+
+def test_profile_crud_noop_and_duplicate_preservation(e2e_client: TestClient) -> None:
+    created = e2e_client.post(PROFILE_PATH, json=_payload())
+    assert created.status_code == 201
+    original = created.json()
+    assert original["id"] == "e2e-user"
+    assert original["contactEmail"] == "E2E@example.com"
+    assert original["createdAt"] == original["updatedAt"]
+    assert created.headers["Location"] == PROFILE_PATH
+
+    duplicate = e2e_client.post(PROFILE_PATH, json=_payload("Replacement"))
+    assert duplicate.status_code == 409
+    assert duplicate.json()["code"] == "profile_exists"
+    assert e2e_client.get(PROFILE_PATH).json() == original
+
+    noop = e2e_client.patch(PROFILE_PATH, json={"firstName": "E2E"})
+    assert noop.status_code == 200
+    assert noop.json() == original
+
+    changed = e2e_client.patch(PROFILE_PATH, json={"marketingOptIn": True})
+    assert changed.status_code == 200
+    assert changed.json()["marketingOptIn"] is True
+    assert changed.json()["createdAt"] == original["createdAt"]
+    assert changed.json()["updatedAt"] > original["updatedAt"]
+
+    deleted = e2e_client.delete(PROFILE_PATH)
+    assert deleted.status_code == 204
+    assert deleted.content == b""
+    assert e2e_client.get(PROFILE_PATH).json()["code"] == "profile_not_found"
+
+
+async def test_concurrent_emulator_creates_and_deletes_have_exact_outcomes() -> None:
     service = ProfileService()
-    profile_data = make_profile_create(email="race@example.com")
-
+    create = ProfileCreate.model_validate(_payload("Race"), strict=True)
     try:
-        results = await asyncio.gather(
-            service.create_profile("race-user", profile_data),
-            service.create_profile("race-user", profile_data),
+        create_results = await asyncio.gather(
+            service.create_profile("race-user", create),
+            service.create_profile("race-user", create),
             return_exceptions=True,
         )
+        assert sum(isinstance(result, Profile) for result in create_results) == 1
+        assert sum(isinstance(result, ProfileAlreadyExistsError) for result in create_results) == 1
+
+        delete_results = await asyncio.gather(
+            service.delete_profile("race-user"),
+            service.delete_profile("race-user"),
+            return_exceptions=True,
+        )
+        assert sum(result is None for result in delete_results) == 1
+        assert sum(isinstance(result, ProfileNotFoundError) for result in delete_results) == 1
     finally:
         close_async_firestore_client()
-
-    profiles = [result for result in results if isinstance(result, Profile)]
-    conflicts = [result for result in results if isinstance(result, ProfileAlreadyExistsError)]
-    assert len(profiles) == 1
-    assert len(conflicts) == 1

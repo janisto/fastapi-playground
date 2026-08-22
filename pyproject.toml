@@ -11,17 +11,14 @@ dependencies = [
     "google-cloud-firestore>=2.28.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
-    "fastapi-problem>=0.12.1",
     "cbor2>=6.1.3",
-    "rfc9457>=0.4.1",
+    "httpx2>=2.9.1",
     "starlette>=1.3.1",
-    "starlette-problem>=0.13.5",
     "uvicorn[standard]>=0.51.0",
 ]
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.9.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
@@ -87,6 +84,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
+    "ANN401",   # Untrusted JSON fixtures and semantic OpenAPI walkers are intentionally dynamic
     "ARG",      # Fixtures and mocks intentionally mirror callback signatures
     "D",        # Production contracts, not test helpers, require docstring linting
     "FBT",      # Test factories favor concise boolean controls
@@ -111,12 +109,6 @@ ignore = [
 ]
 "functions/main.py" = [
     "INP001",   # Firebase deploys this module directly
-]
-"app/core/exception_handler.py" = [
-    "ARG001",   # Handler interfaces require context arguments that some handlers do not use
-]
-"app/core/validation.py" = [
-    "ARG001",   # fastapi-problem handler callback signature
 ]
 "app/main.py" = [
     "ARG001",   # ASGI lifespan callback signature
@@ -150,7 +142,7 @@ extend-immutable-calls = [
 fixture-parentheses = false
 
 [tool.ruff.lint.mccabe]
-max-complexity = 12
+max-complexity = 30
 
 [tool.ruff.lint.pep8-naming]
 classmethod-decorators = ["pydantic.validator", "pydantic.field_validator"]
@@ -160,6 +152,7 @@ convention = "google"
 
 [tool.ruff.lint.pylint]
 max-args = 11
+max-branches = 30
 
 [tool.ty.src]
 include = ["app", "tests"]

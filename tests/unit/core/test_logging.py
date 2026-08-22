@@ -23,9 +23,9 @@ def restore_logging_state() -> Generator[None]:
     root = logging.getLogger()
     root_handlers = root.handlers.copy()
     root_level = root.level
-    uvicorn_states = {
+    logger_states = {
         name: (logger.handlers.copy(), logger.level, logger.propagate, logger.disabled)
-        for name in ("uvicorn", "uvicorn.error", "uvicorn.access")
+        for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "httpx2", "httpcore2")
         if (logger := logging.getLogger(name))
     }
     logging_module._logging_configured = False
@@ -34,7 +34,7 @@ def restore_logging_state() -> Generator[None]:
 
     root.handlers = root_handlers
     root.setLevel(root_level)
-    for name, (handlers, level, propagate, disabled) in uvicorn_states.items():
+    for name, (handlers, level, propagate, disabled) in logger_states.items():
         logger = logging.getLogger(name)
         logger.handlers = handlers
         logger.setLevel(level)
@@ -84,6 +84,21 @@ def test_disables_uvicorn_access_logger(mocker: MockerFixture) -> None:
     assert access_logger.disabled is True
     assert access_logger.propagate is False
     assert access_logger.handlers == []
+
+
+@pytest.mark.parametrize("logger_name", ["httpx2", "httpcore2"])
+def test_disables_outbound_http_client_loggers(mocker: MockerFixture, logger_name: str) -> None:
+    """
+    Verify provider request URLs cannot be emitted by the HTTP client logger.
+    """
+    mocker.patch("app.core.logging.get_settings", return_value=SimpleNamespace(log_level="INFO"))
+
+    configure_logging()
+
+    client_logger = logging.getLogger(logger_name)
+    assert client_logger.disabled is True
+    assert client_logger.propagate is False
+    assert client_logger.handlers == []
 
 
 def test_configuration_is_idempotent(mocker: MockerFixture) -> None:

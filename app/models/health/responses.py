@@ -4,7 +4,7 @@ Health response models.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class HealthResponse(BaseModel):
@@ -17,3 +17,4 @@ class HealthResponse(BaseModel):
         description="Service health status",
         examples=["healthy"],
     )
+    model_config = ConfigDict(extra="forbid", strict=True)

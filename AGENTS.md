@@ -45,7 +45,7 @@ Instructions for coding agents working in this repository.
 - Python 3.14+
 - FastAPI and Pydantic v2
 - Firebase Admin SDK and async Firestore
-- `fastapi-problem` for RFC 9457 Problem Details
+- local closed RFC 9457 Problem Details handlers with stable portable error codes
 - `fastapi-request-observability` for request context and access logs
 - JSON and CBOR representations
 - `uv` for dependencies, Ruff for lint/format, ty for types, pytest for tests, and `just` for workflows
@@ -90,7 +90,7 @@ updated in the same change. A missing or skipped required context blocks every P
 - `app/models/`: separate request and response models plus shared constrained types
 - `app/core/`: configuration, Firebase lifecycle, logging, negotiation, OpenAPI helpers, and exception handling
 - `app/middleware/`: application-specific ASGI middleware
-- `app/exceptions/`: domain Problem Details exceptions
+- `app/exceptions/`: profile domain exceptions
 - `tests/unit/`: isolated helpers, models, middleware, auth, and service behavior
 - `tests/integration/`: composed FastAPI and middleware behavior
 - `tests/e2e/`: real local Firebase emulator behavior
@@ -110,19 +110,21 @@ Use names that communicate both meaning and symbol kind. Do not apply one casing
 - Modules, packages, functions, methods, parameters, local variables, model fields, and instance attributes use
   `snake_case`.
 - Classes, exceptions, Pydantic models, enums, and type aliases use `PascalCase`. Keep established initialisms uppercase
-  inside PascalCase names, for example `CBORRoute`, `JSONValue`, `OpenAPIResponse`, and `UTCDateTime`.
+  inside PascalCase names, for example `JSONValue`, `OpenAPIResponse`, and `UTCDateTime`.
 - Module-level constants use `UPPER_SNAKE_CASE`. A type alias is not a constant: prefer `ItemCategory` over a name such
   as `VALID_CATEGORIES`.
 - Private implementation names use a leading underscore. Avoid opaque abbreviations and single-letter names outside a
   conventional, tightly scoped context; prefer names such as `exception_handler` and `genkit` over `eh` and `ai`.
-- Public JSON and CBOR object properties, query parameters, path parameters, and Firestore document fields use
-  `snake_case`. Define the desired field name directly; do not add camelCase aliases or alternate-casing compatibility
-  inputs. Compound words remain separated, for example `first_name`, `in_stock`, and `created_at`.
-- Operation IDs use `<resource>_<action>`. Static URL path segments remain lowercase and use established resource
+- Portable JSON and CBOR domain properties use the exact lower camel case names from the accepted contract, for example
+  `firstName`, `inStock`, and `createdAt`. Python model fields and Firestore document fields remain explicit idiomatic
+  `snake_case`; aliases exist only for the one canonical wire name and must not accept alternate casing. Query and path
+  parameter names use their exact contract spelling.
+- Portable operation IDs use the exact stable lower camel case values from the accepted specification, such as
+  `getHealth`, `listItems`, and `createProfile`. Static URL path segments remain lowercase and use established resource
   names. Schema discovery document names preserve the exact `PascalCase` OpenAPI component name, for example
   `/schemas/Profile.json`.
 - Preserve names owned by external protocols, libraries, or platforms exactly, including HTTP headers,
-  `describedBy`, Google Cloud fields such as `spanId`, and SDK options such as `projectId`.
+  the registered `describedby` relation, Google Cloud fields such as `spanId`, and SDK options such as `projectId`.
 
 When a public or persisted field is renamed, update the request and response models, service and Firestore keys,
 OpenAPI components, standalone schemas, JSON and CBOR contract tests, fixtures, examples, and relevant documentation in
@@ -137,14 +139,17 @@ OpenAPI inspection; send test and production traffic to `app`.
 The request flow is:
 
 ```text
-RequestContext -> SecurityHeaders -> AccessLog -> CORS (when configured) -> BodySizeLimit -> FastAPI
+RequestContext -> SecurityHeaders -> AccessLog -> CORS (when configured) -> BodySizeLimit -> HandledException -> FastAPI
 ```
 
 Keep request context outermost so every response, including recovery and limit responses, receives `X-Request-ID`.
 Keep access logging outside FastAPI recovery so failures emit one correlated access record.
+Contain FastAPI's post-response exception re-raise only after a complete response, before it reaches the ASGI server
+logger. Propagate failures that occur before response completion.
 
-Use the lifespan context manager for startup and shutdown. Configure logging and initialize Firebase on startup. Close
-the async Firestore client synchronously in a `finally` block; the supported SDK's `AsyncClient.close()` is not awaitable.
+Use the lifespan context manager for startup and shutdown. Configure logging on startup and initialize Firebase lazily
+at the protected profile boundary so public routes and OpenAPI discovery remain dependency-free. Close the async
+Firestore client synchronously in a `finally` block; the supported SDK's `AsyncClient.close()` is not awaitable.
 
 Cloud Run terminates TLS before proxying HTTP to the container. The image runtime trusts Cloud Run forwarded headers so
 the application sees the original HTTPS scheme for HSTS and URL behavior. Preserve the established image, build, and
@@ -159,15 +164,16 @@ buildpack source-deployment flow.
 - Paths have no trailing slash; redirects are disabled.
 - Return resources directly without envelopes.
 - GET and PATCH normally return 200, persistent POST returns 201 plus `Location`, and DELETE returns 204 without a body.
-- Use stable operation IDs in `<resource>_<action>` form.
+- Use the exact stable lower camel case operation IDs from the portable inventory.
 - Use precise return annotations. Use explicit `response_model` only when response-model options are required.
 - Endpoint docstrings describe behavior and notable failures; decorators contain accurate summaries, descriptions, and
   reachable statuses.
 - Use `Literal` for fixed value sets and shared constrained aliases for reusable validation.
 - An invalid pagination cursor is a malformed parameter and returns 400, not 422.
 
-Expected domain failures use exceptions derived from the narrowest `fastapi-problem` class. Re-raise expected domain or
-transport exceptions. Log unexpected failures with safe structured context and return a generic 500.
+Expected service failures use narrow domain exceptions and are mapped deliberately to `PortableProblem` at the route
+boundary. Re-raise expected domain or transport exceptions. Log unexpected failures with safe structured context and
+return a generic 500.
 
 ### Representations and negotiation
 
@@ -175,17 +181,18 @@ transport exceptions. Log unexpected failures with safe structured context and r
   default and the server preference on ties. CBOR is an optional secondary representation and is selected only by an
   exact, positive-quality `application/cbor` range; `*/*` and `application/*` never opt a client into binary output.
   Combine repeated `Accept` field lines. Parse q-values with the RFC grammar: `0` or `1` with zero to three fractional
-  digits (only zeroes after `1`), with no exponent, sign, or omitted leading zero. The available representations define
-  no media-type parameters, so a range with any other non-empty parameter does not match. Recognize `q` regardless of
-  parameter order. RFC 9110 removed the older accept-extension grammar after `q`; do not reintroduce it.
+  digits (only zeroes after `1`), with no exponent, sign, or omitted leading zero. Evaluate the permitted
+  parameterless and `charset=utf-8` JSON forms as separate candidates; CBOR accepts no parameters and arbitrary media
+  parameters do not match. Recognize `q` regardless of parameter order. RFC 9110 removed the older accept-extension
+  grammar after `q`; do not reintroduce it.
 - For a success response with a body, honor quality values and exact exclusions. If every available representation is
   unacceptable, return 406 before FastAPI parses the body, resolves dependencies, or executes the endpoint. The outer
   request-size guard may already have inspected or buffered the body. This ordering prevents a POST or PATCH mutation
   when its success representation cannot be consumed.
 - A 204 response has no representation. Ignore `Accept` for such operations instead of blocking a successful DELETE.
 - Request bodies use `Content-Type: application/json` or `application/cbor`; unsupported body types return 415.
-  Match request base types case-insensitively and ignore `Content-Type` parameters such as `charset`; this is distinct
-  from representation parameters in `Accept`.
+  Match base types case-insensitively. JSON permits only one `charset=utf-8` parameter and CBOR permits no parameters;
+  repeated, comma-combined, malformed, ambiguous, or otherwise parameterized fields are rejected.
 - Preserve the original error status. Use RFC 9457 `application/problem+json` by default and use registered
   `application/cbor` only when the client explicitly prefers CBOR. If no requested error representation is available,
   fall back to JSON rather than masking the original 4xx or 5xx with another 406. RFC 9110 permits this, and
@@ -201,11 +208,12 @@ Use this response policy table as the source of truth:
 | Response class | Available success or error representation | `Accept` policy |
 |---|---|---|
 | Modeled `/v1/...` success with a body | `application/json`, `application/cbor` | Strict; JSON default and tie winner, CBOR exact opt-in, otherwise 406 before execution |
-| `/health` success | `application/json` | Strict; unsupported explicit values return 406 |
+| `/health` success | `application/json`, `application/cbor` | Strict; JSON default and tie winner |
 | `/schemas/{Model}.json` success | `application/schema+json` | Strict; absent, `*/*`, and `application/*` work; `application/json` alone does not match |
 | 204 success | no representation | Ignore `Accept` |
 | Problem Details error | `application/problem+json`, or the same fields encoded as `application/cbor` | Best effort; explicit CBOR preference wins, otherwise JSON fallback while preserving status |
-| `/openapi.json`, `/api-docs`, `/api-redoc` | FastAPI-owned fixed JSON or HTML assets | Outside the application CBOR layer; do not infer a global negotiation promise from these routes |
+| `/openapi.json` success | `application/json` | Strict; CBOR, YAML, and HTML are not success representations |
+| `/api-docs`, `/api-redoc` | Optional FastAPI-owned HTML assets | Render `/openapi.json`; outside the portable inventory |
 
 The `+json` structured syntax suffix describes a representation's underlying syntax; it does not make
 `application/json` match `application/schema+json` in an RFC 9110 media range. JSON Schema Draft 2020-12 recommends
@@ -214,14 +222,15 @@ The `+json` structured syntax suffix describes a representation's underlying syn
 
 ### Problem Details and schema discovery
 
-Problem bodies follow RFC 9457. Validation errors use an `errors` array with dot-notation locations. Echo only bounded
-scalar invalid values, redact compound secret field names, and never attach a container that could be the full request
-body.
+Problem bodies follow RFC 9457 and require `title`, `status`, `detail`, and stable `code`. Validation errors may use a
+bounded `errors` array with safe details and application-owned JSON pointers or canonical query/header names. Never
+echo a rejected value, attacker-controlled unknown name, request body, credential, provider body, or exception text.
 
-Modeled responses advertise a relative schema link:
+Standalone schema discovery and response links are optional sibling extensions. When a response advertises one, use a
+relative target and the registered lowercase relation:
 
 ```http
-Link: </schemas/Model.json>; rel="describedBy"
+Link: </schemas/Model.json>; rel="describedby"
 ```
 
 Do not add `$schema` to API response instances. `$schema` identifies the JSON Schema dialect and belongs on the
@@ -238,7 +247,7 @@ Document response headers that runtime code emits, including `X-Request-ID`, `Li
 - Response models do not inherit strict request bases.
 - Use `model_dump()`; use `exclude_unset=True` for PATCH.
 - PATCH fields may be omitted but explicit null is rejected unless a domain explicitly defines null semantics.
-- Use shared `UTCDateTime`, `NormalizedEmail`, and `Phone` aliases from `app/models/types.py` where applicable.
+- Use shared `UTCDateTime`, `ContactEmail`, and `PhoneNumber` aliases from `app/models/types.py` where applicable.
 - Public timestamps are UTC ISO 8601 with explicit millisecond precision, for example `2025-01-15T10:30:00.000Z`.
 - Scalar fields have useful `Field` descriptions and examples. Nested-model arrays rely on their referenced schemas.
 - Do not use model-level `json_schema_extra` examples.
@@ -249,21 +258,40 @@ Document response headers that runtime code emits, including `X-Request-ID`, `Li
 - Use `get_async_firestore_client()` and inject services rather than constructing clients in routers.
 - User-owned profile documents use the authenticated Firebase UID as both ownership boundary and resource ID. Never
   accept a client-selected owner.
-- Use `@firestore.async_transactional` where create-if-absent or read-modify-write semantics require atomicity.
+- Use Firestore's native conditional `document.create()` for create-if-absent and `@firestore.async_transactional`
+  where read-modify-write or delete-if-present semantics require atomicity.
 - Preserve `created_at`; change `updated_at` only on a mutation.
 - Map absence and conflict to domain exceptions instead of leaking SDK results across the service boundary.
-- Emit one structured audit record after a successful security-relevant mutation.
+- Emit one structured audit record after a successful security-relevant mutation without principal identifiers or
+  profile values.
 - Firebase token verification checks revocation. Credential failures return 401 with `WWW-Authenticate: Bearer`; key
   retrieval or verification dependency failures return 503 with `Retry-After`.
 - Use standard-library module loggers in the FastAPI app and structured `extra={...}` context. Use
   `logger.exception()` only inside exception handlers. Do not interpolate context into log messages.
 - Request trace fields represent valid incoming W3C Trace Context correlation. The middleware does not create spans.
 
+## GitHub transport boundary
+
+- GitHub routes are public and anonymous. Use the dedicated service client; never read an ambient `GITHUB_TOKEN`,
+  invoke Firebase, or forward caller credentials, cookies, tracing fields, forwarding fields, or user agents.
+- The production origin is exactly `https://api.github.com`. Every outbound request uses only the fixed API media type,
+  literal REST version `2026-03-10`, stable application User-Agent, and `Accept-Encoding: identity` in addition to the
+  HTTP client's required `Host` field.
+- Validate caller paths before URL construction and build URLs from separately encoded segments. Handle redirects
+  manually, allow at most three same-origin named-to-numeric redirects, and validate provider pagination targets
+  without fetching them.
+- One inbound request performs at most one logical upstream operation under a ten-second overall deadline, without
+  retry, sleep, cache, or fallback. Bound decoded provider success bodies to 4 MiB before JSON parsing.
+- Require exact `200`, JSON media, identity encoding, duplicate-free JSON, and closed public projection validity.
+  Repository projections fail closed unless `private` is false and `visibility` is `public`. Never expose or log a
+  provider body, exception text, credential, or query-bearing upstream URL.
+
 ## Configuration and CORS
 
-`FIREBASE_PROJECT_ID` is required. `ENVIRONMENT` is one of `development`, `test`, or `production`.
-`MAX_REQUEST_SIZE_BYTES` must be positive. Invalid JSON-array syntax in `CORS_ORIGINS` is a configuration error, not a
-literal origin fallback.
+`FIREBASE_PROJECT_ID` is required when a protected profile operation initializes Firebase; it is not a startup
+dependency for public operations. `ENVIRONMENT` is one of `development`, `test`, or `production`. The portable inbound
+limit is the fixed value 1,000,000 bytes and is not configurable. Invalid JSON-array syntax or a wildcard value in
+`CORS_ORIGINS` is a configuration error, not a permissive fallback.
 
 `ENVIRONMENT` is the single source for production-only security behavior: production enables HSTS and strips 5xx
 Problem Details extensions. `LOG_LEVEL` controls only application log verbosity. Do not reintroduce a general debug

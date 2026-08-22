@@ -32,6 +32,8 @@ def initialize_firebase() -> None:
     settings = get_settings()
 
     try:
+        if not settings.firebase_project_id or not settings.firebase_project_id.strip():
+            raise RuntimeError("Firebase project is not configured")
         if settings.google_application_credentials:
             # Use service account credentials
             cred = credentials.Certificate(settings.google_application_credentials)
@@ -42,8 +44,11 @@ def initialize_firebase() -> None:
 
         logger.info("Firebase initialized successfully")
 
-    except Exception:
-        logger.exception("Failed to initialize Firebase")
+    except Exception as error:
+        logger.error(  # noqa: TRY400 - provider details and credential paths must not enter logs
+            "Firebase initialization failed",
+            extra={"failure_type": type(error).__name__},
+        )
         raise
 
 
@@ -52,7 +57,9 @@ def get_firebase_app() -> firebase_admin.App:
     Get the Firebase app instance.
     """
     if _firebase_app is None:
-        raise RuntimeError("Firebase not initialized. Call initialize_firebase() first.")
+        initialize_firebase()
+    if _firebase_app is None:  # pragma: no cover - initialization either returns an app or raises
+        raise RuntimeError("Firebase initialization did not produce an app")
     return _firebase_app
 
 

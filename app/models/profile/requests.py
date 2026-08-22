@@ -1,99 +1,86 @@
-"""
-Profile request models.
-"""
+"""Portable profile mutation models."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.experimental.missing_sentinel import MISSING
 
-from app.models.types import Name, NormalizedEmail, Phone
+from app.models.types import BoundedName, ContactEmail, PhoneNumber
 
 
-class ProfileBase(BaseModel):
-    """
-    Base profile model with common fields.
-    """
+class ProfileCreate(BaseModel):
+    """Closed current-principal profile creation input."""
 
-    first_name: Name = Field(
-        ...,
-        description="First name",
-        examples=["John"],
+    first_name: BoundedName = Field(alias="firstName", description="Given name.", examples=["Casey"])
+    last_name: BoundedName = Field(alias="lastName", description="Family name.", examples=["Morgan"])
+    contact_email: ContactEmail = Field(
+        alias="contactEmail",
+        description="ASCII contact email; surrounding ASCII whitespace is stripped and the domain is lowercased.",
+        examples=[" Casey@EXAMPLE.TEST "],
     )
-    last_name: Name = Field(
-        ...,
-        description="Last name",
-        examples=["Doe"],
+    phone_number: PhoneNumber = Field(
+        alias="phoneNumber",
+        description="E.164 phone number after stripping surrounding ASCII whitespace.",
+        examples=[" +12025550123 "],
     )
-    email: NormalizedEmail = Field(
-        ...,
-        description="Email address (auto-lowercased)",
-        examples=["user@example.com"],
-    )
-    phone_number: Phone = Field(
-        ...,
-        description="Phone number",
-        examples=["+358401234567"],
-    )
-    marketing: bool = Field(
+    marketing_opt_in: bool = Field(
         default=False,
-        description="Marketing opt-in",
+        alias="marketingOptIn",
+        strict=True,
+        description="Current marketing preference; omitted creation input defaults to false.",
         examples=[False],
     )
-    terms: bool = Field(
-        ...,
-        description="Terms acceptance",
+    terms_accepted: Literal[True] = Field(
+        alias="termsAccepted",
+        description="Required confirmation that the terms are accepted.",
         examples=[True],
     )
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ProfileCreate(ProfileBase):
-    """
-    Model for creating a new profile.
-
-    Validates that terms must be accepted (True) on profile creation.
-    """
-
-    @field_validator("terms", mode="after")
-    @classmethod
-    def terms_must_be_accepted(cls, value: bool) -> bool:
-        """
-        Enforce terms acceptance on profile creation.
-        """
-        if not value:
-            raise ValueError("terms must be accepted")
-        return value
+    model_config = ConfigDict(extra="forbid", strict=True, serialize_by_alias=True)
 
 
 class ProfileUpdate(BaseModel):
-    """
-    Model for updating an existing profile.
-    """
+    """Closed, non-empty current-principal profile patch input."""
 
-    first_name: Name | MISSING = Field(
+    first_name: BoundedName | MISSING = Field(
         MISSING,
-        description="First name",
-        examples=["John"],
+        alias="firstName",
+        description="Replacement given name when supplied.",
+        examples=["Casey"],
     )
-    last_name: Name | MISSING = Field(
+    last_name: BoundedName | MISSING = Field(
         MISSING,
-        description="Last name",
-        examples=["Doe"],
+        alias="lastName",
+        description="Replacement family name when supplied.",
+        examples=["Morgan"],
     )
-    email: NormalizedEmail | MISSING = Field(
+    contact_email: ContactEmail | MISSING = Field(
         MISSING,
-        description="Email address (auto-lowercased)",
-        examples=["user@example.com"],
+        alias="contactEmail",
+        description="Replacement ASCII contact email after canonicalization when supplied.",
+        examples=[" Casey@EXAMPLE.TEST "],
     )
-    phone_number: Phone | MISSING = Field(
+    phone_number: PhoneNumber | MISSING = Field(
         MISSING,
-        description="Phone number",
-        examples=["+358401234567"],
+        alias="phoneNumber",
+        description="Replacement E.164 phone number after stripping ASCII whitespace when supplied.",
+        examples=[" +12025550123 "],
     )
-    marketing: bool | MISSING = Field(
+    marketing_opt_in: bool | MISSING = Field(
         MISSING,
-        description="Marketing opt-in",
-        examples=[False],
+        alias="marketingOptIn",
+        description="Replacement marketing preference when supplied.",
+        examples=[True],
+    )
+    model_config = ConfigDict(
+        extra="forbid",
+        strict=True,
+        serialize_by_alias=True,
+        json_schema_extra={"minProperties": 1},
     )
 
-    model_config = ConfigDict(extra="forbid")
+    @model_validator(mode="after")
+    def require_one_field(self) -> ProfileUpdate:
+        """Reject an empty patch after all members validate."""
+        if not self.model_fields_set:
+            raise ValueError("at least one field is required")
+        return self

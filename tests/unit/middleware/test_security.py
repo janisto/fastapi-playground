@@ -138,9 +138,7 @@ class TestHSTSHeader:
         with TestClient(app, base_url="https://testserver") as client:
             response = client.get("/ping")
             hsts = response.headers.get("strict-transport-security")
-            assert hsts is not None
-            assert "max-age=31536000" in hsts
-            assert "includeSubDomains" in hsts
+            assert hsts == "max-age=31536000; includeSubDomains"
 
     def test_no_hsts_when_disabled(self) -> None:
         """
@@ -461,7 +459,7 @@ class TestContentSecurityPolicyHeader:
         """
         with TestClient(_create_app()) as client:
             response = client.get("/ping")
-            assert response.headers.get("content-security-policy") == "frame-ancestors 'none'"
+            assert response.headers.get("content-security-policy") == "default-src 'none'; frame-ancestors 'none'"
 
     def test_custom_csp(self) -> None:
         """
@@ -546,7 +544,7 @@ class TestCSPDocumentationExemption:
         with TestClient(app) as client:
             response = client.get("/api/users")
             assert response.status_code == 200
-            assert response.headers.get("content-security-policy") == "frame-ancestors 'none'"
+            assert response.headers.get("content-security-policy") == "default-src 'none'; frame-ancestors 'none'"
 
     def test_other_security_headers_still_applied_for_documentation_paths(self) -> None:
         """

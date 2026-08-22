@@ -39,7 +39,7 @@ class SecurityHeadersMiddleware:
         x_frame_options: str = "DENY",
         referrer_policy: str = "strict-origin-when-cross-origin",
         cache_control: str = "no-store",
-        content_security_policy: str = "frame-ancestors 'none'",
+        content_security_policy: str = "default-src 'none'; frame-ancestors 'none'",
         cross_origin_opener_policy: str = "same-origin",
         cross_origin_resource_policy: str = "same-origin",
         permissions_policy: str = _DEFAULT_PERMISSIONS_POLICY,

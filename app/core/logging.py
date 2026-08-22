@@ -40,4 +40,10 @@ def configure_logging() -> None:
     access_logger.propagate = False
     access_logger.disabled = True
 
+    for name in ("httpx2", "httpcore2"):
+        provider_client_logger = logging.getLogger(name)
+        provider_client_logger.handlers.clear()
+        provider_client_logger.propagate = False
+        provider_client_logger.disabled = True
+
     _logging_configured = True

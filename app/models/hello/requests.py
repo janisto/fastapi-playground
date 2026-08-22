@@ -1,39 +1,12 @@
-"""
-Hello request models.
-"""
-
-from typing import Literal
+"""Hello request model."""
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.types import Name
-
-# Supported language codes for greetings
-SupportedLanguage = Literal["en", "fi", "es", "fr", "de"]
-
-GREETINGS: dict[SupportedLanguage, str] = {
-    "en": "Hello",
-    "fi": "Hei",
-    "es": "Hola",
-    "fr": "Bonjour",
-    "de": "Hallo",
-}
+from app.models.types import BoundedName
 
 
-class GreetingRequest(BaseModel):
-    """
-    Request model for generating a personalized greeting.
-    """
+class HelloCreate(BaseModel):
+    """Closed personalized greeting request."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    name: Name = Field(
-        ...,
-        description="Name for personalized greeting",
-        examples=["Alice"],
-    )
-    language: SupportedLanguage = Field(
-        default="en",
-        description="Language code for greeting (en, fi, es, fr, de)",
-        examples=["en", "fi", "es"],
-    )
+    name: BoundedName = Field(description="Name used verbatim in the greeting", examples=["Ada"])
+    model_config = ConfigDict(extra="forbid", strict=True)

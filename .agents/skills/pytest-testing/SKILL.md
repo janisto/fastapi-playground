@@ -27,9 +27,14 @@ Assert observable contracts: exact status, relevant headers, decoded response sh
 negotiation, authentication and authorization, body limits, request IDs, stale cursors, and absence of sensitive log
 fields. Prefer parametrization for validation matrices and `AsyncMock` assertions for async service calls.
 
-For public models, assert representative complete JSON and CBOR property sets and generated schema properties in
-`snake_case`; do not only assert a resource envelope or one unaffected field. For persisted models, assert Firestore
-keys use the same names. These tests enforce the naming policy that static Python linting cannot see.
+For public models, assert representative complete JSON and CBOR property sets and generated schema properties use the
+exact lower camel case contract; do not only assert one unaffected field. Separately assert that Firestore uses the
+canonical `snake_case` persistence keys. These tests enforce the wire/storage mapping that static Python linting cannot
+see.
+
+Use `httpx2.MockTransport` for the anonymous GitHub boundary and assert fixed origin, exact application-selected
+headers, redirect/link validation, deadlines, streamed body bounds, failure mapping, projection closure, and absence of
+caller or ambient credentials. Unit and integration tests must never contact live GitHub.
 
 Use `pytest-mock` for call-aware patching, `monkeypatch` for environment isolation, HTTPX2 for HTTP requests, and
 `pytest-httpx2` for outbound mocks. With automatic asyncio mode, do not add `pytest.mark.asyncio` to ordinary async

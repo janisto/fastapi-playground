@@ -10,13 +10,11 @@ from app.auth.firebase import FirebaseUser, verify_firebase_token
 
 def make_fake_user(
     uid: str = "test-user-123",
-    email: str = "test@example.com",
-    verified: bool = True,
 ) -> FirebaseUser:
     """
     Factory for a fake FirebaseUser.
     """
-    return FirebaseUser(uid=uid, email=email, email_verified=verified)
+    return FirebaseUser(uid=uid)
 
 
 @contextmanager

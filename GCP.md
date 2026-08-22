@@ -86,13 +86,12 @@ These settings are defined in `app/core/config.py`:
 
 | Variable | Required in deployment | Default | Purpose |
 |---|---:|---|---|
-| `FIREBASE_PROJECT_ID` | Yes | none | Firebase and Firestore project ID |
+| `FIREBASE_PROJECT_ID` | Profile API | none | Firebase and Firestore project ID; checked when a protected route needs Firebase |
 | `FIRESTORE_DATABASE` | No | `(default)` | Optional named Firestore database |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Local only | unset | Explicit credential-file path; omit on Cloud Run |
 | `ENVIRONMENT` | No | `production` | `development`, `test`, or `production` |
 | `LOG_LEVEL` | No | `INFO` | Application log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
-| `MAX_REQUEST_SIZE_BYTES` | No | `1000000` | Maximum request-body size |
-| `CORS_ORIGINS` | Browser clients only | empty | JSON array or comma-separated allowed origins |
+| `CORS_ORIGINS` | Browser clients only | empty | JSON array or comma-separated explicit origins; wildcard is rejected |
 
 `PORT` is consumed by the development and container commands, not by `Settings`; it defaults to `8080`.
 
@@ -112,13 +111,17 @@ Install and run the FastAPI app from the repository root:
 
 ```bash
 cp .env.example .env
-# Set FIREBASE_PROJECT_ID in .env
 just install
 just serve
 ```
 
 The API documentation is available at `http://127.0.0.1:8080/api-docs`; `/health` is a dependency-free liveness
-endpoint and does not verify Firebase, Firestore, or Vertex AI readiness.
+endpoint and does not verify Firebase, Firestore, GitHub, or Vertex AI readiness. Public routes and `/openapi.json`
+start without initializing Firebase. Configure `FIREBASE_PROJECT_ID` and ADC before exercising a profile operation.
+
+The application-level inbound request limit is fixed by the portable API contract at 1,000,000 bytes for POST and
+PATCH. It is intentionally not environment-configurable. Configure Cloud Run and any gateway so they do not reject a
+smaller body before the application can return its portable 413 response.
 
 Unit and integration tests mock Auth and Firestore. The E2E profile test overrides authentication but uses the local
 Firestore emulator for real transaction behavior:
@@ -142,8 +145,8 @@ documented by the [Firebase Emulator Suite](https://firebase.google.com/docs/emu
 The Dockerfile uses BuildKit cache mounts, installs only runtime dependencies from `uv.lock`, runs as UID/GID 1001,
 and starts Uvicorn without duplicate access logging. Cloud Run terminates TLS before proxying cleartext HTTP to the
 container, so Uvicorn is configured to trust Cloud Run's forwarded headers. This preserves the original HTTPS scheme
-for generated URLs and HSTS decisions; do not remove those runtime flags without verifying `/health`, schema links,
-and security headers through the deployed service.
+for generated URLs and HSTS decisions; do not remove those runtime flags without verifying `/health`, generated
+pagination links, and security headers through the deployed service.
 
 Production deployment is already managed by existing Google Cloud configuration outside this repository. Do not use
 local container commands or examples in this guide to replace its build, image, or rollout conventions.
@@ -224,11 +227,16 @@ Both observability middleware components use W3C Trace Context Level 1. The serv
 privacy-sensitive raw path, direct peer address, User-Agent, and exception-message access fields; route templates and
 operation IDs remain available as low-cardinality dimensions.
 
-A correct client response and access record do not by themselves prove that an expected exception was fully handled.
-The explicit `InvalidCursorError` registration in `app/main.py` is intentional: it keeps malformed cursors inside
-Starlette's exception middleware so they return 400 without being re-raised as an ASGI server error. When verifying this
-path after deployment, use Cloud Logging MCP to correlate the request ID with its 400 access record and confirm that no
-adjacent `Exception in ASGI application` ERROR was emitted for the same request window.
+The portable route boundary converts malformed or wrong-scope pagination cursors to controlled 400 responses before a
+service call. When verifying this path after deployment, use Cloud Logging MCP to correlate the request ID with its
+single 400 access record and confirm that no adjacent `Exception in ASGI application` ERROR was emitted for the same
+request window.
+
+The GitHub family is a credential-free public projection. The outbound client is fixed to `https://api.github.com`,
+the REST version `2026-03-10`, four allowlisted request fields, identity encoding, a ten-second whole-operation
+deadline, three validated same-origin redirects, and a 4 MiB response bound. Do not configure `GITHUB_TOKEN` for these
+routes: route wiring intentionally ignores ambient and inbound credentials. Anonymous quota exhaustion is a controlled
+429 and may make live smoke checks nondeterministic; deterministic tests use a local transport double.
 
 Production checklist:
 
@@ -237,6 +245,7 @@ Production checklist:
 - terminate TLS at Cloud Run and verify HSTS on HTTPS responses;
 - keep the model-backed function private and grant `roles/run.invoker` only to intended callers;
 - configure explicit `CORS_ORIGINS` for browser clients;
+- keep Cloud Run and gateway body limits at or above the portable 1,000,000-byte application limit;
 - inject production secrets from Secret Manager rather than plain values;
 - rebuild the custom image regularly for OS, Python, and dependency patches;
 - configure log-based alerts and budgets for Vertex AI usage.
@@ -245,11 +254,41 @@ Production checklist:
 
 | Symptom | Likely cause | Check |
 |---|---|---|
-| Profile request returns 500 | Firestore configuration or permission failure | Project ID, ADC, database name, and `roles/datastore.user` |
+| Profile request returns 503 | Firebase or Firestore dependency is unavailable | Project ID, ADC, database name, network, and `roles/datastore.user` |
 | Auth returns 401 | Missing, expired, revoked, disabled-user, or invalid token | Bearer token and `WWW-Authenticate` response header |
 | Auth returns 503 | Firebase verification dependency unavailable | ADC, network access, public-key retrieval, and `Retry-After` |
+| GitHub request returns 429 | Anonymous GitHub quota exhausted | `Retry-After` and optional `X-RateLimit-Reset`; do not add a token as a workaround |
+| GitHub request returns 502/504 | Upstream contract, transport, size, redirect, or deadline failure | Correlated safe access log; provider diagnostics stay out of public responses |
 | Function returns 400 | Unsupported `topic` query value | Use `work`, `tech`, `food`, or `relationships` |
 | Function returns 401/403 before handler | Missing identity token or caller IAM | ID token and `roles/run.invoker` on the backing service |
 | Function returns 503 | Genkit or Vertex AI failure | Vertex API, global endpoint/model alias availability, ADC, IAM, and quotas |
 | E2E test skips | Firestore emulator is not running on `127.0.0.1:7030` | Run `just emulators` |
 | CORS is blocked | Origin is absent from `CORS_ORIGINS` | Configure an exact allowed origin |
+
+## One-time profile data migration
+
+Existing documents written by the retired contract use `email`, `marketing`, and `terms`. The accepted representation
+uses `contact_email`, `marketing_opt_in`, and `terms_accepted` in Firestore while the public API uses camelCase. The
+same migration hardens document keys for principals that are not one safe Firestore document-ID segment, without
+changing the public principal ID. Deployment of this revision over existing data therefore requires the checked-in
+migration:
+
+```bash
+# Read-only validation; requires explicit target configuration and ADC.
+uv run python -m scripts.migrate_profiles
+
+# Writes only after every current document validates. Run only with operational approval.
+uv run python -m scripts.migrate_profiles --apply
+```
+
+Quiesce all profile traffic, back up Firestore, verify the target project and database, run the dry run, apply, then
+rerun the dry run until it reports `pending=0`. The script compares each document again inside its write transaction
+and requires canonical-key documents to contain already-canonical values rather than approving in-memory
+normalization. Key moves create an absent target and delete the source in the same transaction. It is safe to rerun. An
+interrupted collection-wide run can be partial, so keep the retired revision away from migrated records and do not
+start the new revision until the final dry run is clean. If an earlier deployment admitted a custom Firebase UID
+containing `/`, inventory those principals from the backup before cutover because the retired raw path may have
+addressed a nested document that a top-level collection scan cannot find. Deploy and verify the new revision with a
+dedicated synthetic principal before restoring profile traffic. Partial adoption becomes unsafe with the first
+migrated document; rollback requires restoring the backup together with the retired revision. The migration is not
+part of `just check`, deployment automation, or application startup.

@@ -18,7 +18,8 @@ os.environ["FIREBASE_PROJECT_ID"] = "test-project"
 os.environ["CORS_ORIGINS"] = ""
 
 from app.auth.firebase import FirebaseUser, verify_firebase_token
-from app.dependencies import get_profile_service
+from app.dependencies import get_github_service, get_profile_service
+from app.services.github_service import GitHubService
 from app.services.profile import ProfileService
 from tests.helpers.auth import make_fake_user
 
@@ -32,7 +33,13 @@ def mock_profile_service() -> AsyncMock:
 
 
 @pytest.fixture
-def client(mock_profile_service: AsyncMock) -> Generator[TestClient]:
+def mock_github_service() -> AsyncMock:
+    """Deterministic GitHub service double; integration tests never use the network."""
+    return AsyncMock(spec=GitHubService)
+
+
+@pytest.fixture
+def client(mock_profile_service: AsyncMock, mock_github_service: AsyncMock) -> Generator[TestClient]:
     """
     TestClient with mocked services (no Firebase/Firestore).
 
@@ -45,14 +52,14 @@ def client(mock_profile_service: AsyncMock) -> Generator[TestClient]:
     from app.main import app, fastapi_app
 
     with (
-        patch("app.main.initialize_firebase"),
         patch("app.main.configure_logging"),
         patch("app.main.close_async_firestore_client"),
     ):
         fastapi_app.dependency_overrides[get_profile_service] = lambda: mock_profile_service
+        fastapi_app.dependency_overrides[get_github_service] = lambda: mock_github_service
         with TestClient(
             app,
-            raise_server_exceptions=False,
+            raise_server_exceptions=True,
             client=("203.0.113.10", 50000),
         ) as c:
             yield c

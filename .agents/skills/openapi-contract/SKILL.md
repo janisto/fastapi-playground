@@ -7,7 +7,7 @@ description: Maintain and verify fastapi-playground generated OpenAPI 3.1, FastA
 
 Read `AGENTS.md`, `app/main.py`, `app/api/schemas.py`, and the affected routers, models, exception handling, and contract
 tests before changing the public API. When media types or `Accept` behavior changes, also read
-`app/core/content_negotiation.py` and `app/core/cbor.py`.
+`app/core/content_negotiation.py`, `app/core/portable_http.py`, and `app/core/problems.py`.
 
 ## Architecture
 
@@ -21,26 +21,29 @@ Treat the public contract as four connected surfaces:
 4. Runtime behavior adds RFC 9457 JSON or CBOR errors, authentication, request limits, and response headers that the
    generated contract must describe accurately where FastAPI supports them.
 
-Do not add a hand-maintained specification or generated artifact. The small schema-component registration in
-`app/core/openapi.py` is the source for error schemas that are documented inline and served through `/schemas/`.
+Do not add a checked-in generated artifact. `app/core/openapi.py` semantically projects FastAPI's generated document
+into the exact portable inventory, response metadata, and closed schemas; `/openapi.json` is the runtime conformance
+boundary and `/schemas/` is an optional extension derived from its components.
 
 ## Contract rules
 
-- Keep every operation ID stable and unique, paths free of trailing slashes, and summaries and descriptions accurate.
+- Keep the fourteen portable operation IDs exact, stable, and unique, paths free of trailing slashes, and summaries and
+  descriptions accurate. `/openapi.json` may omit its own discovery operation as the accepted contract permits.
 - Document every reachable success and error status with the correct schema and implemented JSON or CBOR media types;
   omit content for 204 responses.
 - Keep request and response models separate. Reject unknown request fields and preserve examples, constraints, and UTC
   millisecond serialization in component schemas.
-- Follow the `AGENTS.md` naming policy in component properties and request parameters: use `snake_case` directly and do
-  not introduce camelCase aliases. Preserve externally standardized names exactly.
+- Follow the `AGENTS.md` naming policy: application domain component properties use exact lower camel case wire names;
+  query/path parameters use exact contract spelling; source and persistence fields remain idiomatic `snake_case`.
+  Never expose or accept alternate casing.
 - Mark protected operations through the existing bearer dependency and verify the generated security requirement.
 - Document `Location` and `Link` headers when runtime behavior emits them.
 - Keep Problem Details models aligned with strict RFC 9457 responses, validation error details, production redaction,
   and `WWW-Authenticate` or `Retry-After` headers where applicable.
 - Keep runtime JSON and CBOR negotiation tests aligned with the documented request, success, and error contract. Do not
   claim a media type in OpenAPI merely because a custom route can serialize it.
-- Keep `$schema` on standalone schema documents only. Response instances use stable relative `describedBy` links, and
-  every advertised schema must resolve through `/schemas/`.
+- Keep `$schema` on standalone schema documents only. Schema links are optional; every emitted link must use a stable
+  relative target, lowercase `describedby`, and a resolving `/schemas/` document.
 
 ## Workflow
 
@@ -48,8 +51,9 @@ Do not add a hand-maintained specification or generated artifact. The small sche
 2. Update operation metadata, models, field names, or shared error declarations at their source.
 3. Add focused runtime tests for changed statuses, validation, authentication, negotiation, and headers.
 4. Inspect `/openapi.json` and the affected `/schemas/{Model}.json` documents through the composed application.
-5. Assert cross-cutting invariants when appropriate: exact path and method sets, unique operation IDs, protected-route
-   security, reachable status codes, snake_case component properties, component references, and schema-link resolution.
+5. Assert cross-cutting invariants when appropriate: exact path and method sets, unique operation IDs, explicit public
+   and protected security, reachable status codes, exact camelCase component properties, local resolving references,
+   and any emitted schema-link resolution.
 6. Reject unrelated schema churn and contract claims that differ from observable runtime behavior.
 
 Run focused integration tests, then `just lint`, `just typing`, and `just test`.
@@ -60,5 +64,6 @@ Run focused integration tests, then `just lint`, `just typing`, and `just test`.
 - Operation IDs are unique and protected routes declare bearer authentication.
 - Request, success, validation, and Problem Details schemas match runtime bodies.
 - 201 responses document `Location`; 204 responses have no body; paginated responses document `Link`.
-- Standalone schema documents declare the JSON Schema dialect, and `describedBy` links resolve to the intended schema.
+- Standalone schema documents declare the JSON Schema dialect, and any `describedby` links resolve to the intended
+  schema.
 - `/openapi.json`, `/api-docs`, `/api-redoc`, and hidden `/schemas/` routes retain their intended visibility.

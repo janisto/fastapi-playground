@@ -1,21 +1,17 @@
-"""
-Profile-related exceptions.
-"""
-
-from fastapi_problem.error import ConflictProblem, NotFoundProblem
+"""Profile service boundary exceptions."""
 
 
-class ProfileNotFoundError(NotFoundProblem):
-    """
-    Raised when a profile cannot be found.
-    """
-
-    title = "Profile not found"
+class ProfileNotFoundError(Exception):
+    """The current principal has no profile."""
 
 
-class ProfileAlreadyExistsError(ConflictProblem):
-    """
-    Raised when attempting to create a duplicate profile.
-    """
+class ProfileAlreadyExistsError(Exception):
+    """The current principal already has a profile."""
 
-    title = "Profile already exists"
+
+class ProfileDependencyError(Exception):
+    """A persistence result is unavailable or unconfirmed."""
+
+
+class ProfileTimestampOverflowError(Exception):
+    """A real mutation cannot advance the canonical timestamp domain."""

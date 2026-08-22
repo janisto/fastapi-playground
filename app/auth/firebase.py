@@ -1,13 +1,11 @@
-"""
-Firebase Authentication utilities.
-"""
+"""Strict Firebase bearer authentication for portable profile operations."""
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass
 
-from fastapi import HTTPException, Security, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Request
 from firebase_admin import auth
 from firebase_admin.auth import (
     CertificateFetchError,
@@ -15,110 +13,77 @@ from firebase_admin.auth import (
     InvalidIdTokenError,
     RevokedIdTokenError,
     UserDisabledError,
+    UserNotFoundError,
 )
 
 from app.core.firebase import get_firebase_app
+from app.core.problems import PortableProblem
+from app.models.types import validate_opaque_id
 
 logger = logging.getLogger(__name__)
-
-# Security scheme for Bearer token
-security = HTTPBearer()
-
-
-def _unauthorized() -> HTTPException:
-    """
-    Build the canonical authentication failure response.
-    """
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Unauthorized",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-
-def _authentication_unavailable() -> HTTPException:
-    """
-    Build the canonical authentication dependency failure response.
-    """
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Authentication service temporarily unavailable",
-        headers={"Retry-After": "30"},
-    )
+_BEARER = re.compile(r"(?i:Bearer) +([A-Za-z0-9\-._~+/]+={0,})\Z")
+_OPAQUE_ID_MAX_LENGTH = 128
 
 
 @dataclass(frozen=True, slots=True)
 class FirebaseUser:
-    """
-    Authenticated Firebase user extracted from token.
-    """
+    """Verified immutable Firebase principal."""
 
     uid: str
-    email: str | None = None
-    email_verified: bool = False
 
 
-async def verify_firebase_token(
-    credentials: HTTPAuthorizationCredentials = Security(security),
-) -> FirebaseUser:
-    """
-    Verify Firebase ID token and return user information.
+def _authorization_values(request: Request) -> list[str]:
+    return [
+        value.decode("latin1") for key, value in request.scope.get("headers", []) if key.lower() == b"authorization"
+    ]
 
-    Args:
-        credentials: Bearer token credentials from request header
 
-    Returns:
-        FirebaseUser: Authenticated user information
-
-    Raises:
-        HTTPException: If the token is invalid or the authentication service is unavailable.
-    """
-    token = credentials.credentials
-
+async def verify_firebase_token(request: Request) -> FirebaseUser:
+    """Parse one token68 bearer credential and verify revocation with Firebase."""
+    values = _authorization_values(request)
+    if len(values) != 1 or "," in values[0]:
+        raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"})
+    match = _BEARER.fullmatch(values[0])
+    if match is None:
+        raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"})
+    token = match.group(1)
     try:
-        # Get Firebase app instance
-        app = get_firebase_app()
-
-        # Verify the ID token with revocation check
-        # Run in thread pool to avoid blocking the event loop (sync Firebase SDK call)
-        decoded_token = await asyncio.to_thread(auth.verify_id_token, token, app=app, check_revoked=True)
-
-        # Extract user information
-        uid = decoded_token.get("uid")
-        email = decoded_token.get("email")
-        email_verified = decoded_token.get("email_verified", False)
-
-        if not uid:
-            logger.warning("Invalid token: missing user ID")
-            raise _unauthorized()
-
-        logger.debug("Successfully authenticated user", extra={"user_id": uid})
-
-        return FirebaseUser(
-            uid=uid,
-            email=email,
-            email_verified=email_verified,
+        firebase_app = get_firebase_app()
+    except Exception:  # noqa: BLE001 - initialization failures are controlled dependency outages
+        logger.error("Firebase verifier initialization failed")  # noqa: TRY400 - do not log provider details
+        raise PortableProblem("dependency_unavailable", headers={"Retry-After": "30"}) from None
+    try:
+        decoded_token = await asyncio.to_thread(
+            auth.verify_id_token,
+            token,
+            app=firebase_app,
+            check_revoked=True,
         )
-
-    except HTTPException:
-        # Re-raise HTTPException without modification
-        raise
+    except (
+        ValueError,
+        ExpiredIdTokenError,
+        RevokedIdTokenError,
+        UserDisabledError,
+        UserNotFoundError,
+        InvalidIdTokenError,
+    ):
+        logger.warning("Firebase credential rejected")
+        raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"}) from None
     except CertificateFetchError:
-        # Network or configuration issue fetching public keys for token verification
-        logger.exception("Failed to fetch Firebase public keys for token verification")
-        raise _authentication_unavailable() from None
-    except ExpiredIdTokenError:
-        logger.warning("Expired Firebase ID token")
-        raise _unauthorized() from None
-    except RevokedIdTokenError:
-        logger.warning("Revoked Firebase ID token")
-        raise _unauthorized() from None
-    except UserDisabledError:
-        logger.warning("Disabled Firebase user account")
-        raise _unauthorized() from None
-    except InvalidIdTokenError:
-        logger.warning("Invalid Firebase ID token")
-        raise _unauthorized() from None
-    except Exception:
-        logger.exception("Error verifying Firebase token")
-        raise _authentication_unavailable() from None
+        logger.error("Firebase verifier dependency unavailable")  # noqa: TRY400 - do not log provider exception text
+        raise PortableProblem("dependency_unavailable", headers={"Retry-After": "30"}) from None
+    except Exception:  # noqa: BLE001 - unknown verifier failures must fail closed as dependency outages
+        logger.error("Firebase verifier failed")  # noqa: TRY400 - credential failures must not emit traceback text
+        raise PortableProblem("dependency_unavailable", headers={"Retry-After": "30"}) from None
+
+    if not isinstance(decoded_token, dict):
+        logger.error("Firebase verifier returned an invalid result")
+        raise PortableProblem("dependency_unavailable", headers={"Retry-After": "30"})
+    principal = decoded_token.get("sub")
+    if not isinstance(principal, str) or not 1 <= len(principal) <= _OPAQUE_ID_MAX_LENGTH:
+        raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"})
+    try:
+        validate_opaque_id(principal)
+    except ValueError:
+        raise PortableProblem("unauthorized", headers={"WWW-Authenticate": "Bearer"}) from None
+    return FirebaseUser(uid=principal)

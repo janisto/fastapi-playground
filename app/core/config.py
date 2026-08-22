@@ -22,7 +22,10 @@ def parse_cors_origins(value: object) -> list[str]:
     if isinstance(value, list):
         if not all(isinstance(item, str) for item in value):
             raise ValueError("CORS_ORIGINS entries must be strings")
-        return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+        origins = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+        if "*" in origins:
+            raise ValueError("CORS_ORIGINS must contain explicit origins, not a wildcard")
+        return origins
 
     if not isinstance(value, str):
         raise TypeError("CORS_ORIGINS must be a string or array of strings")
@@ -39,13 +42,19 @@ def parse_cors_origins(value: object) -> list[str]:
             if isinstance(parsed, list):
                 if not all(isinstance(item, str) for item in parsed):
                     raise ValueError("CORS_ORIGINS entries must be strings")
-                return [item.strip() for item in parsed if item.strip()]
+                origins = [item.strip() for item in parsed if item.strip()]
+                if "*" in origins:
+                    raise ValueError("CORS_ORIGINS must contain explicit origins, not a wildcard")
+                return origins
         except json.JSONDecodeError as error:
             raise ValueError("CORS_ORIGINS must be a valid JSON array or comma-separated list") from error
         raise ValueError("CORS_ORIGINS JSON value must be an array")
 
     # Fall back to comma-separated
-    return [item.strip() for item in value.split(",") if item.strip()]
+    origins = [item.strip() for item in value.split(",") if item.strip()]
+    if "*" in origins:
+        raise ValueError("CORS_ORIGINS must contain explicit origins, not a wildcard")
+    return origins
 
 
 class Settings(BaseSettings):
@@ -63,12 +72,9 @@ class Settings(BaseSettings):
     )
 
     # Firebase
-    firebase_project_id: str = Field(..., min_length=1, description="Firebase project ID")
+    firebase_project_id: str | None = Field(default=None, description="Firebase project ID for profile operations")
     google_application_credentials: str | None = Field(default=None, description="Path to service account credentials")
     firestore_database: str | None = Field(default=None, description="Firestore database ID (default: (default))")
-
-    # Security / Limits
-    max_request_size_bytes: int = Field(default=1_000_000, gt=0, description="Maximum request body size in bytes")
 
     # CORS configuration - when allow_credentials=True, wildcards are forbidden per CORS spec
     cors_origins: Annotated[list[str], NoDecode] = Field(
@@ -76,7 +82,7 @@ class Settings(BaseSettings):
         description="Allowed CORS origins (JSON array or comma-separated)",
     )
     cors_methods: list[str] = Field(
-        default=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        default=["GET", "POST", "PATCH", "DELETE"],
         description="Allowed CORS methods",
     )
     cors_headers: list[str] = Field(
@@ -84,7 +90,7 @@ class Settings(BaseSettings):
         description="Allowed CORS headers",
     )
     cors_expose_headers: list[str] = Field(
-        default=["Link", "Location", "X-Request-ID"],
+        default=["Link", "Location", "Retry-After", "X-RateLimit-Reset", "X-Request-ID"],
         description="CORS headers exposed to browser",
     )
 

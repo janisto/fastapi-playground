@@ -13,9 +13,8 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from app.core.cbor import NotAcceptableHTTPException
 from app.core.content_negotiation import SCHEMA_JSON_MEDIA_TYPE, negotiate_media_type
-from app.exceptions import SchemaNotFoundError
+from app.core.problems import PortableProblem
 
 router = APIRouter(prefix="/schemas", tags=["Schemas"])
 
@@ -93,11 +92,12 @@ async def get_schema(schema_name: str, request: Request) -> JSONResponse:
 
     Returns the JSON Schema for the specified model from the API's
     OpenAPI specification. Schema names correspond to Pydantic model
-    class names (e.g., HealthResponse, Greeting, ItemList).
+    class names (e.g., HealthResponse, Greeting, ItemPage).
 
     The .json extension is optional and will be stripped if present.
     """
-    accept = ",".join(request.headers.getlist("accept"))
+    accept_values = request.headers.getlist("accept")
+    accept = ",".join(accept_values) if accept_values else None
     if (
         negotiate_media_type(
             accept,
@@ -106,11 +106,11 @@ async def get_schema(schema_name: str, request: Request) -> JSONResponse:
         )
         is None
     ):
-        raise NotAcceptableHTTPException(SCHEMA_JSON_MEDIA_TYPE)
+        raise PortableProblem("not_acceptable")
 
     name = schema_name.removesuffix(".json")
     if name not in _schema_cache:
-        raise SchemaNotFoundError(detail=f"Schema '{name}' not found")
+        raise PortableProblem("not_found")
 
     return JSONResponse(
         content=_schema_cache[name],

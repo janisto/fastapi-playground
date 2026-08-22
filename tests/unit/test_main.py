@@ -41,7 +41,6 @@ class TestLifespan:
         """
         with (
             patch("app.main.configure_logging") as mock_configure_logging,
-            patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
@@ -49,19 +48,19 @@ class TestLifespan:
             with TestClient(app):
                 mock_configure_logging.assert_called_once()
 
-    def test_startup_initializes_firebase(self) -> None:
+    def test_startup_does_not_initialize_firebase(self) -> None:
         """
-        Verify lifespan startup calls initialize_firebase.
+        Verify public application startup remains independent of Firebase.
         """
         with (
             patch("app.main.configure_logging"),
-            patch("app.main.initialize_firebase") as mock_init_firebase,
+            patch("app.core.firebase.initialize_firebase") as mock_init_firebase,
             patch("app.main.close_async_firestore_client"),
         ):
             from app.main import app
 
             with TestClient(app):
-                mock_init_firebase.assert_called_once()
+                mock_init_firebase.assert_not_called()
 
     def test_shutdown_closes_firestore_client(self) -> None:
         """
@@ -69,7 +68,6 @@ class TestLifespan:
         """
         with (
             patch("app.main.configure_logging"),
-            patch("app.main.initialize_firebase"),
             patch("app.main.close_async_firestore_client") as mock_close,
         ):
             from app.main import app
@@ -116,6 +114,16 @@ class TestAppConfiguration:
         from app.main import fastapi_app
 
         assert fastapi_app.redoc_url == "/api-redoc"
+
+    def test_optional_documentation_uis_render_the_runtime_document(self) -> None:
+        from app.main import app
+
+        with TestClient(app) as client:
+            for path in ("/api-docs", "/api-redoc"):
+                response = client.get(path)
+                assert response.status_code == 200
+                assert response.headers["Content-Type"].startswith("text/html")
+                assert "/openapi.json" in response.text
 
     def test_observability_middleware_configuration(self) -> None:
         """
@@ -208,10 +216,9 @@ class TestCORSMiddleware:
         allowed_methods = response.headers.get("access-control-allow-methods", "")
         assert "GET" in allowed_methods
         assert "POST" in allowed_methods
-        assert "PUT" in allowed_methods
         assert "PATCH" in allowed_methods
         assert "DELETE" in allowed_methods
-        assert "OPTIONS" in allowed_methods
+        assert "PUT" not in allowed_methods
 
     def test_cors_allows_specific_headers(self) -> None:
         """
@@ -248,3 +255,10 @@ class TestCORSMiddleware:
         allowed_headers = response.headers.get("access-control-allow-headers", "").lower()
         assert "traceparent" in allowed_headers
         assert "tracestate" in allowed_headers
+
+    def test_cors_exposes_portable_response_metadata(self) -> None:
+        with TestClient(_build_cors_test_app()) as client:
+            response = client.get("/", headers={"Origin": "http://localhost:3000"})
+
+        exposed = {name.strip().lower() for name in response.headers["access-control-expose-headers"].split(",")}
+        assert exposed == {"link", "location", "retry-after", "x-ratelimit-reset", "x-request-id"}
