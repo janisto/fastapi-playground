@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from google.api_core.datetime_helpers import DatetimeWithNanoseconds
 from pydantic import TypeAdapter, ValidationError
 
 from app.models.profile import Profile, ProfileCreate, ProfileUpdate
@@ -139,6 +140,33 @@ def test_timestamp_normalizes_timezone_and_rejects_submilliseconds() -> None:
     ):
         with pytest.raises(ValidationError):
             adapter.validate_python(invalid, strict=True)
+
+
+@pytest.mark.parametrize("timezone_value", [UTC, timezone(timedelta(hours=2))])
+def test_timestamp_rejects_hidden_firestore_submillisecond_precision(timezone_value: timezone) -> None:
+    adapter = TypeAdapter(UTCDateTime)
+    exact_millisecond = DatetimeWithNanoseconds(
+        2026,
+        7,
+        30,
+        12,
+        0,
+        tzinfo=timezone_value,
+        nanosecond=123_000_000,
+    )
+    hidden_submillisecond = DatetimeWithNanoseconds(
+        2026,
+        7,
+        30,
+        12,
+        0,
+        tzinfo=timezone_value,
+        nanosecond=123_000_001,
+    )
+
+    assert adapter.validate_python(exact_millisecond, strict=True).microsecond == 123_000
+    with pytest.raises(ValidationError, match="whole-millisecond precision"):
+        adapter.validate_python(hidden_submillisecond, strict=True)
 
 
 def test_profile_rejects_update_before_creation() -> None:

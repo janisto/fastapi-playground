@@ -38,10 +38,13 @@ def normalize_utc_datetime(value: datetime) -> datetime:
     """Require an aware whole-millisecond instant and normalize it to UTC."""
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError("datetime must include timezone information")
-    normalized = value.astimezone(UTC)
-    if normalized.microsecond % 1000:
+    nanosecond = getattr(value, "nanosecond", None)
+    if nanosecond is not None:
+        if type(nanosecond) is not int or nanosecond % 1_000_000:
+            raise ValueError("datetime must have whole-millisecond precision")
+    elif value.microsecond % 1000:
         raise ValueError("datetime must have whole-millisecond precision")
-    return normalized
+    return value.astimezone(UTC)
 
 
 def truncate_clock_milliseconds(value: datetime) -> datetime:

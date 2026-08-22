@@ -5,6 +5,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
+from google.api_core.datetime_helpers import DatetimeWithNanoseconds
 
 from scripts import migrate_profiles
 
@@ -126,6 +127,24 @@ def test_canonical_document_rejects_values_that_require_normalization(field: str
     document = {**_canonical(), field: value}
 
     with pytest.raises(ValueError, match="canonical profile values are invalid"):
+        migrate_profiles._validate_canonical_document(document)
+
+
+def test_canonical_document_rejects_hidden_firestore_submillisecond_precision() -> None:
+    document = {
+        **_canonical(),
+        "updated_at": DatetimeWithNanoseconds(
+            2026,
+            7,
+            31,
+            12,
+            0,
+            tzinfo=UTC,
+            nanosecond=456_000_001,
+        ),
+    }
+
+    with pytest.raises(ValueError, match="whole-millisecond precision"):
         migrate_profiles._validate_canonical_document(document)
 
 

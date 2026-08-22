@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 from google.api_core import exceptions as google_exceptions
+from google.api_core.datetime_helpers import DatetimeWithNanoseconds
 
 from app.exceptions import (
     ProfileAlreadyExistsError,
@@ -254,6 +255,32 @@ async def test_noncanonical_persisted_value_fails_closed_without_write(field: st
 
     assert client.write_count == writes
     assert client.store["principal"][field] == value
+
+
+async def test_submillisecond_firestore_timestamp_fails_closed_without_write() -> None:
+    client = Client()
+    service = ProfileService(client=cast("Any", client), clock=lambda: datetime(2026, 1, 1, tzinfo=UTC))
+    await service.create_profile("principal", _create())
+    hidden_submillisecond = DatetimeWithNanoseconds(
+        2026,
+        1,
+        1,
+        tzinfo=UTC,
+        nanosecond=1,
+    )
+    client.store["principal"]["updated_at"] = hidden_submillisecond
+    writes = client.write_count
+
+    with pytest.raises(ValueError, match="whole-millisecond precision"):
+        await service.get_profile("principal")
+    with pytest.raises(ValueError, match="whole-millisecond precision"):
+        await service.update_profile(
+            "principal",
+            ProfileUpdate.model_validate({"marketingOptIn": True}, strict=True),
+        )
+
+    assert client.write_count == writes
+    assert client.store["principal"]["updated_at"] is hidden_submillisecond
 
 
 async def test_existing_empty_document_is_corruption_not_absence() -> None:
