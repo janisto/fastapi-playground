@@ -29,7 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Run zizmor
-        uses: zizmorcore/zizmor-action@v0.6.1
+        uses: zizmorcore/zizmor-action@v0.6.4
         with:
           advanced-security: true
           persona: pedantic
