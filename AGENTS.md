@@ -31,6 +31,10 @@ Instructions for coding agents working in this repository.
 
 ## GitHub automation
 
+This repository is an example with CI only. Pushes, PRs, and merges must not deploy to GCP. Keep cloud project aliases
+and MCP connections local and ignored; preserve manual deployment instructions and sample manifests for readers using
+their own projects. Cloud resource shutdown is outside the repository cleanup workflow.
+
 - Reference GitHub Actions by explicit full release tags such as
   `owner/action@v1.2.3`, not full commit SHAs or floating major-version tags.
   Dependabot updates those release tags.
@@ -367,16 +371,16 @@ guidance, or contributor workflows change:
 Treat all three as public. Use placeholders and preserve established build/image conventions. Also update
 `functions/README.md` for Function-specific contract, IAM, dependency, or emulator changes.
 
-The workspace keeps equivalent Firebase and Cloud Logging MCP configurations in `.vscode/mcp.json` and
-`.codex/config.toml`. Both use shell-provided `GOOGLE_CLOUD_PROJECT` and a short-lived
-`GOOGLE_CLOUD_ACCESS_TOKEN`. Keep the gcloud default project and ADC quota project aligned, restart clients after token
-refresh, and never commit an expanded token.
+Firebase and Cloud Logging MCP connections are optional personal configuration. `GCP.md` contains setup examples for
+the ignored `.vscode/mcp.json` and `.codex/config.toml` files. Do not assume a cloud connection or deployment exists.
+Keep the gcloud default project and ADC quota project aligned when configuring your own project, restart clients after
+token refresh or configuration removal, and never commit an expanded token.
 
-Cloud Logging MCP is available to investigate deployed behavior. Use it when production evidence is relevant: select
-the appropriate resource and time range, constrain queries to the service or function under investigation, and inspect
+If an authorized deployment investigation has an explicitly configured Cloud Logging MCP connection, select the
+appropriate resource and time range, constrain queries to the service or function under investigation, and inspect
 request IDs, severity, route metadata, and trace correlation. Do not copy sensitive log payloads into code, docs, tests,
-or PR descriptions. Repository evidence and deployed evidence answer different questions; report which one supports a
-finding.
+or PR descriptions. Distinguish repository evidence from deployed evidence; do not require live cloud verification for
+example-only repository changes.
 
 ## Agent skills
 

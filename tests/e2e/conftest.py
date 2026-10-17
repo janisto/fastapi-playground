@@ -2,7 +2,7 @@
 E2E test fixtures for Firebase emulator integration.
 
 These tests require Firebase emulators to be running:
-    firebase emulators:start --only auth,firestore
+    firebase emulators:start --only auth,firestore --project demo-test
 
 Or using just:
     just emulators
