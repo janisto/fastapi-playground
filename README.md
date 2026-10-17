@@ -115,7 +115,7 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) package manager (the minimum supported version is enforced in both project manifests)
 - [just](https://github.com/casey/just) command runner
-- [Firebase CLI](https://firebase.google.com/docs/cli) when running local Firebase emulators
+- [Firebase CLI](https://firebase.google.com/docs/cli) when running local Firebase emulators or manually deploying Functions
 - A project you control with Authentication and Firestore enabled when using hosted profile operations
 
 ## Quick Start
