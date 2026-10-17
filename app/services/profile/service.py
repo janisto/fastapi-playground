@@ -138,7 +138,6 @@ class ProfileService:
         return _profile_from_storage(data, expected_id=user_id)
 
     @staticmethod
-    @firestore.async_transactional
     async def _update_in_transaction(
         transaction: AsyncTransaction,
         document: AsyncDocumentReference,
@@ -171,9 +170,14 @@ class ProfileService:
         document_id = firestore_profile_document_id(user_id)
         client = self._get_client()
         document = client.collection(self.collection_name).document(document_id)
+        update_in_transaction = firestore.async_transactional(self._update_in_transaction)
         try:
-            profile, changed = await self._update_in_transaction(client.transaction(), document, user_id, updates, now)
+            profile, changed = await update_in_transaction(client.transaction(), document, user_id, updates, now)
         except ProfileTimestampOverflowError:
+            raise
+        except ValueError as error:
+            if isinstance(error.__cause__, google_exceptions.Aborted):
+                raise ProfileDependencyError from error
             raise
         except (google_exceptions.GoogleAPICallError, google_exceptions.RetryError, TimeoutError) as error:
             raise ProfileDependencyError from error
@@ -184,7 +188,6 @@ class ProfileService:
         return profile
 
     @staticmethod
-    @firestore.async_transactional
     async def _delete_in_transaction(
         transaction: AsyncTransaction,
         document: AsyncDocumentReference,
@@ -200,8 +203,13 @@ class ProfileService:
         document_id = firestore_profile_document_id(user_id)
         client = self._get_client()
         document = client.collection(self.collection_name).document(document_id)
+        delete_in_transaction = firestore.async_transactional(self._delete_in_transaction)
         try:
-            deleted = await self._delete_in_transaction(client.transaction(), document)
+            deleted = await delete_in_transaction(client.transaction(), document)
+        except ValueError as error:
+            if isinstance(error.__cause__, google_exceptions.Aborted):
+                raise ProfileDependencyError from error
+            raise
         except (google_exceptions.GoogleAPICallError, google_exceptions.RetryError, TimeoutError) as error:
             raise ProfileDependencyError from error
         if not deleted:

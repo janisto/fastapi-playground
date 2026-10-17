@@ -24,7 +24,7 @@ def build_link_header(
         RFC 8288 compliant Link header value
     """
     links = []
-    if next_cursor:
+    if bool(next_cursor):
         params = {**query_params, "cursor": next_cursor}
         links.append(f'<{base_url}?{urlencode(params)}>; rel="next"')
     if prev_cursor is not None:

@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 # Configure structlog for JSON output in Cloud Run/Functions (Genkit uses structlog internally)
 # This ensures Genkit's logs appear as structured jsonPayload in Cloud Logging
-if os.getenv("K_SERVICE"):  # Running in Cloud Run/Functions
+if bool(os.getenv("K_SERVICE")):  # Running in Cloud Run/Functions
     structlog.configure(
         processors=[
             structlog.processors.TimeStamper(fmt="iso"),
@@ -197,7 +197,7 @@ async def generate_dad_joke(topic: JokeTopic | None = None) -> DadJoke:
     Output: Strictly validated GeneratedJoke schema
     """
     style = random.choice(list(JokeStyle))  # noqa: S311
-    user_prompt = f"Generate a dad joke about {topic.value}." if topic else "Generate a dad joke."
+    user_prompt = f"Generate a dad joke about {topic.value}." if topic is not None else "Generate a dad joke."
 
     result = await genkit.generate(
         system=build_system_prompt(style),
@@ -240,7 +240,7 @@ def _handle_dad_joke(request: https_fn.Request) -> https_fn.Response:
 
     topic_param = request.args.get("topic")
     try:
-        topic = JokeTopic(topic_param.lower()) if topic_param else None
+        topic = JokeTopic(topic_param.lower()) if bool(topic_param) else None
     except ValueError:
         valid_topics = [topic.value for topic in JokeTopic]
         logger.warn("Invalid topic requested")

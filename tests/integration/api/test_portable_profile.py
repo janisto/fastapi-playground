@@ -1,6 +1,7 @@
 """Real FastAPI boundary tests for the authenticated GCP profile contract."""
 
 from datetime import UTC, datetime
+from typing import cast
 from unittest.mock import AsyncMock, Mock, call
 
 import cbor2
@@ -61,7 +62,7 @@ def _assert_problem(response: httpx2.Response, status: int, code: str) -> dict[s
     assert response.headers["Content-Type"].split(";", maxsplit=1)[0] == "application/problem+json"
     assert response.headers["Cache-Control"] == "no-store"
     assert response.headers["X-Request-ID"]
-    body = response.json()
+    body = cast("dict[str, object]", response.json())
     assert body["status"] == status
     assert body["code"] == code
     return body

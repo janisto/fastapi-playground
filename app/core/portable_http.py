@@ -6,7 +6,7 @@ import json
 import re
 from collections.abc import Callable
 from io import BytesIO
-from typing import Any, override
+from typing import Any, cast, override
 from urllib.parse import unquote_to_bytes
 
 import cbor2
@@ -132,7 +132,7 @@ def validate_closed_query(raw_query: bytes, allowed: frozenset[str]) -> dict[str
 
 
 def request_query(request: Request) -> dict[str, str]:
-    return request.scope.get("portable.query", {})
+    return cast("dict[str, str]", request.scope.get("portable.query", {}))
 
 
 def _header_values(request: Request, name: bytes) -> list[str]:

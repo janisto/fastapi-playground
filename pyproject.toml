@@ -3,18 +3,18 @@ name = "fastapi-playground"
 version = "0.1.0"
 description = "FastAPI playground for just, uv, ty and Ruff"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.15"
 dependencies = [
-    "fastapi[standard]>=0.140.7",
+    "fastapi[standard]>=0.143.3",
     "fastapi-request-observability>=2.0.0",
-    "firebase-admin>=7.5.0",
-    "google-cloud-firestore>=2.28.0",
-    "pydantic>=2.13.4",
-    "pydantic-settings>=2.14.2",
-    "cbor2>=6.1.3",
-    "httpx2>=2.9.1",
-    "starlette>=1.3.1",
-    "uvicorn[standard]>=0.51.0",
+    "firebase-admin>=7.7.0",
+    "google-cloud-firestore>=2.34.1",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.0",
+    "cbor2>=6.1.5",
+    "httpx2>=2.13.1",
+    "starlette>=1.8.0",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [dependency-groups]
@@ -23,14 +23,14 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "pytest-httpx2>=1.0.0",
-    "pytest-mock>=3.15.1",
-    "ruff>=0.16.0",
-    "ty>=0.0.64",
-    "zizmor>=1.28.0",
+    "pytest-mock>=3.16.1",
+    "ruff>=0.17.1",
+    "ty>=0.0.89",
+    "zizmor>=1.31.1",
 ]
 
 [tool.uv]
-required-version = ">=0.11.28"
+required-version = ">=0.13.1"
 
 [tool.ruff]
 line-length = 120
@@ -48,7 +48,7 @@ ignore = [
     "AIR",  # Airflow
     "CPY",  # Copyright header policy
     "DJ",   # Django
-    "FA",   # Future annotations are unnecessary on Python 3.14+
+    "FA",   # Future annotations are unnecessary on Python 3.15+
     "INT",  # gettext
     "NPY",  # NumPy
     "PD",   # pandas
@@ -145,7 +145,7 @@ fixture-parentheses = false
 max-complexity = 30
 
 [tool.ruff.lint.pep8-naming]
-classmethod-decorators = ["pydantic.validator", "pydantic.field_validator"]
+classmethod-decorators = ["pydantic.field_validator"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

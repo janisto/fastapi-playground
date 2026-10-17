@@ -1,6 +1,7 @@
 """Real FastAPI boundary tests for dependency-free portable operations."""
 
 import re
+from typing import cast
 from unittest.mock import AsyncMock
 from urllib.parse import parse_qs, urlsplit
 
@@ -28,7 +29,7 @@ def _assert_common_headers(response: httpx2.Response, request_id: str | None = N
 def _problem(response: httpx2.Response, status: int, code: str) -> dict[str, object]:
     assert response.status_code == status
     assert response.headers["Content-Type"].split(";", maxsplit=1)[0] == "application/problem+json"
-    body = response.json()
+    body = cast("dict[str, object]", response.json())
     assert body["status"] == status
     assert body["code"] == code
     assert "input" not in str(body).lower()

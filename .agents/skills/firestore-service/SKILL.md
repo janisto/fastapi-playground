@@ -20,8 +20,10 @@ editing persistence behavior.
 
 ## Transactions and data semantics
 
-Use the native conditional `document.create()` for create-if-absent and `@firestore.async_transactional` for
-read-modify-write and delete-if-present operations. Read the document through the transaction before writing. Map
+Use the native conditional `document.create()` for create-if-absent and `firestore.async_transactional` for
+read-modify-write and delete-if-present operations. Create the transaction wrapper per operation; its mutable retry
+state must not be shared across concurrent calls. Map SDK retry exhaustion chained from `Aborted` to a dependency
+failure while preserving unrelated `ValueError` failures. Read the document through the transaction before writing. Map
 absent documents and conflicts to domain exceptions rather than returning sentinel values across the service boundary.
 
 Use timezone-aware `datetime.now(UTC)` timestamps. Preserve `created_at`; update `updated_at` only for real mutations.
@@ -41,9 +43,8 @@ principal or resource identifier, profile fields, tokens, request bodies, or exc
 Run focused service tests, then `just lint`, `just typing`, and `just test`. Run `just test-e2e` when transaction or
 Firestore integration semantics change and the emulators are available.
 
-A persisted-field rename is a breaking data-contract change. Update emulator assertions and provide a dry-run-first,
-idempotent one-time migration with target verification, backup/quiescing guidance, compare-before-write behavior, and
-rerun proof. Do not add a compatibility read path unless the accepted specification explicitly requires one.
+When changing persisted fields, update models, storage mapping, fixtures, emulator assertions, and current contract
+documentation together. Do not retain compatibility reads, aliases, or migration tools for retired playground schemas.
 
 The async Firestore client's `close()` method is synchronous in the supported SDK. Call the repository lifecycle
 helper without `await`, and keep shutdown in the lifespan `finally` block so failed requests cannot skip cleanup.

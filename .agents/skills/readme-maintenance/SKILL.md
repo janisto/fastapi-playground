@@ -30,12 +30,15 @@ task-specific skills.
 - Describe request observability according to `fastapi-request-observability`; do not document deleted local helpers.
 - Describe the GitHub routes as anonymous, fixed-origin, public-data-only projections; do not suggest configuring an
   ambient token for route traffic.
-- When a persisted field changes, document the dry-run/apply migration, quiescing and backup prerequisites, rerun
-  behavior, deployment ordering, and the boundary between repository validation and authorized live execution.
+- Document the current playground contract and setup. Remove retired schema migration instructions and historical
+  compatibility guidance when updating the example.
 - Keep the root app and `functions/` dependency environments distinct.
-- Describe the model-backed Function as a deployable example configured for private IAM invocation; do not imply a
-  hosted deployment exists. Keep its manual deployment and ID-token examples aligned with `functions/README.md` and
-  `GCP.md`.
+- Distinguish a configured deployment target from a currently supported platform runtime. Check current official web
+  documentation and release metadata when changing supported versions; cached documentation can lag. Preserve future
+  manual setup instructions while documenting reader-facing blockers in `functions/README.md` and `GCP.md`. Keep local
+  investigation notes under ignored `plans/`; do not link public guides to those untracked files.
+- Describe the model-backed Function as an example configured for private IAM invocation; do not imply a hosted
+  deployment exists. Keep manual deployment and ID-token examples aligned across the guides.
 - Do not claim deployment, production readiness, rate limiting, tracing creation, or CI coverage that the repository
   does not implement.
 - Remove stale material instead of preserving an old README structure.

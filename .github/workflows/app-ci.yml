@@ -25,13 +25,16 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
-          python-version: '3.14'
+          version: '0.13.1'
+          python-version: '3.15'
           enable-cache: true
 
       - name: Set up just
         uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: '1.59.0'
 
       - name: Install dependencies
         run: just install
@@ -63,7 +66,7 @@ jobs:
         run: just cov
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: coverage-report
           path: htmlcov

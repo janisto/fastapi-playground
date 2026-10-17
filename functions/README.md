@@ -1,8 +1,13 @@
 # Firebase Cloud Functions
 
-This independent Python 3.14 example exports one HTTP function, `dad_joke`, from `main.py`. It is configured for manual
-Firebase deployment to `europe-west4` with the `python314` runtime in the repository `firebase.json`. This repository
+This independent Python 3.15 example exports one HTTP function, `dad_joke`, from `main.py`. Its future manual Firebase
+deployment targets `europe-west4` with `python315` in the repository `firebase.json`. This repository
 does not maintain a hosted endpoint or deploy the Function through PRs or merges. Isolated tests require no GCP account.
+
+As of 2026-10-17, Python 3.15 is not a published Cloud Run functions runtime, and Firebase CLI 15.34.0 does not recognize
+`python315`. Deployment and Functions emulation are currently blocked. The commands below are preserved for use after
+support lands. Recheck the [platform runtime table](https://docs.cloud.google.com/functions/docs/runtime-support#python),
+update Firebase CLI, and confirm it recognizes `python315` before attempting discovery or deployment.
 
 ## Endpoint contract
 
@@ -70,10 +75,12 @@ update the exporter package list in `Justfile`, then run `just sync-functions-re
 
 ## Run with the Functions emulator
 
+Wait for Firebase CLI and platform Python 3.15 support before using these instructions.
+
 Create the Firebase-compatible `venv`, then start the Functions emulator from the repository root:
 
 ```bash
-uv venv --python 3.14 functions/venv
+uv venv --python 3.15 functions/venv
 uv pip install --python functions/venv/bin/python -r functions/requirements.txt
 export FUNCTIONS_DISCOVERY_TIMEOUT=30
 firebase emulators:start --only functions --project PROJECT_ID
@@ -91,12 +98,14 @@ Application Default Credentials, the enabled Vertex AI API, IAM permission, and 
 
 ## Deploy
 
+Wait for Firebase CLI and platform Python 3.15 support before using these instructions.
+
 This is an optional manual deployment to a project you control. Follow [GCP.md](../GCP.md) for project setup, billing,
 APIs, deployment permissions, and runtime IAM before running these commands.
 
 ```bash
 cd functions
-uv venv --python 3.14 venv
+uv venv --python 3.15 venv
 uv pip install --python venv/bin/python -r requirements.txt
 export FUNCTIONS_DISCOVERY_TIMEOUT=30
 firebase deploy --only functions --project PROJECT_ID

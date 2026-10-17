@@ -78,6 +78,7 @@ def _references(value: Any) -> Iterator[str]:
     if isinstance(value, dict):
         for key, child in value.items():
             if key == "$ref":
+                assert isinstance(child, str)
                 yield child
             else:
                 yield from _references(child)

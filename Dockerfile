@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.19.0
+# syntax=docker/dockerfile:1.28.0
 # Dockerfile for a FastAPI application using uv
 #
 # Uses ghcr.io/astral-sh/uv images which include both Python and uv pre-installed.
@@ -6,9 +6,9 @@
 # Example: https://github.com/astral-sh/uv-docker-example/blob/main/multistage.Dockerfile
 
 # Builder image: includes uv for dependency management
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.28-python3.14-trixie-slim
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.1-python3.15-trixie-slim
 # Runtime image: minimal Python image without uv (not needed at runtime)
-ARG RUNTIME_IMAGE=python:3.14.6-slim-trixie
+ARG RUNTIME_IMAGE=python:3.15.0-slim-trixie
 # Version for OCI labels (injected at build time)
 ARG VERSION=dev
 

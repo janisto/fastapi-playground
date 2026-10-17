@@ -49,6 +49,6 @@ async def list_items(request: Request, response: Response) -> ItemPage:
         )
     except InvalidCursorError as error:
         raise PortableProblem("invalid_request") from error
-    if result.link_header:
+    if bool(result.link_header):
         response.headers["Link"] = result.link_header
     return ItemPage(items=result.items, total=result.total)

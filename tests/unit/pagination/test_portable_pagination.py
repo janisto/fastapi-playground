@@ -18,7 +18,8 @@ def _cursor_from_link(link: str, relation: str) -> str | None:
         if f'rel="{relation}"' not in value:
             continue
         target = value.strip().split(">", maxsplit=1)[0].removeprefix("<")
-        return parse_qs(urlsplit(target).query).get("cursor", [None])[0]
+        cursors = parse_qs(urlsplit(target).query).get("cursor")
+        return None if cursors is None else cursors[0]
     raise AssertionError(f"missing {relation} relation")
 
 

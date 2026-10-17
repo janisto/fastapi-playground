@@ -146,7 +146,7 @@ def problem_document(problem: PortableProblem) -> dict[str, Any]:
         "detail": definition.detail,
         "code": problem.code,
     }
-    if problem.errors:
+    if bool(problem.errors):
         document["errors"] = problem.errors[:_MAX_VALIDATION_ISSUES]
     return document
 

@@ -3,6 +3,7 @@ Route-aware ASGI request policy and streaming body limit.
 """
 
 import re
+from typing import cast
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -58,11 +59,12 @@ def _allowed_query(path: str) -> frozenset[str]:
         return frozenset({"limit", "cursor", "category"})
     if any(pattern.fullmatch(path) for pattern in _PAGINATED_GITHUB):
         return frozenset({"limit", "cursor"})
-    return frozenset()
+    return frozenset[str]()
 
 
 def _accept(scope: Scope) -> str:
-    return ",".join(value.decode("latin1") for key, value in scope.get("headers", []) if key.lower() == b"accept")
+    headers = cast("list[tuple[bytes, bytes]]", scope.get("headers", []))
+    return ",".join(value.decode("latin1") for key, value in headers if key.lower() == b"accept")
 
 
 async def _empty_receive() -> Message:
