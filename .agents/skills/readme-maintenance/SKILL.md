@@ -33,8 +33,9 @@ task-specific skills.
 - When a persisted field changes, document the dry-run/apply migration, quiescing and backup prerequisites, rerun
   behavior, deployment ordering, and the boundary between repository validation and authorized live execution.
 - Keep the root app and `functions/` dependency environments distinct.
-- Describe the model-backed Function as private IAM-authenticated infrastructure and keep its ID-token examples aligned
-  with `functions/README.md` and `GCP.md`.
+- Describe the model-backed Function as a deployable example configured for private IAM invocation; do not imply a
+  hosted deployment exists. Keep its manual deployment and ID-token examples aligned with `functions/README.md` and
+  `GCP.md`.
 - Do not claim deployment, production readiness, rate limiting, tracing creation, or CI coverage that the repository
   does not implement.
 - Remove stale material instead of preserving an old README structure.

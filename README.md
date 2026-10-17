@@ -9,6 +9,9 @@ A FastAPI reference application for the accepted portable playground API. It dem
 contracts, Firebase-authenticated Firestore profile lifecycle operations, a credential-free GitHub REST projection,
 and a modern Python workflow using `uv` and `just`.
 
+This is an example repository with CI and no maintained cloud deployment. Pushes, pull requests, and merges do not
+deploy it to GCP. The [deployment instructions](GCP.md) describe optional manual setup in a project you control.
+
 <img src="assets/python.svg" alt="Python logo" width="400">
 
 <sub>Python logo from [python.org](https://www.python.org/community/logos/). Trademark of the Python Software Foundation.</sub>
@@ -112,8 +115,8 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/) package manager (the minimum supported version is enforced in both project manifests)
 - [just](https://github.com/casey/just) command runner
-- Firebase project with Authentication and Firestore enabled when using profile operations
-- [Firebase CLI](https://firebase.google.com/docs/cli) for emulators and Functions deployment
+- [Firebase CLI](https://firebase.google.com/docs/cli) when running local Firebase emulators
+- A project you control with Authentication and Firestore enabled when using hosted profile operations
 
 ## Quick Start
 
@@ -125,8 +128,9 @@ just install        # Install dependencies via uv
 just serve          # Start dev server at http://127.0.0.1:8080
 ```
 
-Public routes and OpenAPI discovery start without Firebase. Set `FIREBASE_PROJECT_ID` and Application Default
-Credentials before using the authenticated profile lifecycle.
+Public routes, OpenAPI discovery, and unit/integration tests require no GCP account. For local Firestore E2E tests,
+run `just emulators` and `just test-e2e`; both use the synthetic `demo-test` project. Hosted profile operations require
+`FIREBASE_PROJECT_ID` and Application Default Credentials for your own project.
 
 Then visit:
 - `http://localhost:8080/health` - service health probe
@@ -158,29 +162,9 @@ cp .env.example .env
 
 ### Firebase and Cloud Logging MCP clients
 
-The workspace MCP configurations in `.vscode/mcp.json` and `.codex/config.toml` use the Firebase CLI server and the
-managed Cloud Logging server. Firebase uses the credentials available to the Firebase CLI. Cloud Logging reads the
-quota project and a short-lived Application Default Credentials access token from the shell environment.
-
-First align the gcloud default project and the Application Default Credentials quota project:
-
-```bash
-gcloud config set project PROJECT_ID
-gcloud auth application-default login
-gcloud auth application-default set-quota-project PROJECT_ID
-```
-
-For zsh, add these public, secret-free definitions to `~/.zshrc`:
-
-```bash
-export GOOGLE_CLOUD_PROJECT="PROJECT_ID"
-export GOOGLE_CLOUD_ACCESS_TOKEN="$(gcloud auth application-default print-access-token)"
-```
-
-Run `source ~/.zshrc`, then restart VS Code or Codex so the client inherits the variables. The access token is
-short-lived; opening a new shell regenerates it, while a long-running client must be restarted after a refresh. Never
-commit the expanded token. Keep this convenience setup to a trusted workstation because child processes inherit the
-token. See [GCP.md](GCP.md) for IAM and troubleshooting details.
+Cloud MCP connections are optional and are not configured by the repository. See
+[GCP.md](GCP.md#optional-local-mcp-connections) for Firebase and Cloud Logging configuration, IAM, authentication, and
+token refresh. Personal `.vscode/mcp.json`, `.codex/config.toml`, and `.firebaserc` files are ignored by Git.
 
 ## Project Layout
 
@@ -375,18 +359,26 @@ using another local path.
 
 ## Deployment
 
+These commands are optional manual actions for your own project. Complete the prerequisites in [GCP.md](GCP.md)
+first; CI only validates the examples and builds a local container image.
+
 ### Google Cloud Run
 
 ```bash
 # Build and push to Artifact Registry
 GIT_SHA="$(git rev-parse HEAD)"
-gcloud builds submit --tag "REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:${GIT_SHA}"
+gcloud builds submit --project PROJECT_ID \
+  --tag "REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:${GIT_SHA}"
 
 # Deploy the repository-built standalone image
 gcloud run deploy fastapi-playground \
+  --project PROJECT_ID \
   --image "REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:${GIT_SHA}" \
   --platform managed \
-  --region REGION
+  --region REGION \
+  --service-account RUNTIME_SERVICE_ACCOUNT \
+  --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,LOG_LEVEL=INFO \
+  --allow-unauthenticated
 ```
 
 The repository Dockerfile produces a standalone image containing the operating system and Python runtime. Do not
@@ -415,9 +407,10 @@ send an ID token when invoking it. The Function deploys in `europe-west4`; its V
 endpoint and the auto-updating `gemini-pro-latest` alias. See [functions/README.md](functions/README.md) for the alias
 trade-offs and Cloud Functions documentation.
 
-## CI/CD
+## CI
 
-GitHub Actions workflows in `.github/workflows/`:
+GitHub Actions workflows in `.github/workflows/` validate code and maintain the repository. They do not publish
+container images or deploy cloud resources. The Cloud Build GitHub integration has been disconnected.
 
 | Workflow | Description |
 |----------|-------------|

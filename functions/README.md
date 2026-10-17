@@ -1,7 +1,8 @@
 # Firebase Cloud Functions
 
-This independent Python 3.14 project exports one HTTP function, `dad_joke`, from `main.py`. Firebase deploys it to
-`europe-west4` with the `python314` runtime configured in the repository `firebase.json`.
+This independent Python 3.14 example exports one HTTP function, `dad_joke`, from `main.py`. It is configured for manual
+Firebase deployment to `europe-west4` with the `python314` runtime in the repository `firebase.json`. This repository
+does not maintain a hosted endpoint or deploy the Function through PRs or merges. Isolated tests require no GCP account.
 
 ## Endpoint contract
 
@@ -90,6 +91,9 @@ Application Default Credentials, the enabled Vertex AI API, IAM permission, and 
 
 ## Deploy
 
+This is an optional manual deployment to a project you control. Follow [GCP.md](../GCP.md) for project setup, billing,
+APIs, deployment permissions, and runtime IAM before running these commands.
+
 ```bash
 cd functions
 uv venv --python 3.14 venv
@@ -103,6 +107,7 @@ Cloud Run service, then smoke-test with an identity token:
 
 ```bash
 gcloud run services add-iam-policy-binding FUNCTION_SERVICE \
+  --project PROJECT_ID \
   --region europe-west4 \
   --member="user:ENGINEER@example.com" \
   --role="roles/run.invoker"

@@ -1,17 +1,47 @@
 # Google Cloud and Firebase setup
 
-This guide covers the two independent deployment targets in this repository:
+This guide preserves optional manual setup for two independent deployment examples:
 
-- the FastAPI container in `app/`, deployed to Cloud Run;
-- the Python function in `functions/`, deployed with the Firebase CLI to Cloud Run functions.
+- the FastAPI container in `app/`, deployable to Cloud Run;
+- the Python function in `functions/`, deployable with the Firebase CLI to Cloud Run functions.
+
+The repository has CI only and no maintained deployment or cloud MCP connection. Pushes, PRs, and merges do not deploy
+these examples. Follow this guide only with an account and project you control; ordinary local development and
+isolated tests require no GCP account. Cloud resource retirement is managed separately from repository maintenance.
 
 Both target Python 3.14. The function runtime is pinned to `python314` in `firebase.json`; Python 3.14 is currently a
 supported [Cloud Run functions runtime](https://cloud.google.com/functions/docs/runtime-support#python).
 
 ## Project and Firebase products
 
+For a future deployment:
+
+1. Install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install), [Firebase CLI](https://firebase.google.com/docs/cli),
+   Python 3.14+, `uv`, and `just`.
+2. Create or select your own Google Cloud project, link a billing account, and configure budgets and alerts. Firebase
+   Functions deployment requires the [Blaze plan](https://firebase.google.com/docs/functions/get-started).
+3. Add Firebase to that project in the Firebase console. For the profile API, create a Native-mode Firestore database
+   and enable the Authentication sign-in providers your client uses. Obtain a Firebase ID token through that client.
+4. Enable the relevant APIs below and configure separate deployment and runtime permissions before deploying.
+
 Use one Google Cloud project linked to Firebase. Configure its project ID as `FIREBASE_PROJECT_ID` for the FastAPI
 service and use the same project when running Firebase CLI commands.
+
+Authenticate the CLI tools and, separately, Application Default Credentials for local SDK use:
+
+```bash
+gcloud auth login
+gcloud config set project PROJECT_ID
+gcloud auth application-default login
+gcloud auth application-default set-quota-project PROJECT_ID
+firebase login
+```
+
+Replace `PROJECT_ID` and other uppercase placeholders with your own values. Cloud commands below select their project
+explicitly. Personal `.firebaserc` aliases are ignored; use `--project PROJECT_ID` or create your own aliases with
+`firebase use --add`. Do not commit them: the
+[Firebase CLI guidance for starter projects](https://firebase.google.com/docs/cli#source_control_and_project_aliases)
+recommends leaving this file out of source control. Local emulator recipes always use `demo-test` instead.
 
 Enable only the products used by the deployment target:
 
@@ -32,11 +62,16 @@ Enable the relevant APIs for your deployment:
 - `firestore.googleapis.com` for Firestore;
 - `aiplatform.googleapis.com` for the Genkit Vertex AI function;
 - `artifactregistry.googleapis.com` for the FastAPI image and function build artifacts;
-- `cloudbuild.googleapis.com` for Firebase's function source build;
+- `cloudbuild.googleapis.com` for manual FastAPI image builds and Firebase's function source build;
 - `logging.googleapis.com` for build and runtime logs;
 - `secretmanager.googleapis.com` only when injecting managed secrets.
 
-Grant the runtime service account the minimum roles required by the deployed component:
+Enable APIs in the Google Cloud console for the selected project, or use `gcloud services enable API_NAME --project
+PROJECT_ID` for each required API. The identity enabling APIs needs `serviceusage.services.enable`.
+
+Create a dedicated FastAPI runtime service account in **IAM & Admin > Service Accounts**. Record its email locally as
+`RUNTIME_SERVICE_ACCOUNT` for the deployment command. For the Function, identify the runtime service account used by
+your Firebase deployment and grant its permissions to that identity. Grant only the roles needed by each component:
 
 - FastAPI: `roles/datastore.user`; Cloud Run captures the service's structured stdout without a Logging API client;
 - `dad_joke` function: `roles/aiplatform.user`; Cloud Run captures the Function's structured stdout without a Logging
@@ -44,16 +79,70 @@ Grant the runtime service account the minimum roles required by the deployed com
 - intended `dad_joke` callers: `roles/run.invoker` on the function's backing Cloud Run service;
 - Secret Manager consumers: `roles/secretmanager.secretAccessor` for only the required secrets.
 
+Deployment permissions are separate from runtime IAM. The FastAPI deployer needs permission to create/update the Cloud
+Run service and act as its runtime identity; image building and publishing also require Cloud Build and Artifact
+Registry permissions for the submitting identity and the project's build service account. Use the current
+[Cloud Run deployment permissions](https://cloud.google.com/run/docs/deploying#required_roles) and
+[Cloud Build service account guidance](https://cloud.google.com/build/docs/cloud-build-service-account) to configure
+the actual identities in your project. Firebase deployers need the applicable
+[Firebase deployment permissions](https://firebase.google.com/docs/projects/iam/roles-predefined-product#functions).
+Runtime roles alone do not grant deployment access.
+
 Do not grant project-wide `Editor`. Prefer the Cloud Run or Functions runtime service account and Application Default
 Credentials. For local development, prefer `gcloud auth application-default login`; use a downloaded service-account
 key only when necessary, keep it outside the repository, and point `GOOGLE_APPLICATION_CREDENTIALS` to it.
 
-## Local MCP authentication
+## Optional local MCP connections
 
-The repository configures the Firebase MCP server and the managed Cloud Logging MCP server for both VS Code and
-Codex. Firebase uses the credentials available to the Firebase CLI. Cloud Logging uses
+Cloud MCP connections are not enabled by this repository. After configuring a project you control, you can create
+either or both of the following ignored files. Merge the relevant entries into any personal configuration already
+present rather than replacing unrelated servers.
+
+For VS Code, create `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "firebase": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "firebase-tools@latest", "mcp", "--only", "auth,firestore,functions,storage"]
+    },
+    "google_cloud_logging": {
+      "type": "http",
+      "url": "https://logging.googleapis.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:GOOGLE_CLOUD_ACCESS_TOKEN}",
+        "x-goog-user-project": "${env:GOOGLE_CLOUD_PROJECT}"
+      }
+    }
+  }
+}
+```
+
+For Codex, create `.codex/config.toml`:
+
+```toml
+[mcp_servers.google_cloud_logging]
+url = "https://logging.googleapis.com/mcp"
+bearer_token_env_var = "GOOGLE_CLOUD_ACCESS_TOKEN"
+env_http_headers = { "x-goog-user-project" = "GOOGLE_CLOUD_PROJECT" }
+enabled_tools = ["list_log_entries", "list_log_names"]
+
+[mcp_servers.firebase]
+command = "npx"
+args = ["-y", "firebase-tools@latest", "mcp", "--only", "auth,firestore,functions,storage"]
+```
+
+Firebase uses the credentials available to the Firebase CLI and your explicitly selected project. Its `--only`
+option selects feature groups, not emulator-only access; core tools remain available. See the
+[Firebase MCP documentation](https://firebase.google.com/docs/ai-assistance/mcp-server). Cloud Logging uses
 `GOOGLE_CLOUD_ACCESS_TOKEN` for OAuth and `GOOGLE_CLOUD_PROJECT` as the `x-goog-user-project` quota project; neither
-value belongs in repository configuration.
+value belongs in tracked configuration. Grant the Cloud Logging identity permission to use MCP tools
+(`roles/mcp.toolUser`) and the Logging permissions required by the enabled tools and log views. Use the
+[Cloud Logging MCP setup guide](https://docs.cloud.google.com/logging/docs/use-logging-mcp) and
+[Logging access control](https://cloud.google.com/logging/docs/access-control) to choose roles for the intended access.
+The Codex example exposes only `list_log_entries` and `list_log_names`; this client tool filter does not replace IAM.
 
 Keep the gcloud default project and the Application Default Credentials quota project aligned:
 
@@ -79,6 +168,9 @@ a trusted workstation because child processes inherit it. If setting the ADC quo
 needs `serviceusage.services.use`, commonly granted through `roles/serviceusage.serviceUsageConsumer`. See
 [Google Cloud MCP authentication](https://docs.cloud.google.com/mcp/authenticate-mcp) for authentication options and
 token-refresh limitations.
+
+Restart clients after adding or removing workspace MCP configuration. A running client can retain a connection until
+restart. User-global MCP settings and CLI credentials are independent; removing a workspace file does not revoke them.
 
 ## FastAPI configuration
 
@@ -148,10 +240,51 @@ container, so Uvicorn is configured to trust Cloud Run's forwarded headers. This
 for generated URLs and HSTS decisions; do not remove those runtime flags without verifying `/health`, generated
 pagination links, and security headers through the deployed service.
 
-Production deployment is already managed by existing Google Cloud configuration outside this repository. Do not use
-local container commands or examples in this guide to replace its build, image, or rollout conventions.
 The Dockerfile produces a standalone, locally runnable image containing the operating system and Python runtime. It is
 not a scratch-based application image, so do not combine it with Cloud Run `--base-image` or `--automatic-updates`.
+
+### Manual Cloud Run deployment
+
+After completing project, API, and IAM setup, create a Docker-format Artifact Registry repository in your chosen region
+if it does not already exist:
+
+```bash
+gcloud artifacts repositories create REPO \
+  --project PROJECT_ID \
+  --location REGION \
+  --repository-format docker
+```
+
+Build from the repository root, publish the image, and deploy it with the dedicated runtime identity:
+
+```bash
+GIT_SHA="$(git rev-parse HEAD)"
+gcloud builds submit --project PROJECT_ID \
+  --tag "REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:${GIT_SHA}"
+
+gcloud run deploy fastapi-playground \
+  --project PROJECT_ID \
+  --image "REGION-docker.pkg.dev/PROJECT_ID/REPO/fastapi-playground:${GIT_SHA}" \
+  --platform managed \
+  --region REGION \
+  --service-account RUNTIME_SERVICE_ACCOUNT \
+  --set-env-vars FIREBASE_PROJECT_ID=PROJECT_ID,ENVIRONMENT=production,LOG_LEVEL=INFO \
+  --allow-unauthenticated
+```
+
+`RUNTIME_SERVICE_ACCOUNT` is the email of the service account you created, not your user account. The public Cloud Run
+invocation policy allows the health and public API routes; profile routes still verify Firebase ID tokens. Keep the
+model-backed Function private. If organization policy prohibits public invocation, use an approved gateway or private
+deployment and supply Cloud Run authentication separately from the profile API's Firebase authentication.
+
+Add `FIRESTORE_DATABASE` and explicit `CORS_ORIGINS` when needed. Cloud Run supplies ADC through the runtime identity;
+do not mount a downloaded key or set `GOOGLE_APPLICATION_CREDENTIALS` there. Retrieve your service URL from the console
+or `gcloud run services describe fastapi-playground --project PROJECT_ID --region REGION --format='value(status.url)'`.
+Verify `/health`, `/openapi.json`, HTTPS security headers, and profile operations with a synthetic principal. No GitHub
+App connection or automatic repository trigger is needed for this manual flow. See
+[Artifact Registry creation](https://cloud.google.com/sdk/gcloud/reference/artifacts/repositories/create),
+[manual builds](https://cloud.google.com/sdk/gcloud/reference/builds/submit), and
+[Cloud Run deployment](https://cloud.google.com/run/docs/deploying).
 
 ## Deploy the Firebase function
 
@@ -190,6 +323,7 @@ Invoker role on the backing service, then call it with an identity token:
 
 ```bash
 gcloud run services add-iam-policy-binding FUNCTION_SERVICE \
+  --project PROJECT_ID \
   --region europe-west4 \
   --member="user:ENGINEER@example.com" \
   --role="roles/run.invoker"
@@ -228,9 +362,9 @@ privacy-sensitive raw path, direct peer address, User-Agent, and exception-messa
 operation IDs remain available as low-cardinality dimensions.
 
 The portable route boundary converts malformed or wrong-scope pagination cursors to controlled 400 responses before a
-service call. When verifying this path after deployment, use Cloud Logging MCP to correlate the request ID with its
-single 400 access record and confirm that no adjacent `Exception in ASGI application` ERROR was emitted for the same
-request window.
+service call. When verifying this path in your own deployment, use Cloud Logging or an explicitly configured Cloud
+Logging MCP connection to correlate the request ID with its single 400 access record and confirm that no adjacent
+`Exception in ASGI application` ERROR was emitted for the same request window.
 
 The GitHub family is a credential-free public projection. The outbound client is fixed to `https://api.github.com`,
 the REST version `2026-03-10`, four allowlisted request fields, identity encoding, a ten-second whole-operation
