@@ -40,6 +40,14 @@ Use `pytest-mock` for call-aware patching, `monkeypatch` for environment isolati
 `pytest-httpx2` for outbound mocks. With automatic asyncio mode, do not add `pytest.mark.asyncio` to ordinary async
 tests.
 
+For dependency upgrades, run the affected suites with warnings treated as errors. Keep any unavoidable upstream
+warning filter limited to its specific message and emitting module, and document when it can be removed. Do not replace
+model or transport boundary validation with unchecked casts to silence new type diagnostics.
+
+Emulator fixtures use a named Firebase app with anonymous credentials and the synthetic `demo-test` project. Discard
+SDK-cached clients between TestClient and pytest event loops; emulator tests must not depend on local ADC or account
+access.
+
 ## Commands
 
 Run the focused file or node first, then the relevant suite:

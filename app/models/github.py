@@ -34,7 +34,7 @@ def _http_url(value: str) -> str:
         raise ValueError("invalid HTTP URL") from error
     if (
         parsed.scheme.lower() not in {"http", "https"}
-        or not parsed.hostname
+        or not bool(parsed.hostname)
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query

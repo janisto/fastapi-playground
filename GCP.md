@@ -3,21 +3,24 @@
 This guide preserves optional manual setup for two independent deployment examples:
 
 - the FastAPI container in `app/`, deployable to Cloud Run;
-- the Python function in `functions/`, deployable with the Firebase CLI to Cloud Run functions.
+- the Python function in `functions/`, intended for Firebase CLI deployment once Python 3.15 is supported.
 
 The repository has CI only and no maintained deployment or cloud MCP connection. Pushes, PRs, and merges do not deploy
 these examples. Follow this guide only with an account and project you control; ordinary local development and
 isolated tests require no GCP account. Cloud resource retirement is managed separately from repository maintenance.
 
-Both target Python 3.14. The function runtime is pinned to `python314` in `firebase.json`; Python 3.14 is currently a
-supported [Cloud Run functions runtime](https://cloud.google.com/functions/docs/runtime-support#python).
+Both examples target Python 3.15. The standalone FastAPI image carries its own Python runtime. The Function's
+`python315` declaration in `firebase.json` is a future target: as of 2026-10-17, the published
+[Cloud Run functions runtimes](https://cloud.google.com/functions/docs/runtime-support#python) stop at Python 3.14,
+and Firebase CLI 15.34.0 does not recognize `python315`. Functions deployment and emulation are blocked until support
+lands. The setup and deployment commands below are preserved for that future use.
 
 ## Project and Firebase products
 
 For a future deployment:
 
 1. Install the [Google Cloud CLI](https://cloud.google.com/sdk/docs/install), [Firebase CLI](https://firebase.google.com/docs/cli),
-   Python 3.14+, `uv`, and `just`.
+   Python 3.15+, `uv`, and `just`.
 2. Create or select your own Google Cloud project, link a billing account, and configure budgets and alerts. Firebase
    Functions deployment requires the [Blaze plan](https://firebase.google.com/docs/functions/get-started).
 3. Add Firebase to that project in the Firebase console. For the profile API, create a Native-mode Firestore database
@@ -288,9 +291,13 @@ App connection or automatic repository trigger is needed for this manual flow. S
 
 ## Deploy the Firebase function
 
+First verify Python 3.15 support in both the platform and Firebase CLI. Do not run the deployment or Functions-emulator
+commands below while that prerequisite is unmet. Local isolated Functions tests and Auth/Firestore emulators remain
+separate from this runtime limitation.
+
 The `dad_joke` HTTP function uses:
 
-- runtime `python314` in `europe-west4`;
+- runtime `python315` in `europe-west4`;
 - 512 MiB memory, concurrency `1`, and `TIMEOUT_SEC` default `120`;
 - `MIN_INSTANCES` default `0` and `MAX_INSTANCES` default `2`;
 - Genkit with the `global` Vertex AI endpoint and auto-updating `gemini-pro-latest` alias configured in
@@ -312,7 +319,7 @@ direct Functions dependencies. The restricted `uv export` command uses `--only-e
 
 ```bash
 cd functions
-uv venv --python 3.14 venv
+uv venv --python 3.15 venv
 uv pip install --python venv/bin/python -r requirements.txt
 export FUNCTIONS_DISCOVERY_TIMEOUT=30
 firebase deploy --only functions --project PROJECT_ID
@@ -398,31 +405,3 @@ Production checklist:
 | Function returns 503 | Genkit or Vertex AI failure | Vertex API, global endpoint/model alias availability, ADC, IAM, and quotas |
 | E2E test skips | Firestore emulator is not running on `127.0.0.1:7030` | Run `just emulators` |
 | CORS is blocked | Origin is absent from `CORS_ORIGINS` | Configure an exact allowed origin |
-
-## One-time profile data migration
-
-Existing documents written by the retired contract use `email`, `marketing`, and `terms`. The accepted representation
-uses `contact_email`, `marketing_opt_in`, and `terms_accepted` in Firestore while the public API uses camelCase. The
-same migration hardens document keys for principals that are not one safe Firestore document-ID segment, without
-changing the public principal ID. Deployment of this revision over existing data therefore requires the checked-in
-migration:
-
-```bash
-# Read-only validation; requires explicit target configuration and ADC.
-uv run python -m scripts.migrate_profiles
-
-# Writes only after every current document validates. Run only with operational approval.
-uv run python -m scripts.migrate_profiles --apply
-```
-
-Quiesce all profile traffic, back up Firestore, verify the target project and database, run the dry run, apply, then
-rerun the dry run until it reports `pending=0`. The script compares each document again inside its write transaction
-and requires canonical-key documents to contain already-canonical values rather than approving in-memory
-normalization. Key moves create an absent target and delete the source in the same transaction. It is safe to rerun. An
-interrupted collection-wide run can be partial, so keep the retired revision away from migrated records and do not
-start the new revision until the final dry run is clean. If an earlier deployment admitted a custom Firebase UID
-containing `/`, inventory those principals from the backup before cutover because the retired raw path may have
-addressed a nested document that a top-level collection scan cannot find. Deploy and verify the new revision with a
-dedicated synthetic principal before restoring profile traffic. Partial adoption becomes unsafe with the first
-migrated document; rollback requires restoring the backup together with the retired revision. The migration is not
-part of `just check`, deployment automation, or application startup.

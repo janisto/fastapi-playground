@@ -126,6 +126,13 @@ def test_profile_update_is_nonempty_closed_and_nonnull(payload: dict[str, object
         ProfileUpdate.model_validate(payload, strict=True)
 
 
+@pytest.mark.parametrize("marketing_opt_in", [False, True])
+def test_profile_update_preserves_explicit_boolean_and_excludes_omitted_fields(marketing_opt_in: bool) -> None:
+    patch = ProfileUpdate.model_validate({"marketingOptIn": marketing_opt_in}, strict=True)
+    assert patch.model_dump(exclude_unset=True, by_alias=False) == {"marketing_opt_in": marketing_opt_in}
+    assert patch.model_dump(mode="json") == {"marketingOptIn": marketing_opt_in}
+
+
 def test_timestamp_serializer_uses_exact_milliseconds() -> None:
     assert serialize_datetime_ms(datetime(2026, 7, 30, 12, 0, 0, 123000, tzinfo=UTC)) == "2026-07-30T12:00:00.123Z"
 

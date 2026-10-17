@@ -37,8 +37,9 @@ Use the `openapi-contract` skill as well when a route, model, error, authenticat
 public contract.
 
 Let Pydantic and FastAPI validate request data. Use `Literal` for fixed query values and constrained annotated aliases
-for shared validation. Re-raise expected domain exceptions; log and replace unexpected failures with generic 500
-details. Never log request bodies, credentials, or profile PII.
+for shared validation. Use public `pydantic.MISSING` for omittable, non-null PATCH fields; preserve explicit false values
+and verify omitted fields stay absent in service updates and JSON/CBOR responses. Re-raise expected domain exceptions;
+log and replace unexpected failures with generic 500 details. Never log request bodies, credentials, or profile PII.
 
 ## Implementation sequence
 

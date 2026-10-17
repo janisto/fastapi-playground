@@ -46,7 +46,11 @@ their own projects. Cloud resource shutdown is outside the repository cleanup wo
 
 ## Repository and tooling
 
-- Python 3.14+
+This playground showcases the latest stable Python and dependencies, using their current APIs and conventions.
+Do not retain historical implementations or add backward-compatibility aliases, shims, or fallback execution paths.
+Document upstream support blockers locally instead of downgrading the example to preserve an older runtime.
+
+- Python 3.15+
 - FastAPI and Pydantic v2
 - Firebase Admin SDK and async Firestore
 - local closed RFC 9457 Problem Details handlers with stable portable error codes
@@ -78,9 +82,14 @@ releases. The Docker builder stays exactly versioned for reproducible image buil
 
 Ruff enables all stable, non-preview rules and excludes only formatter conflicts, irrelevant ecosystems, and documented
 repository conventions. ty treats all rules as errors except checks its documentation identifies as false-positive-prone
-or non-runtime diagnostics. Both tools derive Python 3.14 from `project.requires-python`; ty targets Linux to match the
-deployed runtimes. A tool upgrade may introduce newly stable rules, so review each new diagnostic before adding an ignore
-and keep exceptions scoped to the narrowest file boundary.
+or non-runtime diagnostics. Both tools derive Python 3.15 from `project.requires-python`; ty targets Linux to match the
+container and intended cloud environment. A tool upgrade may introduce newly stable rules, so review each new diagnostic
+before adding an ignore and keep exceptions scoped to the narrowest file boundary.
+
+Check current official web documentation and published releases when modernizing dependencies; cached documentation
+services can lag releases. Keep strict ty rules enabled, preserve intentional empty-versus-absent behavior, and use
+narrow casts only at validated dynamic ASGI or untyped SDK boundaries. Use Pydantic's public `MISSING` sentinel for
+omittable non-null PATCH fields; test that explicit false values survive and omitted fields stay absent.
 
 GitHub Actions are coupled to active repository rules. Do not edit, rename, consolidate, remove, or add path filters to
 workflows or jobs before inspecting the GitHub rulesets and understanding which status-check contexts are required.
@@ -132,8 +141,8 @@ Use names that communicate both meaning and symbol kind. Do not apply one casing
 
 When a public or persisted field is renamed, update the request and response models, service and Firestore keys,
 OpenAPI components, standalone schemas, JSON and CBOR contract tests, fixtures, examples, and relevant documentation in
-one change. Treat such a rename as a breaking contract and plan any deployed-data migration explicitly; do not hide it
-behind a compatibility alias.
+one change. Keep only the current playground contract; do not add compatibility aliases or migration utilities for
+retired example schemas.
 
 ## Application composition
 
@@ -262,8 +271,10 @@ Document response headers that runtime code emits, including `X-Request-ID`, `Li
 - Use `get_async_firestore_client()` and inject services rather than constructing clients in routers.
 - User-owned profile documents use the authenticated Firebase UID as both ownership boundary and resource ID. Never
   accept a client-selected owner.
-- Use Firestore's native conditional `document.create()` for create-if-absent and `@firestore.async_transactional`
-  where read-modify-write or delete-if-present semantics require atomicity.
+- Use Firestore's native conditional `document.create()` for create-if-absent and `firestore.async_transactional`
+  where read-modify-write or delete-if-present semantics require atomicity. Create a fresh transaction wrapper per
+  operation because it holds mutable retry state. Map exhausted retries chained from `Aborted` to dependency failures;
+  propagate unrelated `ValueError` failures.
 - Preserve `created_at`; change `updated_at` only on a mutation.
 - Map absence and conflict to domain exceptions instead of leaking SDK results across the service boundary.
 - Emit one structured audit record after a successful security-relevant mutation without principal identifiers or
@@ -307,11 +318,15 @@ values to public docs or configuration examples.
 
 ## Firebase Function
 
-`functions/` is an independent Python 3.14 project. Its `dad_joke` HTTP function is GET-only and private because every
+`functions/` is an independent Python 3.15 project. Its `dad_joke` HTTP function is GET-only and private because every
 successful call can consume Vertex AI quota. Preserve `invoker="private"`; intended callers need `roles/run.invoker` on
 the backing Cloud Run service and must send an ID token. Keep model output strictly validated and return sanitized 503
 or 500 responses. Logs may include stable status or exception type, never prompts, generated output, exception strings,
 credentials, or user data.
+
+Python 3.15 is a local and future deployment target, not a claim of current Firebase runtime support. Check the
+current platform runtime table and Firebase CLI support before any Functions deployment or emulation. Keep `firebase.json` aligned with the project target;
+do not silently run the 3.15 project on a 3.14 runtime to bypass platform support checks.
 
 Do not rely on Genkit's `output_schema` alone: verify `result.output` is the expected Pydantic model because missing or
 non-model parsed output can otherwise cross the application boundary. Treat schema and output-type failures as the

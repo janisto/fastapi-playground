@@ -2,10 +2,11 @@
 
 import asyncio
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.firebase import close_async_firestore_client
-from app.exceptions import ProfileAlreadyExistsError, ProfileNotFoundError
+from app.exceptions import ProfileAlreadyExistsError, ProfileDependencyError, ProfileNotFoundError
 from app.models.profile import Profile, ProfileCreate
 from app.services.profile import ProfileService
 
@@ -46,13 +47,20 @@ def test_profile_crud_noop_and_duplicate_preservation(e2e_client: TestClient) ->
     assert changed.json()["createdAt"] == original["createdAt"]
     assert changed.json()["updatedAt"] > original["updatedAt"]
 
+    opted_out = e2e_client.patch(PROFILE_PATH, json={"marketingOptIn": False})
+    assert opted_out.status_code == 200
+    expected = {**original, "updatedAt": opted_out.json()["updatedAt"]}
+    assert opted_out.json() == expected
+    assert opted_out.json()["updatedAt"] > changed.json()["updatedAt"]
+    assert e2e_client.get(PROFILE_PATH).json() == expected
+
     deleted = e2e_client.delete(PROFILE_PATH)
     assert deleted.status_code == 204
     assert deleted.content == b""
     assert e2e_client.get(PROFILE_PATH).json()["code"] == "profile_not_found"
 
 
-async def test_concurrent_emulator_creates_and_deletes_have_exact_outcomes() -> None:
+async def test_concurrent_emulator_operations_preserve_atomicity_and_recover_from_contention() -> None:
     service = ProfileService()
     create = ProfileCreate.model_validate(_payload("Race"), strict=True)
     try:
@@ -69,7 +77,21 @@ async def test_concurrent_emulator_creates_and_deletes_have_exact_outcomes() -> 
             service.delete_profile("race-user"),
             return_exceptions=True,
         )
-        assert sum(result is None for result in delete_results) == 1
-        assert sum(isinstance(result, ProfileNotFoundError) for result in delete_results) == 1
+        assert all(
+            result is None or isinstance(result, ProfileNotFoundError | ProfileDependencyError)
+            for result in delete_results
+        )
+        successful_deletes = sum(result is None for result in delete_results)
+        assert successful_deletes <= 1
+        if successful_deletes == 0:
+            # Emulator lock contention can exhaust both SDK transactions without a commit.
+            assert all(isinstance(result, ProfileDependencyError) for result in delete_results)
+            original = next(result for result in create_results if isinstance(result, Profile))
+            assert await service.get_profile("race-user") == original
+            await service.delete_profile("race-user")
+        with pytest.raises(ProfileNotFoundError):
+            await service.get_profile("race-user")
+        with pytest.raises(ProfileNotFoundError):
+            await service.delete_profile("race-user")
     finally:
         close_async_firestore_client()

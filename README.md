@@ -2,7 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/janisto/fastapi-playground/app-ci.yml?branch=main&label=CI)](https://github.com/janisto/fastapi-playground/actions/workflows/app-ci.yml)
 [![Lint](https://img.shields.io/github/actions/workflow/status/janisto/fastapi-playground/app-lint.yml?branch=main&label=lint)](https://github.com/janisto/fastapi-playground/actions/workflows/app-lint.yml)
-[![Python 3.14+](https://img.shields.io/badge/python-3.14%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Python 3.15+](https://img.shields.io/badge/python-3.15%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/github/license/janisto/fastapi-playground)](LICENSE)
 
 A FastAPI reference application for the accepted portable playground API. It demonstrates strict JSON and CBOR
@@ -112,10 +112,10 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
 
 ## Requirements
 
-- Python 3.14+
+- Python 3.15+ (the local environment and container use 3.15.0)
 - [uv](https://docs.astral.sh/uv/) package manager (the minimum supported version is enforced in both project manifests)
 - [just](https://github.com/casey/just) command runner
-- [Firebase CLI](https://firebase.google.com/docs/cli) when running local Firebase emulators or manually deploying Functions
+- [Firebase CLI](https://firebase.google.com/docs/cli) when running local Auth and Firestore emulators
 - A project you control with Authentication and Firestore enabled when using hosted profile operations
 
 ## Quick Start
@@ -211,14 +211,12 @@ app/
   services/            # Business logic layer
     profile/           # ProfileService and Firestore-safe principal keys
     github_service.py  # Bounded anonymous GitHub client and projection
-scripts/
-  migrate_profiles.py  # Dry-run-first one-time persisted-profile migration
 tests/
   unit/                # Unit tests (mocked dependencies)
   integration/         # API route tests (TestClient)
   e2e/                 # Firebase emulator tests (local only)
   helpers/             # Shared test utilities
-functions/             # Firebase Cloud Functions (Python 3.14)
+functions/             # Firebase Cloud Functions (Python 3.15)
   main.py              # HTTP dad-joke function
   pyproject.toml       # Functions-specific dependencies
   tests/               # Isolated function contract tests
@@ -254,35 +252,6 @@ All routes use paths without trailing slashes (`redirect_slashes=False`).
 
 Protected routes require `Authorization: Bearer <Firebase ID token>`. GitHub routes are deliberately anonymous: the
 application neither reads an ambient GitHub token nor forwards caller credentials.
-
-## Persisted profile migration
-
-The accepted profile contract retires the persisted `email`, `marketing`, and `terms` keys in favor of
-`contact_email`, `marketing_opt_in`, and `terms_accepted`. It also hardens Firestore document keys for principals that
-cannot be used safely as one document-ID segment while leaving the public `Profile.id` unchanged. Before deploying
-this revision over existing profile data:
-
-1. Quiesce all profile traffic, take a Firestore backup, and keep the retired revision from reading migrated records.
-2. Point ADC, `FIREBASE_PROJECT_ID`, and optional `FIRESTORE_DATABASE` at the intended environment.
-3. Run `uv run python -m scripts.migrate_profiles` and review `validated`, `pending`, and `written=0`.
-4. With separate operational authorization, run `uv run python -m scripts.migrate_profiles --apply`.
-5. Rerun the dry run and require `pending=0` before starting the new application revision.
-6. Deploy and verify the new revision with a dedicated synthetic principal before restoring profile traffic.
-
-The command validates every document before dispatching writes and compare-checks each source and any new target in a
-transaction. A key move uses create-if-absent plus source deletion in that transaction, so it cannot overwrite another
-profile. The command also requires canonical-key documents to contain already-canonical values instead of approving
-values normalized only in memory. It is dry-run by default and safe to rerun, but Firestore does not make the entire
-collection migration one transaction; if a run is interrupted, keep profile traffic quiesced and rerun to completion.
-If an earlier deployment admitted a custom Firebase UID containing `/`, inventory those principals from the backup
-before cutover: the retired raw path may have addressed a nested document that a top-level collection scan cannot find.
-Partial adoption becomes unsafe when the first document is migrated: the retired reader and writer must not serve
-migrated records. Rollback requires the backup and retired revision together; do not point the retired revision at
-forward-migrated data. Do not run the migration against live data as part of an ordinary code review or test workflow.
-
-The wire cutover is also breaking for generated clients: operation IDs, lower camel case members, item `Money`, error
-documents, statuses, representations, and the six GitHub operations changed. Regenerate clients from the new runtime
-`/openapi.json` and release them with the server cutover; do not treat the retired and accepted clients as compatible.
 
 ## Development
 
@@ -353,9 +322,15 @@ docker build -t fastapi-playground:latest .
 docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
 ```
 
-Profile requests also require Application Default Credentials or a service-account credential mounted into the
-container. The `just container-up` recipe mounts `service_account.json` by default; override its `creds` argument when
-using another local path.
+Public container routes require no credentials. Profile requests require Application Default Credentials or a
+service-account credential mounted into the container. Credential mounting is explicit; pass an existing absolute or
+repository-relative file as the third positional argument:
+
+```bash
+just container-up fastapi-playground:latest fastapi-playground service_account.json
+```
+
+An invalid credential path fails before starting the container.
 
 ## Deployment
 
@@ -395,9 +370,14 @@ For detailed infrastructure setup, see [GCP.md](GCP.md).
 
 ### Firebase Cloud Functions
 
+Python 3.15 is the local target, including `python315` in `firebase.json`. As of 2026-10-17, Google's published Functions
+runtimes and Firebase CLI 15.34.0 do not support it. These commands are retained for future use after support lands;
+deployment and Functions emulation are currently blocked. Recheck the [platform runtime table](https://docs.cloud.google.com/functions/docs/runtime-support#python) and
+Firebase CLI support before using the [Functions instructions](functions/README.md).
+
 ```bash
 cd functions
-uv venv --python 3.14 venv
+uv venv --python 3.15 venv
 uv pip install --python venv/bin/python -r requirements.txt
 firebase deploy --only functions --project PROJECT_ID
 ```

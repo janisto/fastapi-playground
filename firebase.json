@@ -22,7 +22,7 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "runtime": "python314"
+      "runtime": "python315"
     }
   ],
   "storage": {

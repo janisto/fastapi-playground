@@ -22,7 +22,7 @@ def parse_cors_origins(value: object) -> list[str]:
     if isinstance(value, list):
         if not all(isinstance(item, str) for item in value):
             raise ValueError("CORS_ORIGINS entries must be strings")
-        origins = [item.strip() for item in value if isinstance(item, str) and item.strip()]
+        origins: list[str] = [item.strip() for item in value if isinstance(item, str) and item.strip()]
         if "*" in origins:
             raise ValueError("CORS_ORIGINS must contain explicit origins, not a wildcard")
         return origins
@@ -40,12 +40,7 @@ def parse_cors_origins(value: object) -> list[str]:
         try:
             parsed = json.loads(value)
             if isinstance(parsed, list):
-                if not all(isinstance(item, str) for item in parsed):
-                    raise ValueError("CORS_ORIGINS entries must be strings")
-                origins = [item.strip() for item in parsed if item.strip()]
-                if "*" in origins:
-                    raise ValueError("CORS_ORIGINS must contain explicit origins, not a wildcard")
-                return origins
+                return parse_cors_origins(parsed)
         except json.JSONDecodeError as error:
             raise ValueError("CORS_ORIGINS must be a valid JSON array or comma-separated list") from error
         raise ValueError("CORS_ORIGINS JSON value must be an array")

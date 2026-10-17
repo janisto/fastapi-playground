@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
@@ -9,6 +10,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from google.api_core import exceptions as google_exceptions
 from google.api_core.datetime_helpers import DatetimeWithNanoseconds
+from google.cloud.firestore import async_transactional
 
 from app.exceptions import (
     ProfileAlreadyExistsError,
@@ -19,8 +21,11 @@ from app.exceptions import (
 from app.models.profile import Profile, ProfileCreate, ProfileUpdate
 from app.services.profile.service import ProfileService, _log_profile_audit_event
 
-_UPDATE_BODY = cast("Any", ProfileService._update_in_transaction).to_wrap
-_DELETE_BODY = cast("Any", ProfileService._delete_in_transaction).to_wrap
+_UPDATE_BODY = cast(
+    "Callable[..., Awaitable[tuple[Profile | None, bool]]]",
+    ProfileService._update_in_transaction,
+)
+_DELETE_BODY = cast("Callable[..., Awaitable[bool]]", ProfileService._delete_in_transaction)
 
 
 class Snapshot:
@@ -89,6 +94,8 @@ class Client:
 
 @pytest.fixture(autouse=True)
 def atomic_transaction_double(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.profile.service.firestore.async_transactional", lambda function: function)
+
     async def update(
         transaction: Transaction,
         document: Document,
@@ -336,6 +343,71 @@ async def test_concurrent_deletes_return_one_success_and_one_not_found() -> None
     assert "principal" not in client.store
 
 
+async def test_concurrent_transaction_retries_keep_their_own_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    both_reading = asyncio.Event()
+    readers = 0
+    deleted: set[str] = set()
+
+    class RetryingTransaction:
+        _read_only = False
+        _max_attempts = 2
+
+        def __init__(self, identifier: str) -> None:
+            self.identifier = identifier
+            self._id: bytes | None = None
+            self.attempts = 0
+            self.retry_ids: list[bytes | None] = []
+            self.pending: str | None = None
+
+        def _clean_up(self) -> None:
+            self._id = None
+            self.pending = None
+
+        async def _begin(self, retry_id: bytes | None = None) -> None:
+            self.attempts += 1
+            self.retry_ids.append(retry_id)
+            self._id = self.identifier.encode("ascii")
+
+        def delete(self, document: Mock) -> None:
+            self.pending = cast("str", document.identifier)
+
+        async def _commit(self) -> None:
+            if self.attempts == 1:
+                raise google_exceptions.Aborted("retry this transaction")
+            assert self.pending is not None
+            deleted.add(self.pending)
+            self._clean_up()
+
+        async def _rollback(self) -> None:
+            self._clean_up()
+
+    async def read(*, transaction: RetryingTransaction) -> Mock:
+        nonlocal readers
+        if transaction.attempts == 1:
+            readers += 1
+            if readers == 2:
+                both_reading.set()
+            await both_reading.wait()
+        return Mock(exists=True)
+
+    identifiers = ("first", "second")
+    transactions = [RetryingTransaction(identifier) for identifier in identifiers]
+    documents = [Mock(identifier=identifier, get=AsyncMock(side_effect=read)) for identifier in identifiers]
+    client = Mock()
+    client.collection.return_value.document.side_effect = documents
+    client.transaction.side_effect = transactions
+    service = ProfileService(client=client)
+    monkeypatch.setattr("app.services.profile.service.firestore.async_transactional", async_transactional)
+    monkeypatch.setattr(ProfileService, "_delete_in_transaction", staticmethod(_DELETE_BODY))
+
+    async with asyncio.timeout(1):
+        await asyncio.gather(*(service.delete_profile(identifier) for identifier in identifiers))
+
+    assert deleted == set(identifiers)
+    for transaction in transactions:
+        assert transaction.retry_ids == [None, transaction.identifier.encode("ascii")]
+
+
 async def test_concurrent_patches_are_individually_atomic() -> None:
     client = Client()
     service = ProfileService(client=cast("Any", client), clock=lambda: datetime(2026, 1, 2, tzinfo=UTC))
@@ -406,6 +478,39 @@ async def test_known_persistence_failures_are_dependency_errors(
     monkeypatch.setattr(ProfileService, "_delete_in_transaction", AsyncMock(side_effect=failure))
     with pytest.raises(ProfileDependencyError):
         await service.delete_profile("principal")
+
+
+@pytest.mark.parametrize("operation", ["update", "delete"])
+@pytest.mark.parametrize("exhausted_retries", [False, True])
+async def test_transaction_retry_exhaustion_is_a_dependency_failure_without_mutation(
+    operation: str,
+    exhausted_retries: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    client = Client()
+    service = ProfileService(client=cast("Any", client), clock=lambda: datetime(2026, 1, 1, tzinfo=UTC))
+    original = await service.create_profile("principal", _create())
+    failure = ValueError("provider-secret")
+    if exhausted_retries:
+        failure.__cause__ = google_exceptions.Aborted("provider-secret")
+    runner = AsyncMock(side_effect=failure)
+    monkeypatch.setattr("app.services.profile.service.firestore.async_transactional", lambda function: runner)
+    caplog.clear()
+
+    expected_error = ProfileDependencyError if exhausted_retries else ValueError
+    operation_call = (
+        service.update_profile("principal", ProfileUpdate.model_validate({"marketingOptIn": True}, strict=True))
+        if operation == "update"
+        else service.delete_profile("principal")
+    )
+    with caplog.at_level(logging.INFO, logger="app.services.profile.service"), pytest.raises(expected_error):
+        await operation_call
+
+    runner.assert_awaited_once()
+    assert await service.get_profile("principal") == original
+    assert client.write_count == 1
+    assert not caplog.records
 
 
 @pytest.mark.parametrize("operation", ["create", "get", "update", "delete"])

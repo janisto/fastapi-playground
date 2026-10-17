@@ -120,13 +120,22 @@ container-build image="fastapi-playground:latest" version="dev" runtime_img="":
         -t {{ image }} .
 
 [group('container')]
-container-up image="fastapi-playground:latest" name="fastapi-playground" creds="service_account.json":
-    {{ CONTAINER_RUNTIME }} run -d --rm --name {{ name }} \
-        {{ if path_exists(".env") == "true" { "--env-file .env" } else { "" } }} \
-        -p {{ PORT }}:8080 \
-        -v "$(pwd)/{{ creds }}:/app/credentials.json:ro" \
-        -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json \
-        {{ image }}
+container-up image="fastapi-playground:latest" name="fastapi-playground" creds="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=(run -d --rm --name {{ quote(name) }} -p {{ quote(PORT + ":8080") }})
+    if [[ -f .env ]]; then
+        args+=(--env-file .env)
+    fi
+    credentials_path={{ quote(if creds == "" { "" } else { absolute_path(creds) }) }}
+    if [[ -n "$credentials_path" ]]; then
+        if [[ ! -f "$credentials_path" ]]; then
+            printf '%s\n' 'The credential path must refer to an existing file.' >&2
+            exit 1
+        fi
+        args+=(-v "$credentials_path:/app/credentials.json:ro" -e GOOGLE_APPLICATION_CREDENTIALS=/app/credentials.json)
+    fi
+    {{ CONTAINER_RUNTIME }} "${args[@]}" {{ quote(image) }}
 
 [group('container')]
 container-logs name="fastapi-playground":

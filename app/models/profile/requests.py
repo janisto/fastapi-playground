@@ -2,8 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from pydantic.experimental.missing_sentinel import MISSING
+from pydantic import MISSING, BaseModel, ConfigDict, Field, model_validator
 
 from app.models.types import BoundedName, ContactEmail, PhoneNumber
 

@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Iterable
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -52,8 +53,9 @@ async def _request(scope: Scope, chunks: Iterable[bytes]) -> tuple[int, dict[str
     await app(scope, receive, send)
     start = next(message for message in sent if message["type"] == "http.response.start")
     body = b"".join(message.get("body", b"") for message in sent if message["type"] == "http.response.body")
-    headers = {key.decode("latin1"): value.decode("latin1") for key, value in start["headers"]}
-    return start["status"], headers, body, receive_calls
+    raw_headers = cast("list[tuple[bytes, bytes]]", start["headers"])
+    headers = {key.decode("latin1"): value.decode("latin1") for key, value in raw_headers}
+    return cast("int", start["status"]), headers, body, receive_calls
 
 
 @pytest.mark.parametrize("size", [999_999, 1_000_000])

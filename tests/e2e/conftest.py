@@ -12,9 +12,11 @@ import contextlib
 import os
 from collections.abc import Generator
 
+import firebase_admin
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from google.auth.credentials import AnonymousCredentials
 
 FIRESTORE_HOST = "127.0.0.1:7030"
 AUTH_HOST = "127.0.0.1:7010"
@@ -29,6 +31,7 @@ os.environ["CORS_ORIGINS"] = ""
 
 # App imports must follow emulator configuration because settings are resolved during import.
 from app.auth.firebase import FirebaseUser, verify_firebase_token  # noqa: E402
+from app.core import firebase as firebase_module  # noqa: E402
 from app.main import app, fastapi_app  # noqa: E402
 
 
@@ -52,6 +55,23 @@ def require_emulators() -> None:
     """
     if not _emulator_running(FIRESTORE_HOST):
         pytest.skip("Firebase emulators not running (run: just emulators)")
+
+
+@pytest.fixture(autouse=True)
+def isolate_firebase_clients(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
+    """
+    Use emulator-only credentials and fresh SDK clients for each event loop.
+    """
+    firebase_app = firebase_admin.initialize_app(
+        AnonymousCredentials(), options={"projectId": PROJECT_ID}, name="emulator-test"
+    )
+    monkeypatch.setattr(firebase_module, "_firebase_app", firebase_app)
+    monkeypatch.setattr(firebase_module, "_async_firestore_client", None)
+    try:
+        yield
+    finally:
+        firebase_module.close_async_firestore_client()
+        firebase_admin.delete_app(firebase_app)
 
 
 @pytest.fixture(autouse=True)

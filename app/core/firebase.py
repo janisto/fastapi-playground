@@ -3,6 +3,7 @@ Firebase initialization and configuration.
 """
 
 import logging
+from typing import cast
 
 import firebase_admin
 from firebase_admin import credentials, firestore_async
@@ -32,15 +33,19 @@ def initialize_firebase() -> None:
     settings = get_settings()
 
     try:
-        if not settings.firebase_project_id or not settings.firebase_project_id.strip():
+        if settings.firebase_project_id is None or not settings.firebase_project_id.strip():
             raise RuntimeError("Firebase project is not configured")
-        if settings.google_application_credentials:
+        if bool(settings.google_application_credentials):
             # Use service account credentials
             cred = credentials.Certificate(settings.google_application_credentials)
-            _firebase_app = firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
+            _firebase_app = cast(
+                "firebase_admin.App", firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
+            )
         else:
             # Use default credentials (for Cloud Run) with an explicit Firebase project.
-            _firebase_app = firebase_admin.initialize_app(options={"projectId": settings.firebase_project_id})
+            _firebase_app = cast(
+                "firebase_admin.App", firebase_admin.initialize_app(options={"projectId": settings.firebase_project_id})
+            )
 
         logger.info("Firebase initialized successfully")
 

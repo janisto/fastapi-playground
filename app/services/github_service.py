@@ -274,7 +274,7 @@ def _parse_link_relations(headers: httpx2.Headers) -> dict[str, str]:
                 if not equals:
                     raise GitHubUpstreamError
                 decoded = value if _LINK_TOKEN.fullmatch(value) else _decoded_quoted_string(value)
-                if not decoded:
+                if decoded is None or not decoded:
                     raise GitHubUpstreamError
                 if (
                     decoded.startswith(" ")
@@ -342,7 +342,7 @@ def _repository_path(owner: str, repo: str, suffix: str = "") -> str:
 
 def _safe_provider_query(url: str) -> dict[str, str]:
     parsed = urlsplit(url)
-    if parsed.fragment or parsed.username or parsed.password:
+    if parsed.fragment or parsed.username is not None or parsed.password is not None:
         raise GitHubUpstreamError
     try:
         return parse_query_string(parsed.query.encode("ascii"))

@@ -3,7 +3,7 @@ Unit tests for configuration settings.
 """
 
 import os
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -14,13 +14,10 @@ from app.core.config import Settings, get_settings, parse_cors_origins
 def _create_settings(**kwargs: Any) -> Settings:
     """
     Create Settings instance without reading .env file.
-
-    The _env_file parameter is supported by pydantic-settings at runtime
-    but not exposed in the type hints, hence the cast.
     """
     if "firebase_project_id" not in kwargs and "FIREBASE_PROJECT_ID" not in os.environ:
         kwargs["firebase_project_id"] = "test-project"
-    return cast("Any", Settings)(_env_file=None, **kwargs)
+    return Settings(_env_file=None, **kwargs)
 
 
 @pytest.fixture(autouse=True)
