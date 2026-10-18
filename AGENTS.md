@@ -31,9 +31,9 @@ Instructions for coding agents working in this repository.
 
 ## GitHub automation
 
-This repository is an example with CI only. Pushes, PRs, and merges must not deploy to GCP. Keep cloud project aliases
-and MCP connections local and ignored; preserve manual deployment instructions and sample manifests for readers using
-their own projects. Cloud resource shutdown is outside the repository cleanup workflow.
+This example is not deployed; GCP is a possible future target. Pushes, PRs, and merges must not deploy to GCP.
+Keep cloud project aliases and MCP connections local and ignored; preserve manual deployment instructions and sample manifests for readers using
+their own projects. Do not require GCP access or deployed verification for repository changes.
 
 - Reference GitHub Actions by explicit full release tags such as
   `owner/action@v1.2.3`, not full commit SHAs or floating major-version tags.
@@ -61,10 +61,14 @@ Document upstream support blockers locally instead of downgrading the example to
 Use `uv`; do not mix in pip, Poetry, or ad hoc global tools. Do not add compatibility aliases or deprecated shims for
 internal refactors. Docstrings use a multi-line form with the opening and closing `"""` on separate lines.
 
+Use actionlint 1.7.12 locally. `just workflow-check` runs actionlint and the locked zizmor version with the pedantic
+persona in offline mode; `just qa` and `just check` include both scanners. Offline scans do not verify online-only audits.
+
 Run `just` to list recipes. The main gates are:
 
 ```bash
 just lint
+just workflow-check
 just typing
 just typing-functions
 just test
@@ -167,7 +171,7 @@ Firestore client synchronously in a `finally` block; the supported SDK's `AsyncC
 Cloud Run terminates TLS before proxying HTTP to the container. The image runtime trusts Cloud Run forwarded headers so
 the application sees the original HTTPS scheme for HSTS and URL behavior. Preserve the established image, build, and
 deployment conventions. Change them only when a replacement is materially better and verified against both the
-repository and active deployment behavior.
+repository and local container behavior.
 The Dockerfile produces a standalone image containing the operating system and Python runtime. Do not combine it with
 Cloud Run `--base-image` or `--automatic-updates`; those require a scratch-based application image or a different
 buildpack source-deployment flow.

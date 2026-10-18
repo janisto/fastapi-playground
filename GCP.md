@@ -5,9 +5,9 @@ This guide preserves optional manual setup for two independent deployment exampl
 - the FastAPI container in `app/`, deployable to Cloud Run;
 - the Python function in `functions/`, intended for Firebase CLI deployment once Python 3.15 is supported.
 
-The repository has CI only and no maintained deployment or cloud MCP connection. Pushes, PRs, and merges do not deploy
-these examples. Follow this guide only with an account and project you control; ordinary local development and
-isolated tests require no GCP account. Cloud resource retirement is managed separately from repository maintenance.
+The examples are not deployed; GCP is a possible future target. Pushes, PRs, and merges run CI only.
+Cloud MCP connections are not configured. Follow this guide only with an account and project you control;
+ordinary local development and isolated tests require no GCP account.
 
 Both examples target Python 3.15. The standalone FastAPI image carries its own Python runtime. The Function's
 `python315` declaration in `firebase.json` is a future target: as of 2026-10-17, the published
@@ -109,7 +109,7 @@ For VS Code, create `.vscode/mcp.json`:
     "firebase": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "firebase-tools@latest", "mcp", "--only", "auth,firestore,functions,storage"]
+      "args": ["-y", "firebase-tools@15.34.0", "mcp", "--only", "auth,firestore,functions,storage"]
     },
     "google_cloud_logging": {
       "type": "http",
@@ -134,7 +134,7 @@ enabled_tools = ["list_log_entries", "list_log_names"]
 
 [mcp_servers.firebase]
 command = "npx"
-args = ["-y", "firebase-tools@latest", "mcp", "--only", "auth,firestore,functions,storage"]
+args = ["-y", "firebase-tools@15.34.0", "mcp", "--only", "auth,firestore,functions,storage"]
 ```
 
 Firebase uses the credentials available to the Firebase CLI and your explicitly selected project. Its `--only`
