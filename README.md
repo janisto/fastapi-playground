@@ -398,7 +398,7 @@ container images or deploy cloud resources.
 
 | Workflow | Description |
 |----------|-------------|
-| `app-ci.yml` | Python quality, independent actionlint/zizmor checks, gated tests and container build, and required `ci` result |
+| `app-ci.yml` | Python quality, independent actionlint/zizmor checks, gated tests and container runtime smoke, and required `ci` result |
 | `app-lint.yml` | Fast Ruff linting and formatting feedback |
 | `labeler.yml` | Automatic PR labeling |
 | `labeler-manual.yml` | Manual labeling for historical PRs |
@@ -408,11 +408,17 @@ Validation runs on pull requests to any base branch, including higher stack laye
 `ci` check rejects failed, cancelled, or unexpectedly skipped jobs; the separate required `lint` check remains intact.
 Local and CI scans use actionlint 1.7.12 and zizmor 1.31.1 with the pedantic persona and offline audits. CI uses the
 official actionlint image, which also bundles ShellCheck and Pyflakes; local actionlint uses those tools when installed.
-Zizmor findings fail the required security check independently of SARIF reporting. Pushes and same-repository PRs
-upload SARIF; fork and Dependabot PRs run the same audits without an upload.
+Zizmor runs once in enforcing plain mode for every validation event, including fork and Dependabot PRs. Findings fail
+the required `ci` check. Coverage reports remain downloadable after test or threshold failures when coverage ran.
+Container validation checks Python 3.15.0, the non-root runtime user, credential-free startup, the health response, and
+graceful shutdown.
 
 Dependabot is configured in `.github/dependabot.yml` for quarterly updates with a one-day cooldown. Standalone tool
-pins must be reviewed separately when modernizing.
+pins must be reviewed separately when modernizing. Dependabot security alerts and automated security updates are
+disabled; scheduled version updates remain configured. GitHub's graph updater rejected Python 3.15 on 2026-10-18
+because its supported runtime list ended at Python 3.14. Keep the Python 3.15 target and use `just update` for native
+dependency upgrades while that upstream limitation remains. Disabled alerts do not establish that dependencies are
+free of vulnerabilities.
 
 ## Contributing
 
