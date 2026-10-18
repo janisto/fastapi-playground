@@ -10,9 +10,10 @@ Instructions for coding agents working in this repository.
 - Inspect the relevant implementation, callers, and existing tests before changing behavior.
 - Prefer the smallest safe change that solves the problem.
 - Reuse existing local patterns and utilities, refactoring them when needed, instead of creating parallel abstractions or adding dependencies.
+- Validate review findings against actual requirements and reproducible behavior. Simplify unnecessary behavior instead of adding machinery to defend it.
 - State the failure mode before architectural, security, persistence, or production-impacting changes.
 - Do not declare completion until implementation, validation, and remaining risks are reported.
-- Keep source comments and documentation concise. Do not add progress narration, generated banners, emojis, or speculative TODOs.
+- Keep instructions, comments, and documentation concise. Remove obsolete rules, completed-task narration, and duplicated guidance.
 
 ## Pull requests
 
@@ -40,6 +41,9 @@ their own projects. Do not require GCP access or deployed verification for repos
   Python, force incompatible dependency overrides, or add replacement alert bots to work around upstream limitations.
 - Keep public code, documentation, agent instructions, commit messages, and PR text self-contained. Do not disclose
   private coordination repositories, paths, revisions, or discussions.
+- Keep auto-merge limited to verified Dependabot minor/patch updates behind required checks. Handle old excluded-tool
+  PRs once; do not duplicate Dependabot ignore rules with package filters, enablement triggers, state queries, or
+  revocation steps.
 - Reference GitHub Actions by explicit full release tags such as
   `owner/action@v1.2.3`, not full commit SHAs or floating major-version tags.
   Dependabot updates those release tags.
@@ -89,13 +93,10 @@ direct Functions dependency, update both `functions/pyproject.toml` and the expo
 `just sync-functions-requirements`. Both project manifests enforce the minimum supported uv version while allowing newer
 releases. The Docker builder stays exactly versioned for reproducible image builds.
 
-Ruff and ty upgrades are a separate agent-owned process. Dependabot must ignore every version of both tools, and its
-auto-merge workflow must reject any update group containing either tool and disable any already-enabled auto-merge.
-Handle auto-merge enablement events as well as ordinary PR updates. Even patch releases can change diagnostics,
-configuration, and fixes, blocking otherwise routine dependency groups. In a dedicated quality-tool PR, review
-official release notes, update the relevant lockfile and any manifest or CI pins together, review configuration and
-new diagnostics, apply safe fixes, and run `just qa`. Keep other eligible dependency updates in their existing
-scheduled and auto-merge flow. A general modernization may update these tools deliberately with the same review.
+Dependabot ignores every Ruff and ty version. Agents upgrade them separately because even patch releases can change
+diagnostics, configuration, and fixes. Review official release notes, update lockfiles and any manifest or CI pins
+together, review configuration and new diagnostics, apply safe fixes, and run `just qa`. Apply the same review when
+upgrading these tools during a general modernization.
 
 Ruff enables all stable, non-preview rules and excludes only formatter conflicts, irrelevant ecosystems, and documented
 repository conventions. ty treats all rules as errors except checks its documentation identifies as false-positive-prone
