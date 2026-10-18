@@ -15,6 +15,10 @@ updates:
       prefix: "chore(deps)"
     labels:
       - "dependencies"
+    ignore:
+      # Quality-tool upgrades require a separate agent-led configuration and diagnostic review.
+      - dependency-name: "ruff"
+      - dependency-name: "ty"
     groups:
       updates:
         patterns:

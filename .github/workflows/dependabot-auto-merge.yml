@@ -1,7 +1,9 @@
 # Automatically approve and merge Dependabot PRs for minor and patch updates
 name: Dependabot auto-merge
 
-on: pull_request
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, auto_merge_enabled]
 
 permissions: {}
 
@@ -28,8 +30,25 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Disable auto-merge for separately maintained tools
+        if: >-
+          contains(fromJSON(steps.metadata.outputs.updated-dependencies-json).*.dependencyName, 'ruff') ||
+          contains(fromJSON(steps.metadata.outputs.updated-dependencies-json).*.dependencyName, 'ty')
+        run: |
+          auto_merge_enabled="$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')"
+          if [[ "$auto_merge_enabled" == true ]]; then
+            gh pr merge --disable-auto "$PR_URL"
+          fi
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Approve and auto-merge minor and patch updates
-        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        if: >-
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor') &&
+          !contains(fromJSON(steps.metadata.outputs.updated-dependencies-json).*.dependencyName, 'ruff') &&
+          !contains(fromJSON(steps.metadata.outputs.updated-dependencies-json).*.dependencyName, 'ty')
         run: |
           gh pr edit "$PR_URL" --add-label "automerge"
           gh pr review --approve "$PR_URL"

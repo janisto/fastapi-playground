@@ -89,6 +89,14 @@ direct Functions dependency, update both `functions/pyproject.toml` and the expo
 `just sync-functions-requirements`. Both project manifests enforce the minimum supported uv version while allowing newer
 releases. The Docker builder stays exactly versioned for reproducible image builds.
 
+Ruff and ty upgrades are a separate agent-owned process. Dependabot must ignore every version of both tools, and its
+auto-merge workflow must reject any update group containing either tool and disable any already-enabled auto-merge.
+Handle auto-merge enablement events as well as ordinary PR updates. Even patch releases can change diagnostics,
+configuration, and fixes, blocking otherwise routine dependency groups. In a dedicated quality-tool PR, review
+official release notes, update the relevant lockfile and any manifest or CI pins together, review configuration and
+new diagnostics, apply safe fixes, and run `just qa`. Keep other eligible dependency updates in their existing
+scheduled and auto-merge flow. A general modernization may update these tools deliberately with the same review.
+
 Ruff enables all stable, non-preview rules and excludes only formatter conflicts, irrelevant ecosystems, and documented
 repository conventions. ty treats all rules as errors except checks its documentation identifies as false-positive-prone
 or non-runtime diagnostics. Both tools derive Python 3.15 from `project.requires-python`; ty targets Linux to match the

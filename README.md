@@ -420,6 +420,10 @@ because its supported runtime list ended at Python 3.14. Keep the Python 3.15 ta
 dependency upgrades while that upstream limitation remains. Disabled alerts do not establish that dependencies are
 free of vulnerabilities.
 
+Ruff and ty are excluded from Dependabot version updates and auto-merge. Their patch releases can change diagnostics,
+configuration, and fixes, so they are maintained separately. Other eligible dependency updates retain their automatic
+path.
+
 ## Contributing
 
 See [AGENTS.md](AGENTS.md) for coding guidelines and conventions.
