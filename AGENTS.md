@@ -35,6 +35,11 @@ This example is not deployed; GCP is a possible future target. Pushes, PRs, and 
 Keep cloud project aliases and MCP connections local and ignored; preserve manual deployment instructions and sample manifests for readers using
 their own projects. Do not require GCP access or deployed verification for repository changes.
 
+- Keep Dependabot security alerts and automated security updates disabled. Preserve scheduled version updates;
+  document upstream runtime or dependency constraints once and continue independent modernization. Do not downgrade
+  Python, force incompatible dependency overrides, or add replacement alert bots to work around upstream limitations.
+- Keep public code, documentation, agent instructions, commit messages, and PR text self-contained. Do not disclose
+  private coordination repositories, paths, revisions, or discussions.
 - Reference GitHub Actions by explicit full release tags such as
   `owner/action@v1.2.3`, not full commit SHAs or floating major-version tags.
   Dependabot updates those release tags.
@@ -95,12 +100,20 @@ services can lag releases. Keep strict ty rules enabled, preserve intentional em
 narrow casts only at validated dynamic ASGI or untyped SDK boundaries. Use Pydantic's public `MISSING` sentinel for
 omittable non-null PATCH fields; test that explicit false values survive and omitted fields stay absent.
 
-GitHub Actions are coupled to active repository rules. Do not edit, rename, consolidate, remove, or add path filters to
-workflows or jobs before inspecting the GitHub rulesets and understanding which status-check contexts are required.
-The current default-branch rules require both `ci` and `lint`; preserve those job IDs unless the ruleset is deliberately
-updated in the same change. `ci` aggregates quality, tests, container build, actionlint, and zizmor with `if: always()`
-and rejects every non-success result. Keep workflow scans independent of Python quality and validation enabled for
-PRs targeting any stack branch. A missing or skipped required context blocks every PR even when all remaining checks pass.
+GitHub Actions are coupled to active repository rules. Before changing workflows, use Chrome to inspect Settings >
+Rules > Rulesets, including required check names and their configured sources. The current default-branch rules require
+both `ci` and `lint` from GitHub Actions; a same-named result from another app does not satisfy that binding. An `any
+source` rule has no app restriction. Preserve required contexts and their sources until replacement enforcement reaches
+the protected trunk. Verify the final ruleset and actual PR checks in Chrome before reporting completion; CLI/API
+inspection supplements this verification. If Chrome or settings access is unavailable, report the adoption blocker.
+Do not weaken protection or update old dependency PRs merely to retire obsolete check names.
+
+Keep dedicated pure Ruff linting independent of dependency installation, typing, tests, audits, and workflow scans.
+`ci` aggregates quality, tests, container runtime smoke, actionlint, and zizmor with `if: always()` and rejects every
+non-success result. Keep workflow scans independent of Python quality and validation enabled for PRs targeting any
+stack branch. Run one enforcing plain-mode zizmor scan; do not add duplicate SARIF uploads or security-event write
+permissions. Retain coverage artifacts after failed tests or thresholds, but skip uploads when coverage never ran or
+the workflow was cancelled.
 
 ## Project structure and boundaries
 

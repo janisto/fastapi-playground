@@ -19,7 +19,6 @@ jobs:
 
     permissions:
       contents: write # Enable the squash merge.
-      issues: write # Add the automerge label through the issues API.
       pull-requests: write # Approve the pull request and enable auto-merge.
 
     steps:

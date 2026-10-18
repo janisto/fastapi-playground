@@ -88,9 +88,11 @@ jobs:
         run: just test-functions
 
       - name: Run app coverage
+        id: test-coverage
         run: just cov
 
       - name: Upload coverage report
+        if: ${{ !cancelled() && steps.test-coverage.outcome != 'skipped' }}
         uses: actions/upload-artifact@v7.0.2
         with:
           name: coverage-report
@@ -98,7 +100,7 @@ jobs:
           if-no-files-found: error
 
   container:
-    name: Container build
+    name: Container build and smoke
     needs: quality
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -113,6 +115,42 @@ jobs:
         run: docker build --build-arg "VERSION=$IMAGE_VERSION" --tag fastapi-playground:test .
         env:
           IMAGE_VERSION: ${{ github.sha }}
+
+      - name: Verify runtime version and user
+        run: |
+          docker run --rm --entrypoint python fastapi-playground:test -c \
+            'import os, sys; assert sys.version_info[:3] == (3, 15, 0); assert (os.getuid(), os.getgid()) == (1001, 1001)'
+
+      - name: Smoke startup, health, and graceful shutdown
+        run: |
+          set -euo pipefail
+          container_id="$(docker run --detach --publish 127.0.0.1::8080 fastapi-playground:test)"
+          cleanup() {
+            docker logs "$container_id" || true
+            docker rm --force "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          port="$(docker port "$container_id" 8080/tcp | sed 's/.*://')"
+          ready=false
+          for _attempt in $(seq 1 30); do
+            if curl --fail --silent --max-time 2 "http://127.0.0.1:${port}/health" >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "Container did not become healthy" >&2
+            exit 1
+          fi
+
+          curl --fail --silent --max-time 2 "http://127.0.0.1:${port}/health" | jq --exit-status '. == {"status": "healthy"}'
+
+          docker stop --time 10 "$container_id" >/dev/null
+          test "$(docker inspect --format '{{.State.ExitCode}}' "$container_id")" -eq 0
+          docker rm "$container_id" >/dev/null
+          trap - EXIT
 
   actionlint:
     name: Workflow syntax
@@ -133,10 +171,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
-    permissions:
-      contents: read
-      security-events: write # Upload SARIF for trusted repository events.
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.1
@@ -152,17 +186,6 @@ jobs:
           persona: pedantic
           online-audits: false
           advanced-security: false
-
-      - name: Upload zizmor SARIF
-        if: ${{ !cancelled() && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) }}
-        uses: zizmorcore/zizmor-action@v0.7.1
-        env:
-          ZIZMOR_OFFLINE: 'true'
-        with:
-          version: '1.31.1'
-          persona: pedantic
-          online-audits: false
-          advanced-security: true
 
   ci:
     name: ci
