@@ -421,8 +421,8 @@ dependency upgrades while that upstream limitation remains. Disabled alerts do n
 free of vulnerabilities.
 
 Ruff and ty are excluded from Dependabot version updates and auto-merge. Their patch releases can change diagnostics,
-configuration, and fixes, so agents upgrade them separately with release-note review, configuration adjustments, and
-the full quality gate. Other eligible dependency updates retain their automatic path.
+configuration, and fixes, so they are maintained separately. Other eligible dependency updates retain their automatic
+path.
 
 ## Contributing
 

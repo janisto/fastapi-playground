@@ -90,7 +90,8 @@ direct Functions dependency, update both `functions/pyproject.toml` and the expo
 releases. The Docker builder stays exactly versioned for reproducible image builds.
 
 Ruff and ty upgrades are a separate agent-owned process. Dependabot must ignore every version of both tools, and its
-auto-merge workflow must reject any update group containing either tool. Even patch releases can change diagnostics,
+auto-merge workflow must reject any update group containing either tool and disable any already-enabled auto-merge.
+Handle auto-merge enablement events as well as ordinary PR updates. Even patch releases can change diagnostics,
 configuration, and fixes, blocking otherwise routine dependency groups. In a dedicated quality-tool PR, review
 official release notes, update the relevant lockfile and any manifest or CI pins together, review configuration and
 new diagnostics, apply safe fixes, and run `just qa`. Keep other eligible dependency updates in their existing
