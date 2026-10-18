@@ -98,7 +98,9 @@ omittable non-null PATCH fields; test that explicit false values survive and omi
 GitHub Actions are coupled to active repository rules. Do not edit, rename, consolidate, remove, or add path filters to
 workflows or jobs before inspecting the GitHub rulesets and understanding which status-check contexts are required.
 The current default-branch rules require both `ci` and `lint`; preserve those job IDs unless the ruleset is deliberately
-updated in the same change. A missing or skipped required context blocks every PR even when all remaining checks pass.
+updated in the same change. `ci` aggregates quality, tests, container build, actionlint, and zizmor with `if: always()`
+and rejects every non-success result. Keep workflow scans independent of Python quality and validation enabled for
+PRs targeting any stack branch. A missing or skipped required context blocks every PR even when all remaining checks pass.
 
 ## Project structure and boundaries
 

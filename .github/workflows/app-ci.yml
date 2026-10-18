@@ -1,10 +1,9 @@
-name: App linting, typing, tests and coverage
+name: App validation
 
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -14,9 +13,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ci:
-    name: ci
+  quality:
+    name: Python quality
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout
@@ -42,27 +42,52 @@ jobs:
       - name: Install Functions dependencies
         run: just install-functions
 
-      - name: Run linting checks
+      - name: Check Python style
         run: just lint
 
-      - name: Run typing checks
+      - name: Check app types
         run: just typing
 
-      - name: Run Functions typing checks
+      - name: Check Functions types
         run: just typing-functions
 
       - name: Verify Functions deployment requirements
         run: just check-functions-requirements
 
-      - name: Build application container
-        run: docker build --build-arg "VERSION=$IMAGE_VERSION" --tag fastapi-playground:test .
-        env:
-          IMAGE_VERSION: ${{ github.sha }}
+  tests:
+    name: App and Functions tests
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: '0.13.1'
+          python-version: '3.15'
+          enable-cache: true
+
+      - name: Set up just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: '1.59.0'
+
+      - name: Install dependencies
+        run: just install
+
+      - name: Install Functions dependencies
+        run: just install-functions
 
       - name: Run Functions tests
         run: just test-functions
 
-      - name: Run test coverage
+      - name: Run app coverage
         run: just cov
 
       - name: Upload coverage report
@@ -70,3 +95,95 @@ jobs:
         with:
           name: coverage-report
           path: htmlcov
+          if-no-files-found: error
+
+  container:
+    name: Container build
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build application container
+        run: docker build --build-arg "VERSION=$IMAGE_VERSION" --tag fastapi-playground:test .
+        env:
+          IMAGE_VERSION: ${{ github.sha }}
+
+  actionlint:
+    name: Workflow syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run actionlint
+        uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+  zizmor:
+    name: Workflow security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      contents: read
+      security-events: write # Upload SARIF for trusted repository events.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@v0.7.1
+        env:
+          ZIZMOR_OFFLINE: 'true'
+        with:
+          version: '1.31.1'
+          persona: pedantic
+          online-audits: false
+          advanced-security: false
+
+      - name: Upload zizmor SARIF
+        if: ${{ !cancelled() && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) }}
+        uses: zizmorcore/zizmor-action@v0.7.1
+        env:
+          ZIZMOR_OFFLINE: 'true'
+        with:
+          version: '1.31.1'
+          persona: pedantic
+          online-audits: false
+          advanced-security: true
+
+  ci:
+    name: ci
+    if: always()
+    needs: [quality, tests, container, actionlint, zizmor]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+
+    steps:
+      - name: Require every validation job to succeed
+        run: |
+          if [[ "$QUALITY_RESULT" != success || "$TESTS_RESULT" != success ||
+                "$CONTAINER_RESULT" != success || "$ACTIONLINT_RESULT" != success ||
+                "$ZIZMOR_RESULT" != success ]]; then
+            printf '%s\n' 'A required validation job failed, was cancelled, or was skipped.' >&2
+            exit 1
+          fi
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          CONTAINER_RESULT: ${{ needs.container.result }}
+          ACTIONLINT_RESULT: ${{ needs.actionlint.result }}
+          ZIZMOR_RESULT: ${{ needs.zizmor.result }}

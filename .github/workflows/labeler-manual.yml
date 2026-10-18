@@ -27,6 +27,7 @@ jobs:
   collect-prs:
     name: Collect pull requests
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     permissions:
       pull-requests: read # Enumerate pull requests selected by the operator.
@@ -74,6 +75,7 @@ jobs:
     needs: collect-prs
 
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     permissions:
       contents: read # Read the labeler configuration from the default branch.
