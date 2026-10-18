@@ -9,8 +9,8 @@ A FastAPI reference application for the accepted portable playground API. It dem
 contracts, Firebase-authenticated Firestore profile lifecycle operations, a credential-free GitHub REST projection,
 and a modern Python workflow using `uv` and `just`.
 
-This is an example repository with CI and no maintained cloud deployment. Pushes, pull requests, and merges do not
-deploy it to GCP. The [deployment instructions](GCP.md) describe optional manual setup in a project you control.
+This example is not deployed. GCP is a possible future deployment target; pushes, pull requests, and merges run CI
+only. The [deployment instructions](GCP.md) describe optional manual setup in a project you control.
 
 <img src="assets/python.svg" alt="Python logo" width="400">
 
@@ -114,8 +114,10 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
 
 - Python 3.15+ (the local environment and container use 3.15.0)
 - [uv](https://docs.astral.sh/uv/) package manager (the minimum supported version is enforced in both project manifests)
-- [just](https://github.com/casey/just) command runner
-- [Firebase CLI](https://firebase.google.com/docs/cli) when running local Auth and Firestore emulators
+- [just](https://github.com/casey/just) 1.59.0 command runner
+- [actionlint](https://github.com/rhysd/actionlint) 1.7.12 for local workflow validation
+- Node.js 24 LTS and `npx` only when running Firebase tooling
+- [Firebase CLI](https://firebase.google.com/docs/cli) 15.34.0, selected by `just emulators`, for local Auth and Firestore emulators
 - A project you control with Authentication and Firestore enabled when using hosted profile operations
 
 ## Quick Start
@@ -258,7 +260,8 @@ application neither reads an ambient GitHub token nor forwards caller credential
 ### Build and Test
 
 ```bash
-just lint               # Check Python style and GitHub Actions security
+just lint               # Check Python style
+just workflow-check     # Check GitHub Actions syntax and security
 just typing             # Type-check the FastAPI app
 just typing-functions   # Type-check the separate Functions project
 just test-functions     # Run isolated Functions tests
@@ -276,7 +279,8 @@ just cov                # Generate HTML and JSON coverage reports
 |---------|-------------|
 | `just serve` | Start dev server with hot reload |
 | `just browser` | Open dev server in browser |
-| `just lint` | Check Ruff linting/formatting and GitHub Actions with zizmor |
+| `just lint` | Check Ruff linting and formatting |
+| `just workflow-check` | Check GitHub Actions with actionlint 1.7.12 and locked, pedantic offline zizmor |
 | `just typing` | Type checking via ty |
 | `just typing-functions` | Type-check the separate Functions project |
 | `just test-functions` | Test the separate Functions project |
@@ -284,7 +288,7 @@ just cov                # Generate HTML and JSON coverage reports
 | `just test-e2e` | Firebase emulator E2E tests |
 | `just test-all` | All test tiers |
 | `just cov` | Coverage report (html/json) |
-| `just check` | Full app and Functions lint, type, test, and dependency-manifest checks |
+| `just check` | Workflow, app and Functions lint, type, test, and dependency-manifest checks |
 | `just emulators` | Start Firebase emulators for E2E |
 
 Run `just` to see all available commands.
@@ -390,18 +394,25 @@ trade-offs and Cloud Functions documentation.
 ## CI
 
 GitHub Actions workflows in `.github/workflows/` validate code and maintain the repository. They do not publish
-container images or deploy cloud resources. The Cloud Build GitHub integration has been disconnected.
+container images or deploy cloud resources.
 
 | Workflow | Description |
 |----------|-------------|
-| `app-ci.yml` | App and Functions checks, container build, and app test coverage |
+| `app-ci.yml` | Python quality, independent actionlint/zizmor checks, gated tests and container build, and required `ci` result |
 | `app-lint.yml` | Fast Ruff linting and formatting feedback |
-| `zizmor.yml` | Upload GitHub Actions security findings to code scanning |
 | `labeler.yml` | Automatic PR labeling |
 | `labeler-manual.yml` | Manual labeling for historical PRs |
 | `dependabot-auto-merge.yml` | Auto-merge Dependabot minor/patch updates |
 
-Dependabot is configured in `.github/dependabot.yml` for automated dependency updates.
+Validation runs on pull requests to any base branch, including higher stack layers, and pushes to `main`. The required
+`ci` check rejects failed, cancelled, or unexpectedly skipped jobs; the separate required `lint` check remains intact.
+Local and CI scans use actionlint 1.7.12 and zizmor 1.31.1 with the pedantic persona and offline audits. CI uses the
+official actionlint image, which also bundles ShellCheck and Pyflakes; local actionlint uses those tools when installed.
+Zizmor findings fail the required security check independently of SARIF reporting. Pushes and same-repository PRs
+upload SARIF; fork and Dependabot PRs run the same audits without an upload.
+
+Dependabot is configured in `.github/dependabot.yml` for quarterly updates with a one-day cooldown. Standalone tool
+pins must be reviewed separately when modernizing.
 
 ## Contributing
 

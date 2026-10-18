@@ -17,7 +17,7 @@ CONTAINER_RUNTIME := if `command -v podman 2>/dev/null || true` != "" { "podman"
 # Start Firebase emulators for E2E tests
 [group('test')]
 emulators:
-    firebase emulators:start --only auth,firestore --project demo-test
+    npx --yes --package firebase-tools@15.34.0 firebase emulators:start --only auth,firestore --project demo-test
 
 # Run all CI-compatible tests (unit + integration)
 [group('test')]
@@ -65,7 +65,12 @@ fix:
 lint:
     uv run ruff check
     uv run ruff format --check
-    uv run zizmor --offline --persona=pedantic .
+
+# Validate GitHub Actions syntax and security independently of Python checks
+[group('qa')]
+workflow-check:
+    actionlint
+    uv run --locked zizmor --offline --persona=pedantic .
 
 # Modernize code (PEP 585/604, etc.) via Ruff's pyupgrade
 [group('qa')]
@@ -83,13 +88,13 @@ typing:
 typing-functions: install-functions
     uv run ty check --python functions/.venv functions/main.py
 
-# Quality assurance: fix, format, type check, and test
+# Fix Python style, then run every quality check
 [group('qa')]
-qa: fix typing typing-functions test test-functions
+qa: fix check
 
 # Perform all checks
 [group('qa')]
-check: lint typing typing-functions test test-functions check-functions-requirements
+check: workflow-check lint typing typing-functions test test-functions check-functions-requirements
 
 # Run development server
 # --no-server-header: Hide server fingerprinting (OWASP recommendation)
@@ -103,7 +108,7 @@ req path="" *args:
     @just _http {{ args }} http://127.0.0.1:{{ PORT }}/{{ path }}
 
 _http *args:
-    uvx --from httpie http {{ args }}
+    uvx --from httpie==3.2.4 http --ignore-stdin {{ args }}
 
 # Open development server in web browser
 [group('run')]
