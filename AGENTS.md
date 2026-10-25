@@ -1,34 +1,58 @@
 # AGENTS.md
 
-Instructions for coding agents working in this repository.
-
-`README.md` is for human users and contributors: setup, capabilities, architecture, operations, and contribution entry points. `AGENTS.md` is for coding agents: execution rules, implementation constraints, and validation policy. Do not duplicate agent instructions into the README or turn this file into human onboarding documentation.
+Instructions for coding agents. Keep execution rules here; `README.md` serves
+human users and contributors. Do not duplicate agent instructions into it.
 
 ## Engineering priorities
 
-- Correctness first, then readability and maintainability, then performance.
-- Inspect the relevant implementation, callers, and existing tests before changing behavior.
-- Prefer the smallest safe change that solves the problem.
-- Reuse existing local patterns and utilities, refactoring them when needed, instead of creating parallel abstractions or adding dependencies.
-- Validate review findings against actual requirements and reproducible behavior. Simplify unnecessary behavior instead of adding machinery to defend it.
-- State the failure mode before architectural, security, persistence, or production-impacting changes.
-- Do not declare completion until implementation, validation, and remaining risks are reported.
-- Keep instructions, comments, and documentation concise. Remove obsolete rules, completed-task narration, and duplicated guidance.
+- Prioritize correctness, readability, maintainability, then performance.
+- Inspect the implementation, callers, and tests before changing behavior.
+- Prefer the smallest safe change; reuse or refactor local patterns and utilities
+  before adding abstractions or dependencies.
+- Validate review findings against requirements and reproducible behavior.
+  Simplify unnecessary behavior instead of adding machinery to defend it.
+- State the failure mode before architectural, security, persistence, or
+  production-impacting changes.
+- Report implementation, validation, and remaining risks before completion.
+- Keep instructions, comments, and documentation concise. Explain and obtain
+  explicit approval before removing, merging, or relocating guidance, including
+  obsolete rules, completed-task narration, and duplicates.
 
-## Pull requests
+## Epistemic honesty and scope discipline
 
-- Format titles as `type[optional scope]: description`. Prefer no scope; include one only when it materially improves clarity.
-- Use `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, or `revert` as the type. Example: `feat: add response size field`.
-- Keep each pull request focused. In the body, explain why the change is needed, what changed, how it was validated, and any remaining risk.
-- Keep the title suitable for the final squash or merge commit.
-- This repository does not maintain a `CHANGELOG.md`; do not create one or require changelog entries in pull requests.
+- Report defects, corrupted data, unmet requirements, and unfinished work plainly.
+  Never conceal them in justifications or relabel them as simplifications,
+  provisional scope, or expected limitations. If a problem is deeper than
+  expected, stop at a safe boundary and report the exact failure, affected
+  behavior or records, and remaining work.
+- Counts, checksums, and passing tests show consistency, not semantic correctness.
+  Before claiming parsing, Pydantic validation, or Firestore transformations work,
+  inspect accepted inputs and resulting profiles using synthetic fixtures or
+  authorized data. Hunt for false positives; report the worst counterexamples,
+  or describe the sample when none were found.
+- Fix the bug class behind cited failures: correct the grammar, validation, query,
+  or logic and audit all affected paths or records within the authorized scope.
+  Do not hardcode cited values into exceptions or blocklists, or patch only named
+  IDs.
+- Do not weaken specifications, `AGENTS.md`, or active plans to excuse defects or
+  shortcuts. Follow current task scope and stop gates. For review-only or
+  report-only work, edit only an explicitly requested report.
+- After the final code, schema, or generator change, inspect affected runtime
+  OpenAPI, regenerate fixture artifacts, rebuild affected test data, and rerun
+  relevant checks. Earlier passing results do not validate later edits.
 
-## Commits
+## Commits and pull requests
 
-- Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/).
-- Prefer no scope; include one only when it materially improves clarity. Write a short, imperative description. Example: `fix: preserve request ID`.
-- Mark breaking changes with `!` and explain them in a `BREAKING CHANGE:` footer.
-- Before committing, run `just qa` and `git diff --check`.
+- Use [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/):
+  `type: imperative description`. Add a scope only when
+  it materially improves clarity. Types: `feat`, `fix`, `docs`, `test`, `refactor`,
+  `perf`, `build`, `ci`, `chore`, and `revert`.
+- Use the same format for PR titles, suitable for the final merge commit. Keep PRs
+  focused; describe the problem, resulting behavior, validation, and remaining
+  risks.
+- Mark breaking changes with `!` and a `BREAKING CHANGE:` footer.
+- Work on task branches. Before committing, run `just qa` and `git diff --check`.
+- This repository has no `CHANGELOG.md`; do not create one or require entries.
 
 ## GitHub automation
 
@@ -50,6 +74,8 @@ their own projects. Do not require GCP access or deployed verification for repos
 
 ## Mandatory skills
 
+- Use `.agents/skills/edit-agent-instructions/SKILL.md` when reviewing or editing
+  root or nested agent instructions.
 - Use `.agents/skills/adversarial-testing/SKILL.md` for every task that plans, creates, modifies, reviews, debugs, or evaluates tests. Apply it alongside any more specific framework or infrastructure testing skill.
 - Use `.agents/skills/readme-maintenance/SKILL.md` for every README audit or change. Also use it to assess README impact whenever public behavior, configuration, setup, commands, architecture, deployment, CI, or supported versions change. A README edit is required only when the audit finds a stale or missing reader-facing claim.
 
@@ -346,60 +372,20 @@ values to public docs or configuration examples.
 
 ## Firebase Function
 
-`functions/` is an independent Python 3.15 project. Its `dad_joke` HTTP function is GET-only and private because every
-successful call can consume Vertex AI quota. Preserve `invoker="private"`; intended callers need `roles/run.invoker` on
-the backing Cloud Run service and must send an ID token. Keep model output strictly validated and return sanitized 503
-or 500 responses. Logs may include stable status or exception type, never prompts, generated output, exception strings,
-credentials, or user data.
+Before changing the independent Function, its tests, dependencies, exporter,
+Firebase manifests, or deployment/emulation guidance, read
+[functions/AGENTS.md](functions/AGENTS.md). Preserve private IAM invocation and
+Vertex AI quota safeguards.
 
-Python 3.15 is a local and future deployment target, not a claim of current Firebase runtime support. Check the
-current platform runtime table and Firebase CLI support before any Functions deployment or emulation. Keep `firebase.json` aligned with the project target;
-do not silently run the 3.15 project on a 3.14 runtime to bypass platform support checks.
+## Testing and validation
 
-Do not rely on Genkit's `output_schema` alone: verify `result.output` is the expected Pydantic model because missing or
-non-model parsed output can otherwise cross the application boundary. Treat schema and output-type failures as the
-sanitized, retryable `INVALID_MODEL_OUTPUT` 503. Keep topic parsing in its own narrow exception boundary so downstream
-`ValueError` failures remain generic 500 responses rather than being misreported as client input errors.
+Before changing application tests or behavior requiring tests, read
+[tests/AGENTS.md](tests/AGENTS.md) and apply the `pytest-testing` skill. Function
+tests follow [functions/AGENTS.md](functions/AGENTS.md).
 
-The Function deploy region remains `europe-west4`; model inference uses the `global` Vertex AI endpoint and the
-auto-updating `gemini-pro-latest` alias. Keep deployment region and model location distinct. An alias avoids stale model
-IDs but may change behavior, latency, or cost without a code change, so preserve structured output validation, tests,
-quota and spend monitoring, and explicit production verification when changing model configuration.
-
-Unit tests in `functions/tests/` must isolate Genkit reflection and must not call Vertex AI. Firebase
-deploys from the intentionally lean `functions/requirements.txt`, which pins only direct runtime packages to versions
-from `functions/uv.lock`. Do not hand-edit it or include transitive dependencies; use the restricted exporter through
-`just sync-functions-requirements`.
-
-## Testing
-
-Use the narrowest meaningful boundary:
-
-- Unit tests for pure functions, models, middleware, auth branches, service behavior, and Firestore fakes.
-- Integration tests for routing, middleware order, request IDs, negotiation, Problem Details, OpenAPI, and headers.
-- E2E tests for real Firebase SDK and transaction behavior against local emulators.
-- Functions tests for handler behavior and deployment manifest controls.
-
-Assert observable behavior rather than implementation trivia: exact status and media type, relevant headers, decoded
-shape, service calls, error redaction, route metadata, and absence of sensitive output. Prefer parametrization for input
-matrices and `AsyncMock` assertions for async calls. No real network or Firestore access in unit or integration tests.
-The emulator recipe always uses the synthetic `demo-test` project; do not point E2E tests at a deployed project.
-
-The main commands are:
-
-```bash
-just test-unit
-just test-integration
-just test-functions
-just test
-just cov
-just emulators
-just test-e2e
-just test-all
-```
-
-Run emulator E2E tests when Firestore transaction or SDK semantics change. For container-sensitive changes, verify the
-actual image with `just container-build`, `just container-up`, `just container-logs`, and `just container-down`.
+Run emulator E2E tests when Firestore transaction or SDK semantics change. For
+container-sensitive changes, verify the actual image with `just container-build`,
+`just container-up`, `just container-logs`, and `just container-down`.
 
 ## Documentation alignment
 
@@ -433,6 +419,7 @@ repository-specific workflow rather than restate this file.
 | Skill | Use when |
 |---|---|
 | `adversarial-testing` | Planning, writing, reviewing, debugging, or evaluating tests at any layer |
+| `edit-agent-instructions` | Reviewing or editing root or nested agent instructions |
 | `fastapi-endpoint` | Creating or changing a route and its runtime behavior |
 | `firestore-service` | Changing async Firestore persistence or transaction semantics |
 | `openapi-contract` | Changing routes, schemas, errors, media types, headers, or API docs |
