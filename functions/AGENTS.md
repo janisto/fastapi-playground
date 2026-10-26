@@ -1,7 +1,11 @@
 # Firebase Function agent instructions
 
-The root `AGENTS.md` also applies. This is an independent Python 3.15 project;
-do not merge its dependency environment with the FastAPI app.
+Scope: `functions/`. The root `AGENTS.md` also applies.
+Repository paths are root-relative. Run commands from the repository root unless
+another working directory is explicitly stated.
+
+This is an independent Python 3.15 project; do not merge its dependency
+environment with the FastAPI app.
 
 ## Invocation and output
 

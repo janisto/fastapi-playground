@@ -17,6 +17,9 @@ human users and contributors. Do not duplicate agent instructions into it.
 - Keep instructions, comments, and documentation concise. Explain and obtain
   explicit approval before removing, merging, or relocating guidance, including
   obsolete rules, completed-task narration, and duplicates.
+- Keep public code, instructions, comments, documentation, commits, and PR text
+  self-contained. Do not disclose private coordination repositories, paths,
+  revisions, or discussions.
 
 ## Epistemic honesty and scope discipline
 
@@ -44,15 +47,68 @@ human users and contributors. Do not duplicate agent instructions into it.
 ## Commits and pull requests
 
 - Use [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/):
-  `type: imperative description`. Add a scope only when
-  it materially improves clarity. Types: `feat`, `fix`, `docs`, `test`, `refactor`,
-  `perf`, `build`, `ci`, `chore`, and `revert`.
+  `type: imperative description`. Add a scope only when it materially improves
+  clarity. Types: `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`,
+  `ci`, `chore`, and `revert`.
 - Use the same format for PR titles, suitable for the final merge commit. Keep PRs
   focused; describe the problem, resulting behavior, validation, and remaining
   risks.
-- Mark breaking changes with `!` and a `BREAKING CHANGE:` footer.
-- Work on task branches. Before committing, run `just qa` and `git diff --check`.
+- Mark breaking changes with `!` and a `BREAKING CHANGE:` footer explaining the
+  impact.
+- Work on task branches; never commit directly to the default branch.
+- Before committing, always run `just qa` and `git diff --check`.
+- Use one atomic PR when layers would require manual settings changes between
+  merges. A stack must be mergeable as a whole.
 - This repository has no `CHANGELOG.md`; do not create one or require entries.
+
+## Skills and validation
+
+### Required guidance
+
+- Use `.agents/skills/edit-agent-instructions/SKILL.md` when reviewing or editing
+  root or nested agent instructions.
+- Use `.agents/skills/adversarial-testing/SKILL.md` whenever planning, creating,
+  modifying, reviewing, debugging, or evaluating tests. Apply relevant language,
+  framework, and infrastructure testing guidance alongside it.
+- Use `.agents/skills/readme-maintenance/SKILL.md` for README audits and edits.
+  Assess README impact when API behavior/contracts, persistence, configuration,
+  setup, commands, architecture, tooling, deployment, CI, or supported versions
+  change. Edit the README only for stale or missing reader-facing claims.
+
+### Validation
+
+Before changing application tests or behavior requiring tests, read
+[tests/AGENTS.md](tests/AGENTS.md) and apply the `pytest-testing` skill. Function
+tests follow [functions/AGENTS.md](functions/AGENTS.md).
+
+Run emulator E2E tests when Firestore transaction or SDK semantics change. For
+container-sensitive changes, verify the actual image with `just container-build`,
+`just container-up`, `just container-logs`, and `just container-down`.
+
+### Task guides
+
+Task-specific portable skills live under `.agents/skills/`. Keep the set small; a skill should encode a recurring,
+repository-specific workflow rather than restate this file.
+
+| Skill | Use when |
+|---|---|
+| `adversarial-testing` | Planning, writing, reviewing, debugging, or evaluating tests at any layer |
+| `edit-agent-instructions` | Reviewing or editing root or nested agent instructions |
+| `fastapi-endpoint` | Creating or changing a route and its runtime behavior |
+| `firestore-service` | Changing async Firestore persistence or transaction semantics |
+| `openapi-contract` | Changing routes, schemas, errors, media types, headers, or API docs |
+| `pytest-testing` | Writing or reviewing app, emulator, or Functions tests |
+| `readme-maintenance` | Auditing public README claims after repository changes |
+
+The five repository-specific skills cover distinct recurring boundaries and should remain separate.
+`adversarial-testing` is the shared mandatory quality layer applied alongside `pytest-testing`. Do not add generic
+lint, review, GCP, or logging skills whose workflow is already captured by `just`, this file, or product tools. The
+read-only GitHub Copilot security profile remains at `.github/agents/security-review.agent.md` because that product
+discovers custom agents there.
+
+The repository uses the standard [AGENTS.md](https://github.com/agentsmd/agents.md) format and the
+[Agent Skills specification](https://agentskills.io/specification). If a skill name, description, or default prompt
+changes, keep its metadata aligned.
 
 ## GitHub automation
 
@@ -63,21 +119,12 @@ their own projects. Do not require GCP access or deployed verification for repos
 - Keep Dependabot security alerts and automated security updates disabled. Preserve scheduled version updates;
   document upstream runtime or dependency constraints once and continue independent modernization. Do not downgrade
   Python, force incompatible dependency overrides, or add replacement alert bots to work around upstream limitations.
-- Keep public code, documentation, agent instructions, commit messages, and PR text self-contained. Do not disclose
-  private coordination repositories, paths, revisions, or discussions.
 - Keep auto-merge limited to verified Dependabot minor/patch updates behind required checks. Handle old excluded-tool
   PRs once; do not duplicate Dependabot ignore rules with package filters, enablement triggers, state queries, or
   revocation steps.
 - Reference GitHub Actions by explicit full release tags such as
   `owner/action@v1.2.3`, not full commit SHAs or floating major-version tags.
   Dependabot updates those release tags.
-
-## Mandatory skills
-
-- Use `.agents/skills/edit-agent-instructions/SKILL.md` when reviewing or editing
-  root or nested agent instructions.
-- Use `.agents/skills/adversarial-testing/SKILL.md` for every task that plans, creates, modifies, reviews, debugs, or evaluates tests. Apply it alongside any more specific framework or infrastructure testing skill.
-- Use `.agents/skills/readme-maintenance/SKILL.md` for every README audit or change. Also use it to assess README impact whenever public behavior, configuration, setup, commands, architecture, deployment, CI, or supported versions change. A README edit is required only when the audit finds a stale or missing reader-facing claim.
 
 ## Repository and tooling
 
@@ -377,16 +424,6 @@ Firebase manifests, or deployment/emulation guidance, read
 [functions/AGENTS.md](functions/AGENTS.md). Preserve private IAM invocation and
 Vertex AI quota safeguards.
 
-## Testing and validation
-
-Before changing application tests or behavior requiring tests, read
-[tests/AGENTS.md](tests/AGENTS.md) and apply the `pytest-testing` skill. Function
-tests follow [functions/AGENTS.md](functions/AGENTS.md).
-
-Run emulator E2E tests when Firestore transaction or SDK semantics change. For
-container-sensitive changes, verify the actual image with `just container-build`,
-`just container-up`, `just container-logs`, and `just container-down`.
-
 ## Documentation alignment
 
 Keep `README.md`, `GCP.md`, and `AGENTS.md` mutually consistent when behavior, configuration, commands, deployment
@@ -410,28 +447,3 @@ appropriate resource and time range, constrain queries to the service or functio
 request IDs, severity, route metadata, and trace correlation. Do not copy sensitive log payloads into code, docs, tests,
 or PR descriptions. Distinguish repository evidence from deployed evidence; do not require live cloud verification for
 example-only repository changes.
-
-## Agent skills
-
-Task-specific portable skills live under `.agents/skills/`. Keep the set small; a skill should encode a recurring,
-repository-specific workflow rather than restate this file.
-
-| Skill | Use when |
-|---|---|
-| `adversarial-testing` | Planning, writing, reviewing, debugging, or evaluating tests at any layer |
-| `edit-agent-instructions` | Reviewing or editing root or nested agent instructions |
-| `fastapi-endpoint` | Creating or changing a route and its runtime behavior |
-| `firestore-service` | Changing async Firestore persistence or transaction semantics |
-| `openapi-contract` | Changing routes, schemas, errors, media types, headers, or API docs |
-| `pytest-testing` | Writing or reviewing app, emulator, or Functions tests |
-| `readme-maintenance` | Auditing public README claims after repository changes |
-
-The five repository-specific skills cover distinct recurring boundaries and should remain separate.
-`adversarial-testing` is the shared mandatory quality layer applied alongside `pytest-testing`. Do not add generic
-lint, review, GCP, or logging skills whose workflow is already captured by `just`, this file, or product tools. The
-read-only GitHub Copilot security profile remains at `.github/agents/security-review.agent.md` because that product
-discovers custom agents there.
-
-The repository uses the standard [AGENTS.md](https://github.com/agentsmd/agents.md) format and the
-[Agent Skills specification](https://agentskills.io/specification). If a skill name, description, or default prompt
-changes, keep its metadata aligned.

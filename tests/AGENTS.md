@@ -1,8 +1,11 @@
 # Application test instructions
 
-The root `AGENTS.md` also applies. Use the local `adversarial-testing` and
-`pytest-testing` skills before changing tests. Function tests follow
-[their own guide](../functions/AGENTS.md).
+Scope: `tests/`. The root `AGENTS.md` also applies.
+Repository paths are root-relative. Run commands from the repository root unless
+another working directory is explicitly stated.
+
+Use the local `adversarial-testing` and `pytest-testing` skills before changing
+tests. Function tests follow [their own guide](../functions/AGENTS.md).
 
 ## Boundaries and assertions
 
