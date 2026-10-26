@@ -59,7 +59,11 @@ def _pagination_link(path: str, limit: int, next_cursor: str | None, prev_cursor
     "/owners/{owner}",
     response_model=GitHubOwner,
     summary="Get a GitHub owner",
-    description="Projects selected public owner fields from anonymous GitHub REST data.",
+    description=(
+        "Reads selected public owner fields anonymously from GitHub. Caller and server credentials are never "
+        "forwarded. Returns 404 for a missing owner; quota, upstream, and deadline failures use the "
+        "documented error codes. The server never retries automatically."
+    ),
     operation_id="getGitHubOwner",
 )
 async def get_github_owner(owner: OwnerPath, service: GitHubServiceDependency) -> GitHubOwner:
@@ -70,7 +74,12 @@ async def get_github_owner(owner: OwnerPath, service: GitHubServiceDependency) -
     "/owners/{owner}/repos",
     response_model=GitHubRepositoryPage,
     summary="List GitHub owner repositories",
-    description="Returns one provider-ordered public repository page.",
+    description=(
+        "Reads one provider-ordered page of public repositories without GitHub credentials. Follow next/prev "
+        "HTTP Link targets and treat cursors as opaque and scoped to this owner and effective limit. Private "
+        "repositories are never exposed; quota, upstream, and deadline failures are not retried by the "
+        "server."
+    ),
     operation_id="listGitHubOwnerRepositories",
 )
 async def list_github_owner_repositories(
@@ -94,7 +103,11 @@ async def list_github_owner_repositories(
     "/repos/{owner}/{repo}",
     response_model=GitHubRepository,
     summary="Get a GitHub repository",
-    description="Projects one public repository after a fail-closed visibility check.",
+    description=(
+        "Reads one repository anonymously after checking public visibility. Missing or non-public resources "
+        "return 404 github_not_found. Caller credentials are never forwarded. The bounded upstream request "
+        "can fail with quota, upstream, or deadline errors and is never retried automatically."
+    ),
     operation_id="getGitHubRepository",
 )
 async def get_github_repository(owner: OwnerPath, repo: RepoPath, service: GitHubServiceDependency) -> GitHubRepository:
@@ -106,7 +119,12 @@ async def get_github_repository(owner: OwnerPath, repo: RepoPath, service: GitHu
     "/repos/{owner}/{repo}/activity",
     response_model=GitHubActivityPage,
     summary="List GitHub repository activity",
-    description="Returns one newest-first activity page with provider navigation translated to cursors.",
+    description=(
+        "Reads one newest-first public activity page after a repository visibility check. Follow next/prev "
+        "HTTP Link targets; cursors are opaque and scoped to this repository and effective limit. No "
+        "authentication or mutation; upstream quota and deadline failures are returned without automatic "
+        "retries."
+    ),
     operation_id="listGitHubRepositoryActivity",
 )
 async def list_github_repository_activity(
@@ -133,7 +151,11 @@ async def list_github_repository_activity(
     "/repos/{owner}/{repo}/languages",
     response_model=GitHubLanguages,
     summary="List GitHub repository languages",
-    description="Returns byte counts sorted by count and Unicode scalar-value name.",
+    description=(
+        "Reads public repository language byte counts after a visibility check. Results are sorted by "
+        "descending byte count, then Unicode scalar-value name; this result is not paginated. No credentials "
+        "or mutation; upstream quota and deadline failures are returned without automatic retries."
+    ),
     operation_id="listGitHubRepositoryLanguages",
 )
 async def list_github_repository_languages(
@@ -149,7 +171,12 @@ async def list_github_repository_languages(
     "/repos/{owner}/{repo}/tags",
     response_model=GitHubTagPage,
     summary="List GitHub repository tags",
-    description="Returns one provider-ordered tag page with translated navigation.",
+    description=(
+        "Reads one provider-ordered public tag page after a repository visibility check. Follow next/prev "
+        "HTTP Link targets and keep cursors scoped to this repository and effective limit. Tags are provider "
+        "data, not a guarantee of release versions. No credentials or mutation; the server never retries "
+        "automatically."
+    ),
     operation_id="listGitHubRepositoryTags",
 )
 async def list_github_repository_tags(

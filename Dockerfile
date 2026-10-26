@@ -71,6 +71,7 @@ ENV VIRTUAL_ENV=/app/.venv \
 WORKDIR /app
 COPY --from=builder --chown=1001:1001 /app/.venv /app/.venv
 COPY --from=builder --chown=1001:1001 /app/app /app/app
+COPY --chown=1001:1001 llms.txt llms-full.txt ./
 
 # Switch to non-root user (numeric UID for Kubernetes runAsNonRoot policy compatibility)
 USER 1001:1001

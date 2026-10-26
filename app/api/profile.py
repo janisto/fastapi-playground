@@ -53,7 +53,12 @@ def _map_profile_error(error: Exception) -> PortableProblem:
     response_model=Profile,
     status_code=status.HTTP_201_CREATED,
     summary="Create the current profile",
-    description="Atomically creates the authenticated principal's sole profile.",
+    description=(
+        "Requires a Firebase ID token and atomically creates that principal's sole profile. Returns 201 with "
+        "Location and equal creation/update timestamps; an existing profile returns 409 profile_exists. After "
+        "an uncertain outcome, read and reconcile state before retrying; an existing profile does not prove "
+        "the original request succeeded."
+    ),
     operation_id="createProfile",
     openapi_extra=_CREATE_BODY,
 )
@@ -77,7 +82,11 @@ async def create_profile(
     "",
     response_model=Profile,
     summary="Get the current profile",
-    description="Reads the authenticated principal's profile without mutation.",
+    description=(
+        "Requires a Firebase ID token and returns only the verified principal's profile without mutation. A "
+        "missing profile returns 404 profile_not_found; this read can help reconcile an uncertain write but "
+        "cannot prove which request produced the current state."
+    ),
     operation_id="getProfile",
 )
 async def get_profile(current_user: CurrentUser, profile_service: ProfileServiceDependency) -> Profile:
@@ -92,7 +101,12 @@ async def get_profile(current_user: CurrentUser, profile_service: ProfileService
     "",
     response_model=Profile,
     summary="Update the current profile",
-    description="Atomically applies a non-empty profile patch and preserves no-op timestamps.",
+    description=(
+        "Requires a Firebase ID token and atomically applies a non-empty patch to that principal's existing "
+        "profile. Omitted fields are preserved; null is not deletion. Explicit false is accepted for "
+        "marketingOptIn. Unchanged values perform no write and preserve updatedAt. After an uncertain "
+        "outcome, read and reassess before replaying a patch that could overwrite intervening changes."
+    ),
     operation_id="updateProfile",
     openapi_extra=_UPDATE_BODY,
 )
@@ -114,7 +128,11 @@ async def update_profile(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
     summary="Delete the current profile",
-    description="Atomically removes the authenticated principal's existing profile.",
+    description=(
+        "Requires a Firebase ID token and atomically deletes that principal's profile. Returns an empty 204, "
+        "or 404 profile_not_found when absent. Repeated deletion has idempotent effects but does not replay "
+        "the first response or protect a profile recreated between attempts."
+    ),
     operation_id="deleteProfile",
 )
 async def delete_profile(current_user: CurrentUser, profile_service: ProfileServiceDependency) -> Response:

@@ -77,7 +77,7 @@ class Settings(BaseSettings):
         description="Allowed CORS origins (JSON array or comma-separated)",
     )
     cors_methods: list[str] = Field(
-        default=["GET", "POST", "PATCH", "DELETE"],
+        default=["GET", "HEAD", "POST", "PATCH", "DELETE"],
         description="Allowed CORS methods",
     )
     cors_headers: list[str] = Field(

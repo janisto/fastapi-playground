@@ -3,13 +3,12 @@ Route-aware ASGI request policy and streaming body limit.
 """
 
 import re
-from typing import cast
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.content_negotiation import strip_http_ows
 from app.core.portable_http import validate_closed_query
-from app.core.problems import PortableProblem, render_problem
+from app.core.problems import PortableProblem, render_request_problem
 
 MAX_REQUEST_BODY_BYTES = 1_000_000
 _BODY_ROUTES = {("POST", "/v1/hello"), ("POST", "/v1/profile"), ("PATCH", "/v1/profile")}
@@ -19,6 +18,9 @@ _EXACT_METHODS: dict[str, frozenset[str]] = {
     "/v1/items": frozenset({"GET"}),
     "/v1/profile": frozenset({"GET", "POST", "PATCH", "DELETE"}),
     "/openapi.json": frozenset({"GET"}),
+    "/.well-known/api-catalog": frozenset({"GET", "HEAD"}),
+    "/llms.txt": frozenset({"GET"}),
+    "/llms-full.txt": frozenset({"GET"}),
 }
 _GITHUB_PATTERNS = (
     re.compile(r"/v1/github/owners/[^/]+\Z"),
@@ -62,17 +64,12 @@ def _allowed_query(path: str) -> frozenset[str]:
     return frozenset[str]()
 
 
-def _accept(scope: Scope) -> str:
-    headers = cast("list[tuple[bytes, bytes]]", scope.get("headers", []))
-    return ",".join(value.decode("latin1") for key, value in headers if key.lower() == b"accept")
-
-
 async def _empty_receive() -> Message:
     return {"type": "http.request", "body": b"", "more_body": False}
 
 
 async def _send_problem(scope: Scope, send: Send, problem: PortableProblem) -> None:
-    response = render_problem(_accept(scope), problem)
+    response = render_request_problem(scope, problem)
     await response(scope, _empty_receive, send)
 
 

@@ -44,7 +44,9 @@ For dependency upgrades, run the affected suites with warnings treated as errors
 warning filter limited to its specific message and emitting module, and document when it can be removed. Do not replace
 model or transport boundary validation with unchecked casts to silence new type diagnostics.
 
-Emulator fixtures use a named Firebase app with anonymous credentials and the synthetic `demo-test` project. Discard
+Emulator fixtures call the production Firebase initializer with both localhost emulators and `demo-test`, rather
+than injecting an SDK credential that can hide a broken local initialization path. Verify that ADC is never queried
+and production or unsafe emulator selectors fail closed. Discard
 SDK-cached clients between TestClient and pytest event loops; emulator tests must not depend on local ADC or account
 access.
 

@@ -251,7 +251,13 @@ def _success_response(
     path: str,
 ) -> OpenAPIResponse:
     original = generated.get(str(status), {})
-    headers = deepcopy(_COMMON_HEADERS)
+    headers: dict[str, Any] = deepcopy(_COMMON_HEADERS)
+    if path == "/health":
+        headers["Link"] = {
+            "description": "RFC 8288 api-catalog and service-desc links to the catalog and OpenAPI document.",
+            "required": True,
+            "schema": {"type": "string"},
+        }
     if path in _PAGINATED_PATHS:
         headers["Link"] = {"description": "Optional RFC 8288 next and previous links.", "schema": {"type": "string"}}
     if path == "/v1/profile" and status == _HTTP_CREATED:

@@ -1,0 +1,20 @@
+# FastAPI Playground
+
+> A Python reference REST API with public greetings, a fixed item catalog, anonymous GitHub projections, and Firebase-authenticated profiles stored in Firestore. JSON is the default; explicit negotiation also supports CBOR.
+
+This example is not deployed. Run it locally; do not assume a hosted API or a GCP account is available. From a checkout, run `just install`, then `just serve` for public routes at `http://127.0.0.1:8080`. Profile requests also need `just emulators` in another terminal. Local profiles use the synthetic `demo-test` project and require no Google Application Default Credentials (ADC).
+
+Set `BASE_URL` to the running application's origin. Fetch `$BASE_URL/.well-known/api-catalog` to discover its schema, guides, and health route, or `$BASE_URL/openapi.json` for the exact OpenAPI 3.1 contract. Catalog references beginning with `/` resolve against that origin; retain the retrieval URL if you download the catalog. This index covers the application's origin-root paths, including `/v1`. It grants no access to protected routes.
+
+## API usage
+
+- [Complete API usage guide](llms-full.txt): Curated, self-contained reference for broad or offline use, including local credentials, requests, pagination, profile CRUD, failures, and retry decisions. Read only the relevant sections for a focused task.
+- [Human onboarding](https://github.com/janisto/fastapi-playground/blob/main/README.md): Installation, repository commands, and container use.
+
+## Reference implementation
+
+- [Application composition](https://github.com/janisto/fastapi-playground/blob/main/app/main.py): Registered routers, middleware, and local OpenAPI generation.
+- [HTTP routes](https://github.com/janisto/fastapi-playground/tree/main/app/api): Greetings, items, profiles, GitHub projections, and public discovery.
+- [Authentication](https://github.com/janisto/fastapi-playground/blob/main/app/auth/firebase.py): Firebase ID-token verification and current-principal ownership.
+- [Profile persistence](https://github.com/janisto/fastapi-playground/blob/main/app/services/profile/service.py): Atomic Firestore creation, patching, timestamps, and deletion.
+- [OpenAPI generation](https://github.com/janisto/fastapi-playground/blob/main/app/core/openapi.py): Structured operation, schema, error, and response-header metadata.

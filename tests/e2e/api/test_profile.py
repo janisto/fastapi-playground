@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 from fastapi.testclient import TestClient
+from pytest_mock import MockerFixture
 
 from app.core.firebase import close_async_firestore_client
 from app.exceptions import ProfileAlreadyExistsError, ProfileDependencyError, ProfileNotFoundError
@@ -95,3 +96,38 @@ async def test_concurrent_emulator_operations_preserve_atomicity_and_recover_fro
             await service.delete_profile("race-user")
     finally:
         close_async_firestore_client()
+
+
+def test_real_emulator_token_drives_profile_crud_without_adc(
+    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
+) -> None:
+    import httpx2
+
+    from app.main import app
+
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/must-not-read/obsolete-key.json")
+    adc = mocker.patch("google.auth.default", side_effect=AssertionError("ADC lookup"))
+    signup = httpx2.post(
+        "http://127.0.0.1:7010/identitytoolkit.googleapis.com/v1/accounts:signUp",
+        params={"key": "demo-test"},
+        json={"returnSecureToken": True},
+        timeout=5,
+    )
+    assert signup.status_code == 200
+    identity = signup.json()
+    headers = {"Authorization": f"Bearer {identity['idToken']}"}
+    with TestClient(app) as client:
+        assert client.get(PROFILE_PATH).status_code == 401
+        created = client.post(PROFILE_PATH, json=_payload("Local"), headers=headers)
+        assert created.status_code == 201
+        assert created.json()["id"] == identity["localId"]
+        assert client.get(PROFILE_PATH, headers=headers).json() == created.json()
+        changed = client.patch(PROFILE_PATH, json={"marketingOptIn": True}, headers=headers)
+        assert changed.status_code == 200
+        assert changed.json()["marketingOptIn"] is True
+        assert changed.json()["createdAt"] == created.json()["createdAt"]
+        assert changed.json()["updatedAt"] > created.json()["updatedAt"]
+        assert client.delete(PROFILE_PATH, headers=headers).status_code == 204
+        assert client.get(PROFILE_PATH, headers=headers).json()["code"] == "profile_not_found"
+    adc.assert_not_called()

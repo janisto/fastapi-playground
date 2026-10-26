@@ -24,6 +24,8 @@ only. The [deployment instructions](GCP.md) describe optional manual setup in a 
 - Strict JSON and CBOR parsing and RFC 9110 content negotiation using `Content-Type`, `Content-Encoding`, and `Accept`
 - Cursor-based pagination with [RFC 8288 Link](https://datatracker.ietf.org/doc/html/rfc8288) headers
 - Runtime [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) discovery at `/openapi.json`, with Swagger UI and ReDoc
+- RFC 9727 API catalog and curated [API usage guides](llms.txt), served from the same build
+- Credential-free local profile usage with Auth and Firestore emulators in `demo-test`
 - Firebase Authentication with ID token verification and revocation checks
 - Atomic Firestore profile creation, patching, and deletion
 - Six public GitHub operations through a fixed-origin, anonymous, bounded HTTP client
@@ -88,7 +90,8 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
   representation-bearing endpoint executes. A 204 response has no representation, so `Accept` does not gate it.
 - Schema discovery returns only `application/schema+json`. Strict clients must accept that media type or a matching
   wildcard; `application/json` does not match a distinct `+json` subtype.
-- Errors keep their original status. They use RFC 9457 `application/problem+json` by default, or registered
+- Errors keep their original status. Consumer guide and catalog errors always use JSON Problem Details; other API
+  errors use RFC 9457 `application/problem+json` by default, or registered
   `application/cbor` when explicitly preferred. Unsupported error preferences fall back to JSON; the unregistered
   `application/problem+cbor` media type is not implemented.
 - JSON request bodies accept the base media type or one `charset=utf-8` parameter. CBOR accepts no media parameters;
@@ -130,11 +133,15 @@ just install        # Install dependencies via uv
 just serve          # Start dev server at http://127.0.0.1:8080
 ```
 
-Public routes, OpenAPI discovery, and unit/integration tests require no GCP account. For local Firestore E2E tests,
-run `just emulators` and `just test-e2e`; both use the synthetic `demo-test` project. Hosted profile operations require
-`FIREBASE_PROJECT_ID` and Application Default Credentials for your own project.
+Local use requires no GCP account or ADC. `just serve` explicitly selects development mode, the synthetic
+`demo-test` project, and localhost Auth/Firestore emulators, overriding stale cloud selectors in a local `.env`.
+Public routes work without the emulators; profile requests need `just emulators` in a second terminal. Run
+`just test-e2e` for real SDK and Firestore transaction validation. Anonymous SDK credentials are permitted only
+with both loopback emulator endpoints in a non-production `demo-` project. Production rejects emulator settings.
+Optional future hosted profile operations use the reader's own Firebase project and server credentials.
 
 Then visit:
+
 - `http://localhost:8080/health` - service health probe
 - `http://localhost:8080/api-docs` - interactive API explorer (Swagger UI)
 - `http://localhost:8080/api-redoc` - API documentation (ReDoc)
@@ -143,6 +150,24 @@ Sample request:
 ```bash
 curl -s localhost:8080/health | jq
 ```
+
+## API discovery and usage
+
+Start at `GET /.well-known/api-catalog` when you know only the application origin. Its RFC 9264 linkset points to
+`/openapi.json`, both usage guides, and `/health`; resolve root-relative targets against the catalog retrieval URL.
+Catalog HEAD returns matching metadata without a body. The catalog uses
+`application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"`, not `application/json`.
+
+[llms.txt](llms.txt) is a concise index and [llms-full.txt](llms-full.txt) is the complete curated API usage guide,
+including local test tokens, examples, pagination, profile ownership, and uncertain-write recovery. The exact files
+are served at those root paths as `text/plain; charset=utf-8` and included in the container image. The guides are
+maintained prose, not generated copies of OpenAPI or source files.
+
+Health advertises catalog and OpenAPI links for JSON and CBOR. OpenAPI, the full guide, catalog GET/HEAD, Swagger UI,
+and ReDoc advertise the root index using an HTTP `Link` with `rel="describedby"; type="text/plain"`. All discovery
+is public, local to the build, and independent of Firebase, persistence, or GitHub. Query parameters are rejected;
+unsupported methods and negotiation return 405 and 406 respectively. Catalog and guide errors stay JSON Problem
+Details, and HEAD never returns a body. No repository directory is exposed.
 
 ## Environment Variables
 
@@ -157,9 +182,11 @@ cp .env.example .env
 | `PORT` | Server listen port | `8080` |
 | `ENVIRONMENT` | Runtime mode; `production` enables HSTS and strips 5xx response extensions | `production` |
 | `LOG_LEVEL` | Application log verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`) | `INFO` |
-| `FIREBASE_PROJECT_ID` | Firebase/GCP project ID | - |
+| `FIREBASE_PROJECT_ID` | Firebase project ID; `just serve` selects the local synthetic project | `demo-test` in `.env.example` |
+| `FIREBASE_AUTH_EMULATOR_HOST` | Local Auth emulator endpoint, without a scheme | `127.0.0.1:7010` in local setup |
+| `FIRESTORE_EMULATOR_HOST` | Local Firestore emulator endpoint, without a scheme | `127.0.0.1:7030` in local setup |
 | `FIRESTORE_DATABASE` | Firestore database ID | `(default)` |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Service account JSON path (local dev) | - |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Optional credential-file path for future hosted Firebase use | - |
 | `CORS_ORIGINS` | JSON array or comma-separated explicit allowed origins; `*` is rejected | - |
 
 ### Firebase and Cloud Logging MCP clients
@@ -183,6 +210,7 @@ app/
     profile.py         # Profile CRUD (Firebase Auth protected)
     github.py          # Public GitHub projections
     openapi_document.py  # Local runtime OpenAPI discovery
+    discovery.py       # Same-build usage guides and RFC 9727 catalog
   auth/                # Firebase authentication
     firebase.py        # Token verification, FirebaseUser
   core/                # Configuration and infrastructure
@@ -250,6 +278,9 @@ All routes use paths without trailing slashes (`redirect_slashes=False`).
 | GET | `/v1/github/repos/{owner}/{repo}/languages` | No | List projected repository languages |
 | GET | `/v1/github/repos/{owner}/{repo}/tags` | No | List projected repository tags |
 | GET | `/openapi.json` | No | Retrieve the runtime OpenAPI 3.1 document |
+| GET, HEAD | `/.well-known/api-catalog` | No | Discover the local schema, guides, and health |
+| GET | `/llms.txt` | No | Selective API usage index |
+| GET | `/llms-full.txt` | No | Complete curated API usage guide |
 | GET | `/schemas/{Model}.json` | No | Optional standalone JSON Schema extension |
 
 Protected routes require `Authorization: Bearer <Firebase ID token>`. GitHub routes are deliberately anonymous: the
@@ -277,7 +308,7 @@ just cov                # Generate HTML and JSON coverage reports
 
 | Command | Description |
 |---------|-------------|
-| `just serve` | Start dev server with hot reload |
+| `just serve` | Start the local demo server with hot reload and emulator selectors |
 | `just browser` | Open dev server in browser |
 | `just lint` | Check Ruff linting and formatting |
 | `just workflow-check` | Check GitHub Actions with actionlint 1.7.12 and locked, pedantic offline zizmor |
@@ -326,9 +357,11 @@ docker build -t fastapi-playground:latest .
 docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
 ```
 
-Public container routes require no credentials. Profile requests require Application Default Credentials or a
-service-account credential mounted into the container. Credential mounting is explicit; pass an existing absolute or
-repository-relative file as the third positional argument:
+Public container routes and discovery require no credentials. Use host-based `just serve` plus `just emulators` for
+local profile examples; a container's loopback addresses refer to that container, not the host emulator processes.
+For an optional future hosted Firebase setup, unset both emulator variables and configure your own project and
+server credentials. Credential mounting is explicit; pass an existing absolute or repository-relative file as the
+third positional argument:
 
 ```bash
 just container-up fastapi-playground:latest fastapi-playground service_account.json

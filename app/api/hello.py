@@ -13,7 +13,7 @@ router = APIRouter(prefix=f"{API_V1_PREFIX}/hello", tags=["Hello"], route_class=
     "",
     response_model=Greeting,
     summary="Get the default greeting",
-    description="Returns the exact world greeting without dependencies.",
+    description="Returns the default greeting without authentication, external dependencies, or mutation.",
     operation_id="getHello",
 )
 async def get_hello() -> Greeting:
@@ -26,7 +26,10 @@ async def get_hello() -> Greeting:
     response_model=Greeting,
     status_code=status.HTTP_200_OK,
     summary="Create a personalized greeting",
-    description="Validates a name and returns it verbatim in a greeting.",
+    description=(
+        "Validates one name and returns it verbatim in a personalized greeting. Public and computation-only: "
+        "repeating the same valid POST has no persisted side effect."
+    ),
     operation_id="createHello",
     openapi_extra={
         "requestBody": {

@@ -4,6 +4,7 @@ Unit tests for Firebase initialization and configuration.
 
 import logging
 from collections.abc import Generator
+from typing import Literal
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,10 +20,12 @@ from app.core.firebase import (
 
 
 @pytest.fixture(autouse=True)
-def reset_global_state() -> Generator[None]:
+def reset_global_state(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
     """
     Reset global Firebase state before and after each test.
     """
+    monkeypatch.delenv("FIREBASE_AUTH_EMULATOR_HOST", raising=False)
+    monkeypatch.delenv("FIRESTORE_EMULATOR_HOST", raising=False)
     original_app = firebase_mod._firebase_app
     original_async_client = firebase_mod._async_firestore_client
 
@@ -240,3 +243,96 @@ class TestCloseAsyncFirestoreClient:
         close_async_firestore_client()
 
         assert firebase_mod._async_firestore_client is None
+
+
+@pytest.mark.parametrize(
+    ("auth_host", "firestore_host", "environment", "project"),
+    [
+        ("127.0.0.1:7010", "127.0.0.1:7030", "production", "demo-test"),
+        ("127.0.0.1:7010", "127.0.0.1:7030", "test", "real-project"),
+        (None, "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1:7010", None, "test", "demo-test"),
+        ("", "127.0.0.1:7030", "test", "demo-test"),
+        ("example.test:7010", "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1:7010", "192.0.2.1:7030", "test", "demo-test"),
+        ("localhost:7010", "localhost.example.test:7030", "test", "demo-test"),
+        ("http://127.0.0.1:7010", "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1:7010/path", "127.0.0.1:7030", "test", "demo-test"),
+        ("user@127.0.0.1:7010", "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1:7010?secret", "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1:7010#fragment", "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1", "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1:0", "127.0.0.1:7030", "test", "demo-test"),
+        ("127.0.0.1:65536", "127.0.0.1:7030", "test", "demo-test"),
+    ],
+)
+def test_unsafe_or_incomplete_emulators_fail_before_credentials_or_sdk_initialization(
+    monkeypatch: pytest.MonkeyPatch,
+    mocker: MockerFixture,
+    auth_host: str | None,
+    firestore_host: str | None,
+    environment: Literal["test", "production"],
+    project: str,
+) -> None:
+    from app.core.config import Settings
+
+    for name, value in (("FIREBASE_AUTH_EMULATOR_HOST", auth_host), ("FIRESTORE_EMULATOR_HOST", firestore_host)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    mocker.patch(
+        "app.core.firebase.get_settings",
+        return_value=Settings(
+            _env_file=None,
+            environment=environment,
+            firebase_project_id=project,
+            google_application_credentials="obsolete-key.json",
+        ),
+    )
+    initialize = mocker.patch("app.core.firebase.firebase_admin.initialize_app")
+    certificate = mocker.patch("app.core.firebase.credentials.Certificate")
+    with pytest.raises(ValueError, match="paired loopback"):
+        initialize_firebase()
+    initialize.assert_not_called()
+    certificate.assert_not_called()
+    assert firebase_mod._firebase_app is None
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "[::1]"])
+def test_local_demo_uses_real_sdk_anonymous_credentials_without_adc(
+    monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture, host: str
+) -> None:
+    import firebase_admin
+    from google.auth.credentials import AnonymousCredentials
+
+    from app.core.config import Settings
+
+    monkeypatch.setenv("FIREBASE_AUTH_EMULATOR_HOST", f"{host}:7010")
+    monkeypatch.setenv("FIRESTORE_EMULATOR_HOST", f"{host}:7030")
+    mocker.patch(
+        "app.core.firebase.get_settings",
+        return_value=Settings(
+            _env_file=None,
+            environment="test",
+            firebase_project_id="demo-test",
+            google_application_credentials="obsolete-key.json",
+        ),
+    )
+    adc = mocker.patch("google.auth.default", side_effect=AssertionError("ADC lookup"))
+    certificate = mocker.patch(
+        "app.core.firebase.credentials.Certificate", side_effect=AssertionError("credential file")
+    )
+    initialize_firebase()
+    firebase_app = get_firebase_app()
+    try:
+        assert firebase_app.project_id == "demo-test"
+        assert isinstance(firebase_app.credential.get_credential(), AnonymousCredentials)
+        firestore = get_async_firestore_client()
+        assert firestore.project == "demo-test"
+        assert isinstance(firestore._credentials, AnonymousCredentials)
+        adc.assert_not_called()
+        certificate.assert_not_called()
+    finally:
+        close_async_firestore_client()
+        firebase_admin.delete_app(firebase_app)
