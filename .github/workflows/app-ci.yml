@@ -25,7 +25,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: '0.13.1'
           python-version: '3.15'
@@ -67,7 +67,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.0
+        uses: astral-sh/setup-uv@v10.3.2
         with:
           version: '0.13.1'
           python-version: '3.15'
@@ -178,7 +178,7 @@ jobs:
           persist-credentials: false
 
       - name: Run zizmor
-        uses: zizmorcore/zizmor-action@v0.7.1
+        uses: zizmorcore/zizmor-action@v0.8.0
         env:
           ZIZMOR_OFFLINE: 'true'
         with:
