@@ -100,6 +100,10 @@ check: workflow-check lint typing typing-functions test test-functions check-fun
 # --no-server-header: Hide server fingerprinting (OWASP recommendation)
 [group('run')]
 serve:
+    ENVIRONMENT=development \
+    FIREBASE_PROJECT_ID=demo-test \
+    FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:7010 \
+    FIRESTORE_EMULATOR_HOST=127.0.0.1:7030 \
     uv run {{ ARGS_SERVE }} uvicorn app.main:app --reload --port {{ PORT }} --no-server-header --no-access-log
 
 # Send HTTP request to development server

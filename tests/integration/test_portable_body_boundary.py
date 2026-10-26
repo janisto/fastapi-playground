@@ -105,6 +105,10 @@ async def test_streamed_profile_body_is_not_read_before_authentication() -> None
         ("GET", "/v1/hello", 200),
         ("GET", "/v1/items", 200),
         ("GET", "/openapi.json", 200),
+        ("GET", "/llms.txt", 200),
+        ("GET", "/llms-full.txt", 200),
+        ("GET", "/.well-known/api-catalog", 200),
+        ("HEAD", "/.well-known/api-catalog", 200),
         ("GET", "/v1/profile", 401),
         ("DELETE", "/v1/profile", 401),
         ("GET", "/v1/github/owners/-bad", 422),
@@ -235,3 +239,21 @@ async def test_non_ows_representation_fields_fail_before_profile_mutation(
     assert json.loads(body)["code"] == expected_code
     assert calls == expected_reads
     profile_service.update_profile.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("query", "accept", "status"),
+    [(b"x=1", b"application/cbor", 400), (b"", b"application/cbor", 406), (b"", b"application/linkset+json", 200)],
+)
+async def test_catalog_head_sends_no_asgi_body_and_never_reads_content(
+    query: bytes, accept: bytes, status: int
+) -> None:
+    scope = _scope("HEAD", "/.well-known/api-catalog", headers=[(b"accept", accept)])
+    scope["query_string"] = query
+    result, headers, body, calls = await _request(scope, [])
+    assert result == status
+    assert body == b""
+    assert int(headers["content-length"]) > 0
+    assert calls == 0
+    if status != 200:
+        assert headers["content-type"] == "application/problem+json"

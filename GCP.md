@@ -183,7 +183,7 @@ These settings are defined in `app/core/config.py`:
 |---|---:|---|---|
 | `FIREBASE_PROJECT_ID` | Profile API | none | Firebase and Firestore project ID; checked when a protected route needs Firebase |
 | `FIRESTORE_DATABASE` | No | `(default)` | Optional named Firestore database |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Local only | unset | Explicit credential-file path; omit on Cloud Run |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Optional hosted setup | unset | Explicit credential-file path; omit on Cloud Run and in local emulator use |
 | `ENVIRONMENT` | No | `production` | `development`, `test`, or `production` |
 | `LOG_LEVEL` | No | `INFO` | Application log verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` |
 | `CORS_ORIGINS` | Browser clients only | empty | JSON array or comma-separated explicit origins; wildcard is rejected |
@@ -212,14 +212,20 @@ just serve
 
 The API documentation is available at `http://127.0.0.1:8080/api-docs`; `/health` is a dependency-free liveness
 endpoint and does not verify Firebase, Firestore, GitHub, or Vertex AI readiness. Public routes and `/openapi.json`
-start without initializing Firebase. Configure `FIREBASE_PROJECT_ID` and ADC before exercising a profile operation.
+start without initializing Firebase. `just serve` selects only development mode, `demo-test`, and localhost Auth and
+Firestore emulators. Start `just emulators` in another terminal for profile requests; no ADC or GCP account is needed.
+The application uses anonymous SDK credentials only when both emulator endpoints are loopback host/port pairs,
+the project starts with `demo-`, and the environment is not production. Invalid or incomplete emulator settings fail
+at the Firebase boundary; public discovery remains available. Hosted setup is separate: use your own project and
+credentials with both emulator variables unset. `just serve` deliberately cannot select that hosted workflow.
+See [the API usage guide](llms-full.txt) for a local ID token and profile CRUD examples.
 
 The application-level inbound request limit is fixed by the portable API contract at 1,000,000 bytes for POST and
 PATCH. It is intentionally not environment-configurable. Configure Cloud Run and any gateway so they do not reject a
 smaller body before the application can return its portable 413 response.
 
-Unit and integration tests mock Auth and Firestore. The E2E profile test overrides authentication but uses the local
-Firestore emulator for real transaction behavior:
+Unit and integration tests isolate Auth and Firestore. E2E tests use the production Firebase initializer and local
+emulators for real SDK and transaction behavior, including a real Auth emulator token through profile CRUD:
 
 ```bash
 # Terminal 1
@@ -395,9 +401,9 @@ Production checklist:
 
 | Symptom | Likely cause | Check |
 |---|---|---|
-| Profile request returns 503 | Firebase or Firestore dependency is unavailable | Project ID, ADC, database name, network, and `roles/datastore.user` |
+| Profile request returns 503 | Firebase or Firestore dependency is unavailable | Local: both emulators, loopback endpoints, non-production mode, and a `demo-` project. Future hosted setup: own project, credentials, database, network, and `roles/datastore.user` |
 | Auth returns 401 | Missing, expired, revoked, disabled-user, or invalid token | Bearer token and `WWW-Authenticate` response header |
-| Auth returns 503 | Firebase verification dependency unavailable | ADC, network access, public-key retrieval, and `Retry-After` |
+| Auth returns 503 | Firebase verification dependency unavailable | Local: Auth emulator and guarded demo configuration. Future hosted setup: credentials, network, public-key retrieval, and `Retry-After` |
 | GitHub request returns 429 | Anonymous GitHub quota exhausted | `Retry-After` and optional `X-RateLimit-Reset`; do not add a token as a workaround |
 | GitHub request returns 502/504 | Upstream contract, transport, size, redirect, or deadline failure | Correlated safe access log; provider diagnostics stay out of public responses |
 | Function returns 400 | Unsupported `topic` query value | Use `work`, `tech`, `food`, or `relationships` |

@@ -23,6 +23,9 @@ task-specific skills.
 
 - Require every named path, command, route, default, and environment variable to exist.
 - Describe `/health` as dependency-free liveness, not Firebase readiness.
+- Keep the catalog and same-build usage-guide routes accurate; use `llms-full.txt` for detailed API examples.
+- Describe `just serve` as the credential-free local demo workflow with both loopback emulators. Keep future hosted
+  credential requirements separate; local setup requires no GCP access.
 - State that JSON is the default and CBOR requires explicit `Accept` negotiation.
 - State that public JSON and CBOR domain properties use exact lower camel case names while source and persisted
   Firestore fields use explicit `snake_case`; query and path parameters use their exact contract spelling.

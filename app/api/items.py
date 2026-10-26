@@ -18,7 +18,11 @@ router = APIRouter(prefix=f"{API_V1_PREFIX}/items", tags=["Items"], route_class=
     "",
     response_model=ItemPage,
     summary="List catalog items",
-    description="Filters and cursor-paginates the fixed portable catalog.",
+    description=(
+        "Reads the fixed catalog without authentication or mutation. Optionally filter by category and follow "
+        "next/prev HTTP Link targets. Cursors are opaque and scoped to this operation, effective limit, and "
+        "filter; invalid or stale cursors return 400."
+    ),
     operation_id="listItems",
 )
 async def list_items(request: Request, response: Response) -> ItemPage:

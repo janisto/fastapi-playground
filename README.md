@@ -2,12 +2,12 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/janisto/fastapi-playground/app-ci.yml?branch=main&label=CI)](https://github.com/janisto/fastapi-playground/actions/workflows/app-ci.yml)
 [![Lint](https://img.shields.io/github/actions/workflow/status/janisto/fastapi-playground/app-lint.yml?branch=main&label=lint)](https://github.com/janisto/fastapi-playground/actions/workflows/app-lint.yml)
-[![Python 3.15+](https://img.shields.io/badge/python-3.15%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Python 3.15](https://img.shields.io/badge/python-3.15-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/github/license/janisto/fastapi-playground)](LICENSE)
 
-A FastAPI reference application for the accepted portable playground API. It demonstrates strict JSON and CBOR
-contracts, Firebase-authenticated Firestore profile lifecycle operations, a credential-free GitHub REST projection,
-and a modern Python workflow using `uv` and `just`.
+A FastAPI reference application demonstrating strict JSON and CBOR contracts, Firebase-authenticated Firestore
+profile lifecycle operations, a credential-free GitHub REST projection, and a modern Python workflow using `uv`
+and `just`.
 
 This example is not deployed. GCP is a possible future deployment target; pushes, pull requests, and merges run CI
 only. The [deployment instructions](GCP.md) describe optional manual setup in a project you control.
@@ -24,6 +24,8 @@ only. The [deployment instructions](GCP.md) describe optional manual setup in a 
 - Strict JSON and CBOR parsing and RFC 9110 content negotiation using `Content-Type`, `Content-Encoding`, and `Accept`
 - Cursor-based pagination with [RFC 8288 Link](https://datatracker.ietf.org/doc/html/rfc8288) headers
 - Runtime [OpenAPI 3.1](https://spec.openapis.org/oas/v3.1.0) discovery at `/openapi.json`, with Swagger UI and ReDoc
+- RFC 9727 API catalog and curated [API usage guides](llms.txt), served from the same build
+- Credential-free local profile usage with Auth and Firestore emulators in `demo-test`
 - Firebase Authentication with ID token verification and revocation checks
 - Atomic Firestore profile creation, patching, and deletion
 - Six public GitHub operations through a fixed-origin, anonymous, bounded HTTP client
@@ -77,7 +79,7 @@ Validation errors (422) include detailed field locations:
 ```
 
 Validation documents identify only application-owned structure; they do not echo rejected values or unknown
-attacker-controlled names. Standalone JSON Schema routes are a sibling extension. When a response advertises one, it
+attacker-controlled names. Standalone JSON Schema routes are an optional extension. When a response advertises one, it
 uses the registered lowercase relation, for example `Link: </schemas/Profile.json>; rel="describedby"`.
 
 ### Content Negotiation
@@ -88,7 +90,8 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
   representation-bearing endpoint executes. A 204 response has no representation, so `Accept` does not gate it.
 - Schema discovery returns only `application/schema+json`. Strict clients must accept that media type or a matching
   wildcard; `application/json` does not match a distinct `+json` subtype.
-- Errors keep their original status. They use RFC 9457 `application/problem+json` by default, or registered
+- Errors keep their original status. Consumer guide and catalog errors always use JSON Problem Details; other API
+  errors use RFC 9457 `application/problem+json` by default, or registered
   `application/cbor` when explicitly preferred. Unsupported error preferences fall back to JSON; the unregistered
   `application/problem+cbor` media type is not implemented.
 - JSON request bodies accept the base media type or one `charset=utf-8` parameter. CBOR accepts no media parameters;
@@ -112,41 +115,68 @@ uses the registered lowercase relation, for example `Link: </schemas/Profile.jso
 
 ## Requirements
 
-- Python 3.15+ (the local environment and container use 3.15.0)
+- Python 3.15 (the selected local and container patch is 3.15.0)
 - [uv](https://docs.astral.sh/uv/) package manager (the minimum supported version is enforced in both project manifests)
 - [just](https://github.com/casey/just) 1.59.0 command runner
 - [actionlint](https://github.com/rhysd/actionlint) 1.7.12 for local workflow validation
 - Node.js 24 LTS and `npx` only when running Firebase tooling
 - [Firebase CLI](https://firebase.google.com/docs/cli) 15.34.0, selected by `just emulators`, for local Auth and Firestore emulators
-- A project you control with Authentication and Firestore enabled when using hosted profile operations
+- A Java JDK for the Firestore emulator; see the [Emulator Suite prerequisites](https://firebase.google.com/docs/emulator-suite/install_and_configure#install_the_local_emulator_suite)
+
+Local application use and all test tiers need no GCP account or ADC. Real Vertex AI calls and any future hosted
+setup are separate, optional workflows that require the reader's own project and permissions. The independent
+[Functions example](functions/README.md) has its own environment and provider-support constraints.
 
 ## Quick Start
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/janisto/fastapi-playground.git
 cd fastapi-playground
 cp .env.example .env
 just install        # Install dependencies via uv
 just serve          # Start dev server at http://127.0.0.1:8080
 ```
 
-Public routes, OpenAPI discovery, and unit/integration tests require no GCP account. For local Firestore E2E tests,
-run `just emulators` and `just test-e2e`; both use the synthetic `demo-test` project. Hosted profile operations require
-`FIREBASE_PROJECT_ID` and Application Default Credentials for your own project.
+Local use requires no GCP account or ADC. `just serve` explicitly selects development mode, the synthetic
+`demo-test` project, and localhost Auth/Firestore emulators, overriding stale cloud selectors in a local `.env`.
+Public routes work without the emulators; profile requests need `just emulators` in a second terminal. Run
+`just test-e2e` for real SDK and Firestore transaction validation. Anonymous SDK credentials are permitted only
+with both loopback emulator endpoints in a non-production `demo-` project. Production rejects emulator settings.
+Optional future hosted profile operations use the reader's own Firebase project and server credentials.
 
 Then visit:
+
 - `http://localhost:8080/health` - service health probe
 - `http://localhost:8080/api-docs` - interactive API explorer (Swagger UI)
 - `http://localhost:8080/api-redoc` - API documentation (ReDoc)
 
 Sample request:
+
 ```bash
 curl -s localhost:8080/health | jq
 ```
 
+## API discovery and usage
+
+Start at `GET /.well-known/api-catalog` when you know only the application origin. Its RFC 9264 linkset points to
+`/openapi.json`, both usage guides, and `/health`; resolve root-relative targets against the catalog retrieval URL.
+Catalog HEAD returns matching metadata without a body. The catalog uses
+`application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"`, not `application/json`.
+
+[llms.txt](llms.txt) is a concise index and [llms-full.txt](llms-full.txt) is the complete curated API usage guide,
+including local test tokens, examples, pagination, profile ownership, and uncertain-write recovery. The exact files
+are served at those root paths as `text/plain; charset=utf-8` and included in the container image. The guides are
+maintained prose, not generated copies of OpenAPI or source files.
+
+Health advertises catalog and OpenAPI links for JSON and CBOR. OpenAPI, the full guide, catalog GET/HEAD, Swagger UI,
+and ReDoc advertise the root index using an HTTP `Link` with `rel="describedby"; type="text/plain"`. All discovery
+is public, local to the build, and independent of Firebase, persistence, or GitHub. Query parameters are rejected;
+unsupported methods and negotiation return 405 and 406 respectively. Catalog and guide errors stay JSON Problem
+Details, and HEAD never returns a body. No repository directory is exposed.
+
 ## Environment Variables
 
-Copy `.env.example` to `.env` and customize:
+Copy `.env.example` to `.env` for the local demo defaults. Add explicit browser origins only when needed:
 
 ```bash
 cp .env.example .env
@@ -155,12 +185,18 @@ cp .env.example .env
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | Server listen port | `8080` |
-| `ENVIRONMENT` | Runtime mode; `production` enables HSTS and strips 5xx response extensions | `production` |
-| `LOG_LEVEL` | Application log verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`) | `INFO` |
-| `FIREBASE_PROJECT_ID` | Firebase/GCP project ID | - |
+| `ENVIRONMENT` | Runtime mode; `production` enables HSTS on HTTPS responses | `production`; local demo uses `development` |
+| `LOG_LEVEL` | Application log verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`) | `INFO`; local template uses `DEBUG` |
+| `FIREBASE_PROJECT_ID` | Firebase project ID; `just serve` selects the local synthetic project | `demo-test` in `.env.example` |
+| `FIREBASE_AUTH_EMULATOR_HOST` | Local Auth emulator endpoint, without a scheme | `127.0.0.1:7010` in local setup |
+| `FIRESTORE_EMULATOR_HOST` | Local Firestore emulator endpoint, without a scheme | `127.0.0.1:7030` in local setup |
 | `FIRESTORE_DATABASE` | Firestore database ID | `(default)` |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Service account JSON path (local dev) | - |
-| `CORS_ORIGINS` | JSON array or comma-separated explicit allowed origins; `*` is rejected | - |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Optional credential-file path for future hosted Firebase use | - |
+| `CORS_ORIGINS` | JSON array or comma-separated explicit allowed origins; `*` is rejected | Empty |
+
+`just serve` sets the local project and emulator selectors explicitly. Other runtime settings come from the
+process environment or ignored `.env`. Use the current template for local setup; cloud project identifiers and
+credentials belong only to a separately configured hosted workflow.
 
 ### Firebase and Cloud Logging MCP clients
 
@@ -183,6 +219,7 @@ app/
     profile.py         # Profile CRUD (Firebase Auth protected)
     github.py          # Public GitHub projections
     openapi_document.py  # Local runtime OpenAPI discovery
+    discovery.py       # Same-build usage guides and RFC 9727 catalog
   auth/                # Firebase authentication
     firebase.py        # Token verification, FirebaseUser
   core/                # Configuration and infrastructure
@@ -250,7 +287,12 @@ All routes use paths without trailing slashes (`redirect_slashes=False`).
 | GET | `/v1/github/repos/{owner}/{repo}/languages` | No | List projected repository languages |
 | GET | `/v1/github/repos/{owner}/{repo}/tags` | No | List projected repository tags |
 | GET | `/openapi.json` | No | Retrieve the runtime OpenAPI 3.1 document |
+| GET, HEAD | `/.well-known/api-catalog` | No | Discover the local schema, guides, and health |
+| GET | `/llms.txt` | No | Selective API usage index |
+| GET | `/llms-full.txt` | No | Complete curated API usage guide |
 | GET | `/schemas/{Model}.json` | No | Optional standalone JSON Schema extension |
+| GET | `/api-docs` | No | Swagger UI for the runtime document |
+| GET | `/api-redoc` | No | ReDoc for the runtime document |
 
 Protected routes require `Authorization: Bearer <Firebase ID token>`. GitHub routes are deliberately anonymous: the
 application neither reads an ambient GitHub token nor forwards caller credentials.
@@ -260,6 +302,8 @@ application neither reads an ambient GitHub token nor forwards caller credential
 ### Build and Test
 
 ```bash
+just qa                 # Apply Ruff fixes/formatting, then run the complete quality gate
+just check              # Run the same checks without applying Ruff fixes
 just lint               # Check Python style
 just workflow-check     # Check GitHub Actions syntax and security
 just typing             # Type-check the FastAPI app
@@ -273,12 +317,23 @@ just test-all           # Run every test tier
 just cov                # Generate HTML and JSON coverage reports
 ```
 
+`just qa` checks workflows, Ruff, app and Functions types, application unit/integration tests, isolated Functions
+tests, and the generated deployment requirements. `just check` is the non-fixing gate. Neither starts emulators
+or runs emulator E2E tests.
+
+For all test tiers, keep `just emulators` running in one terminal and run `just test-all` in another. This executes
+application unit/integration tests, real local Firebase E2E tests, and isolated Functions tests in separate
+processes. Without running emulators, the E2E suite skips; that is not evidence of emulator coverage. Functions
+tests isolate model calls and never contact Vertex AI. CI runs application and isolated Functions tests plus a
+real container smoke check; it does not run the Firebase emulator suite.
+
 ### Justfile Commands
 
 | Command | Description |
 |---------|-------------|
-| `just serve` | Start dev server with hot reload |
+| `just serve` | Start the local demo server with hot reload and emulator selectors |
 | `just browser` | Open dev server in browser |
+| `just qa` | Apply Ruff fixes/formatting, then run the complete quality gate |
 | `just lint` | Check Ruff linting and formatting |
 | `just workflow-check` | Check GitHub Actions with actionlint 1.7.12 and locked, pedantic offline zizmor |
 | `just typing` | Type checking via ty |
@@ -288,19 +343,24 @@ just cov                # Generate HTML and JSON coverage reports
 | `just test-e2e` | Firebase emulator E2E tests |
 | `just test-all` | All test tiers |
 | `just cov` | Coverage report (html/json) |
-| `just check` | Workflow, app and Functions lint, type, test, and dependency-manifest checks |
+| `just check` | Non-fixing workflow, lint, app/Functions type and test, and deployment-export checks |
 | `just emulators` | Start Firebase emulators for E2E |
 
-Run `just` to see all available commands.
+Run `just` to see all available commands. The emulator and container checks remain separate from `just qa`.
 
 ### Dependencies
 
 ```bash
-just install         # Install/sync dependencies
-just install-functions  # Install/sync Functions dependencies
-just update          # Upgrade root and Functions dependencies
-just fresh           # Clean + reinstall
+just install             # Sync the locked application environment
+just install-functions   # Sync the independent locked Functions environment
+just update              # Upgrade both lockfiles and regenerate the direct Functions requirements
+just fresh               # Recreate the application environment
 ```
+
+`just update` refreshes both Python dependency graphs and regenerates `functions/requirements.txt` through the
+owning exporter. Review dependency API changes and Ruff/ty diagnostics and configuration before accepting the
+result; run `just qa` afterward. The restricted Functions export intentionally includes only direct runtime
+packages, not a second transitive lockfile. Runtime, CLI, action, and image pins require their own review.
 
 ## Adding Routes
 
@@ -321,14 +381,17 @@ just container-down     # Stop container
 ```
 
 Or with Docker/Podman CLI:
+
 ```bash
 docker build -t fastapi-playground:latest .
 docker run --rm -p 8080:8080 --env-file .env fastapi-playground:latest
 ```
 
-Public container routes require no credentials. Profile requests require Application Default Credentials or a
-service-account credential mounted into the container. Credential mounting is explicit; pass an existing absolute or
-repository-relative file as the third positional argument:
+Public container routes and discovery require no credentials. Use host-based `just serve` plus `just emulators` for
+local profile examples; a container's loopback addresses refer to that container, not the host emulator processes.
+For an optional future hosted Firebase setup, unset both emulator variables and configure your own project and
+server credentials. Credential mounting is explicit; pass an existing absolute or repository-relative file as the
+third positional argument:
 
 ```bash
 just container-up fastapi-playground:latest fastapi-playground service_account.json
@@ -374,10 +437,13 @@ For detailed infrastructure setup, see [GCP.md](GCP.md).
 
 ### Firebase Cloud Functions
 
-Python 3.15 is the local target, including `python315` in `firebase.json`. As of 2026-10-17, Google's published Functions
-runtimes and Firebase CLI 15.34.0 do not support it. These commands are retained for future use after support lands;
-deployment and Functions emulation are currently blocked. Recheck the [platform runtime table](https://docs.cloud.google.com/functions/docs/runtime-support#python) and
-Firebase CLI support before using the [Functions instructions](functions/README.md).
+The independent Functions example targets Python 3.15 and `python315` in `firebase.json`. Its isolated tests work
+locally, but the [published Functions runtimes](https://docs.cloud.google.com/functions/docs/runtime-support#python)
+and [Firebase CLI 15.34.0 runtime definitions](https://github.com/firebase/firebase-tools/blob/v15.34.0/src/deploy/functions/runtimes/supported/types.ts)
+currently stop at Python 3.14. Functions emulation requires matching CLI support; deployment also requires a
+published platform runtime. These constraints do not block Auth/Firestore emulators or FastAPI profile tests.
+Recheck the relevant prerequisites before using the future [Functions instructions](functions/README.md),
+without downgrading the repository target.
 
 ```bash
 cd functions
@@ -415,10 +481,10 @@ graceful shutdown.
 
 Dependabot is configured in `.github/dependabot.yml` for quarterly updates with a one-day cooldown. Standalone tool
 pins must be reviewed separately when modernizing. Dependabot security alerts and automated security updates are
-disabled; scheduled version updates remain configured. GitHub's graph updater rejected Python 3.15 on 2026-10-18
-because its supported runtime list ended at Python 3.14. Keep the Python 3.15 target and use `just update` for native
-dependency upgrades while that upstream limitation remains. Disabled alerts do not establish that dependencies are
-free of vulnerabilities.
+disabled; scheduled version updates remain configured. Dependabot's Python/uv runtime support currently stops at
+Python 3.14; [upstream Python 3.15 support](https://github.com/dependabot/dependabot-core/issues/16524) is still pending.
+Keep the Python 3.15 target and use `just update` for native upgrades while that constraint remains. Disabled alerts
+do not establish that dependencies are free of vulnerabilities.
 
 Ruff and ty are excluded from Dependabot version updates and auto-merge. Their patch releases can change diagnostics,
 configuration, and fixes, so they are maintained separately. Other eligible dependency updates retain their automatic
@@ -426,7 +492,7 @@ path.
 
 ## Contributing
 
-See [AGENTS.md](AGENTS.md) for coding guidelines and conventions.
+See [AGENTS.md](AGENTS.md) for coding guidelines and conventions. Resolve PR review conversations before merging.
 
 ## License
 

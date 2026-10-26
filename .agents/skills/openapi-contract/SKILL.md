@@ -11,14 +11,17 @@ tests before changing the public API. When media types or `Accept` behavior chan
 
 ## Architecture
 
-Treat the public contract as four connected surfaces:
+Treat the public contract as connected surfaces:
 
 1. FastAPI decorators, return annotations, dependencies, and Pydantic models define operations and component schemas.
 2. `fastapi_app.openapi()` produces the OpenAPI 3.1 document served at `/openapi.json` and rendered at `/api-docs` and
    `/api-redoc`.
 3. `populate_schema_cache()` derives `/schemas/{Model}.json` documents from OpenAPI components after router
    registration.
-4. Runtime behavior adds RFC 9457 JSON or CBOR errors, authentication, request limits, and response headers that the
+4. `app/api/discovery.py` serves the RFC 9727 catalog and the exact root `llms.txt` and `llms-full.txt` files.
+   Keep these outside the portable operation projection. They use their own media types and JSON-only errors,
+   including bodyless HEAD outcomes; package both files in the container.
+5. Runtime behavior adds RFC 9457 JSON or CBOR errors, authentication, request limits, and response headers that the
    generated contract must describe accurately where FastAPI supports them.
 
 Do not add a checked-in generated artifact. `app/core/openapi.py` semantically projects FastAPI's generated document
@@ -44,6 +47,12 @@ boundary and `/schemas/` is an optional extension derived from its components.
   claim a media type in OpenAPI merely because a custom route can serialize it.
 - Keep `$schema` on standalone schema documents only. Schema links are optional; every emitted link must use a stable
   relative target, lowercase `describedby`, and a resolving `/schemas/` document.
+
+Update the curated usage guides when API usage changes. Keep operation descriptions accurate about ownership,
+side effects, pagination, and uncertain-write recovery without renaming operation IDs or promising write replay.
+Preserve typed discovery links and unrelated links, including multiple `describedby` targets. Test actual catalog
+GET/HEAD, parsed links and resolved targets, same-build bytes, and dependency isolation; do not add prose snapshots,
+a duplicate operation registry, a documentation generator, or a dedicated discovery CI job.
 
 ## Workflow
 

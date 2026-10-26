@@ -16,7 +16,6 @@ import firebase_admin
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
-from google.auth.credentials import AnonymousCredentials
 
 FIRESTORE_HOST = "127.0.0.1:7030"
 AUTH_HOST = "127.0.0.1:7010"
@@ -62,11 +61,9 @@ def isolate_firebase_clients(monkeypatch: pytest.MonkeyPatch) -> Generator[None]
     """
     Use emulator-only credentials and fresh SDK clients for each event loop.
     """
-    firebase_app = firebase_admin.initialize_app(
-        AnonymousCredentials(), options={"projectId": PROJECT_ID}, name="emulator-test"
-    )
-    monkeypatch.setattr(firebase_module, "_firebase_app", firebase_app)
+    monkeypatch.setattr(firebase_module, "_firebase_app", None)
     monkeypatch.setattr(firebase_module, "_async_firestore_client", None)
+    firebase_app = firebase_module.get_firebase_app()
     try:
         yield
     finally:

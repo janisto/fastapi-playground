@@ -24,9 +24,10 @@ from fastapi_request_observability import (
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, ExceptionHandler
 
-from app.api import business_routers, health, openapi_document, schemas
+from app.api import business_routers, discovery, health, openapi_document, schemas
 from app.api.schemas import populate_schema_cache
 from app.core.config import Settings, get_settings
+from app.core.constants import LLMS_INDEX_LINK
 from app.core.firebase import close_async_firestore_client
 from app.core.logging import configure_logging
 from app.core.openapi import build_openapi_document
@@ -88,13 +89,17 @@ fastapi_app = PortableFastAPI(
 @fastapi_app.get("/api-docs", include_in_schema=False, response_class=HTMLResponse)
 async def swagger_ui() -> HTMLResponse:
     """Render Swagger UI against the strict runtime OpenAPI route."""
-    return get_swagger_ui_html(openapi_url="/openapi.json", title=f"{fastapi_app.title} - Swagger UI")
+    response = get_swagger_ui_html(openapi_url="/openapi.json", title=f"{fastapi_app.title} - Swagger UI")
+    response.headers.append("Link", LLMS_INDEX_LINK)
+    return response
 
 
 @fastapi_app.get("/api-redoc", include_in_schema=False, response_class=HTMLResponse)
 async def redoc_ui() -> HTMLResponse:
     """Render ReDoc against the strict runtime OpenAPI route."""
-    return get_redoc_html(openapi_url="/openapi.json", title=f"{fastapi_app.title} - ReDoc")
+    response = get_redoc_html(openapi_url="/openapi.json", title=f"{fastapi_app.title} - ReDoc")
+    response.headers.append("Link", LLMS_INDEX_LINK)
+    return response
 
 
 # Include routers
@@ -102,6 +107,7 @@ for business_router in business_routers:
     fastapi_app.include_router(business_router)
 fastapi_app.include_router(health.router)  # /health (unversioned)
 fastapi_app.include_router(openapi_document.router)
+fastapi_app.include_router(discovery.router)
 fastapi_app.include_router(schemas.router)  # /schemas (unversioned)
 
 populate_schema_cache(fastapi_app.openapi())

@@ -16,7 +16,8 @@ tests before editing an endpoint.
 - Use `PortableRoute` for JSON/CBOR business endpoints and `JSONOnlyRoute` for JSON-only portable successes so parsing
   and negotiation happen before dependency resolution.
 - Use typed dependency aliases from `app/dependencies.py`; protected routes must use `CurrentUser`.
-- Return Pydantic response models directly. Do not introduce response envelopes or raw dictionaries.
+- Return Pydantic domain models directly without envelopes or raw dictionaries. Documentation assets use native
+  responses for their exact text/linkset formats; keep their handlers in `app/api/discovery.py`.
 
 ## Public contract
 

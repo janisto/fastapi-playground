@@ -202,7 +202,7 @@ class TestSettings:
 
     def test_default_cors_policy_exposes_only_portable_methods_and_headers(self) -> None:
         settings = _create_settings()
-        assert settings.cors_methods == ["GET", "POST", "PATCH", "DELETE"]
+        assert settings.cors_methods == ["GET", "HEAD", "POST", "PATCH", "DELETE"]
         assert settings.cors_expose_headers == [
             "Link",
             "Location",

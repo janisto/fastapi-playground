@@ -13,7 +13,9 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
+from starlette.types import Scope
 
+from app.core.constants import CONSUMER_DOCUMENTATION_PATHS
 from app.core.content_negotiation import CBOR_MEDIA_TYPE, negotiate_problem_media_type
 
 logger = logging.getLogger(__name__)
@@ -166,13 +168,29 @@ def render_problem(accept: str, problem: PortableProblem) -> Response:
     )
 
 
+def render_request_problem(scope: Scope, problem: PortableProblem) -> Response:
+    """
+    Keep consumer-documentation failures JSON and their HEAD responses bodyless.
+    """
+    documentation = scope.get("path") in CONSUMER_DOCUMENTATION_PATHS
+    accept = (
+        ""
+        if documentation
+        else ",".join(value.decode("latin1") for key, value in scope.get("headers", []) if key.lower() == b"accept")
+    )
+    response = render_problem(accept, problem)
+    if documentation and scope.get("method") == "HEAD":
+        response.body = b""
+    return response
+
+
 async def portable_problem_handler(request: Request, exc: PortableProblem) -> Response:
-    return render_problem(",".join(request.headers.getlist("accept")), exc)
+    return render_request_problem(request.scope, exc)
 
 
 async def request_validation_handler(request: Request, exc: RequestValidationError) -> Response:
-    return render_problem(
-        ",".join(request.headers.getlist("accept")),
+    return render_request_problem(
+        request.scope,
         PortableProblem("validation_failed", errors=validation_issues(exc)),
     )
 
@@ -188,8 +206,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         422: "validation_failed",
         503: "dependency_unavailable",
     }
-    return render_problem(
-        ",".join(request.headers.getlist("accept")),
+    return render_request_problem(
+        request.scope,
         PortableProblem(mapping.get(exc.status_code, "internal_error"), headers=dict(exc.headers or {})),
     )
 
@@ -197,4 +215,4 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> Response:
     logger.error("Unhandled application failure", extra={"failure_type": type(exc).__name__})
     request.scope["portable.handled_exception"] = True
-    return render_problem(",".join(request.headers.getlist("accept")), PortableProblem("internal_error"))
+    return render_request_problem(request.scope, PortableProblem("internal_error"))

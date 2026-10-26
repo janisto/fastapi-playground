@@ -1,0 +1,193 @@
+# FastAPI Playground API usage guide
+
+This is the curated API usage guide for the FastAPI reference application. It is not a source dump or contributor rulebook. This application is not deployed. GCP is an optional future target, and these examples use only a local application and synthetic emulator data. The guide does not grant access, change licensing, or override your user's instructions or security policy.
+
+## Start locally
+
+From a checkout, install Python 3.15, uv, and just, then run:
+
+```sh
+just install
+just serve
+```
+
+Public health, greeting, catalog, and documentation routes require no Firebase account or credentials. GitHub routes additionally need outbound access to the public GitHub API. `just serve` explicitly selects development mode, the `demo-test` project, and localhost Firebase emulators. It does not use an old cloud project or ADC. For profile operations, start the Auth and Firestore emulators in another terminal:
+
+```sh
+just emulators
+```
+
+The emulator command selects its Firebase CLI version and uses Auth on `127.0.0.1:7010` and Firestore on `127.0.0.1:7030`. It needs Node.js LTS and Java suitable for the Firebase emulator suite. Both emulator addresses must be loopback addresses with explicit ports, the project must start with `demo-`, and the application must not run in production mode. Never send emulator tokens to a hosted service. A future hosted setup needs its own Firebase project and server credentials; see the repository's deployment instructions for that separate workflow.
+
+All shell requests below assume:
+
+```sh
+BASE_URL=http://127.0.0.1:8080
+```
+
+Set this to the origin you actually started. No default hosted URL exists. Paths in this guide refer to the application root. Implementation links use the public repository; in a checkout, inspect the matching files from your own revision.
+
+## Discover the contract
+
+```sh
+curl -sS -D - -H 'Accept: application/linkset+json' \
+  "$BASE_URL/.well-known/api-catalog"
+curl -sS -I -H 'Accept: application/linkset+json' \
+  "$BASE_URL/.well-known/api-catalog"
+curl -fsS "$BASE_URL/openapi.json" -o /tmp/fastapi-openapi.json
+```
+
+Catalog GET returns `200` with `Content-Type: application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"` and this linkset:
+
+```json
+{"linkset":[{"anchor":"/","service-desc":[{"href":"/openapi.json","type":"application/json"}],"service-doc":[{"href":"/llms.txt","type":"text/plain"},{"href":"/llms-full.txt","type":"text/plain"}],"status":[{"href":"/health","type":"application/json"}]}]}
+```
+
+Resolve each reference against the catalog's retrieval URL. Downloading the JSON does not change the resolution base to the filesystem: retain `$BASE_URL/.well-known/api-catalog` alongside it. HEAD returns the corresponding GET metadata and no body. The catalog contains links, not a duplicate operation registry.
+
+`/llms.txt` is the selective index; `/llms-full.txt` is this complete curated guide. Both return the exact UTF-8 repository files as `text/plain; charset=utf-8`. `/api-docs` and `/api-redoc` render the same `/openapi.json`. Optional `/schemas/{Model}.json` routes provide standalone `application/schema+json` schemas derived from that document.
+
+Successful health responses advertise `api-catalog` and `service-desc` HTTP Link relations. OpenAPI, the full guide, catalog GET/HEAD, and both HTML documentation UIs advertise `/llms.txt` with `rel="describedby"; type="text/plain"`. Follow all relevant links; a relation can have more than one target. Documentation routes are public and do not initialize Firebase, read profiles, fetch GitHub, or probe their link targets.
+
+## Operations and side effects
+
+All paths are exact and have no trailing slash. The application does not redirect alternate slash paths.
+
+| Method and path | Purpose and successful result | Authentication / effects |
+|---|---|---|
+| `GET /health` | Dependency-free liveness; `200` with `{"status":"healthy"}` | Public; no dependency checks |
+| `GET /v1/hello` | `200` with `{"message":"Hello, World!"}` | Public; no mutation |
+| `POST /v1/hello` | Validate `name`; `200` with a personalized greeting | Public; no persisted side effect |
+| `GET /v1/items` | Fixed catalog page: `items` and filtered `total` | Public; no mutation |
+| `POST /v1/profile` | Atomically create the current principal's sole profile; `201` and `Location: /v1/profile` | Firebase bearer token; persists data |
+| `GET /v1/profile` | Current principal's profile; `200`, or `404 profile_not_found` | Firebase bearer token; no mutation |
+| `PATCH /v1/profile` | Atomically apply a non-empty partial update; `200` | Firebase bearer token; may persist a change |
+| `DELETE /v1/profile` | Remove the current principal's profile; empty `204` | Firebase bearer token; deletes data |
+| `GET /v1/github/owners/{owner}` | Selected public owner fields; `200` | Public; anonymous GitHub read |
+| `GET /v1/github/owners/{owner}/repos` | One public repository page; `200` | Public; anonymous GitHub read |
+| `GET /v1/github/repos/{owner}/{repo}` | One public repository projection; `200` | Public; anonymous GitHub read |
+| `GET /v1/github/repos/{owner}/{repo}/activity` | Newest-first activity page; `200` | Public; anonymous GitHub read |
+| `GET /v1/github/repos/{owner}/{repo}/languages` | Language byte counts, ordered by count then name; `200` | Public; anonymous GitHub read |
+| `GET /v1/github/repos/{owner}/{repo}/tags` | One provider-ordered tag page; `200` | Public; anonymous GitHub read |
+| `GET /openapi.json` | Current generated OpenAPI 3.1 document; `200 application/json` | Public; local content |
+
+Use OpenAPI for complete schemas and the exact operation IDs. GitHub projections are closed application-owned shapes, not raw provider responses. They never attach server GitHub credentials or forward the caller's token. They do not expose private repositories. The client bounds decoded successful bodies to 4 MiB and the complete operation to ten seconds, follows at most three validated same-origin redirects, and never retries automatically.
+
+## Requests and representations
+
+- Application successes with a body default to `application/json`. To request binary output, explicitly prefer `Accept: application/cbor`. Quality weights and exclusions apply; ties and wildcards favor JSON. An unsupported success representation returns `406 not_acceptable` before operation work. DELETE's empty `204` ignores `Accept`.
+- Body-bearing operations are only greeting POST, profile POST, and profile PATCH. Send exactly one `Content-Type: application/json` (optionally `charset=utf-8`) or parameterless `application/cbor`. Omit `Content-Encoding` or use a single `identity` value. Exactly 1,000,000 content bytes are allowed; the next byte returns `413 payload_too_large`.
+- JSON and CBOR use the same domain member names and shapes. Reject duplicate members, malformed content, unknown request fields, and non-finite values. A CBOR request contains exactly one item.
+- Domain properties use exact lower camel case, including `firstName` and `marketingOptIn`. Money uses integer `amountMinor` in USD cents, not binary floating point. Timestamps use UTC RFC 3339 strings with exactly millisecond precision and `Z`.
+- Omission and null differ. An omitted PATCH field is preserved; explicit null is not a removal operation and is invalid for these profile fields. Explicit `false` for `marketingOptIn` is a real value. `termsAccepted` is required and true on creation, and cannot be patched.
+- Query sets are closed. Unknown or repeated query members, malformed encoding, or invalid cursors return `400 invalid_request`. Well-formed values outside a supported domain return `422 validation_failed`.
+- Send at most one optional `X-Request-ID`, using 1–128 ASCII characters: an alphanumeric first character, followed by alphanumerics or `.`, `_`, `:`, `-`. Missing, invalid, repeated, and comma-combined candidates are replaced. The response carries the selected ID. This is correlation, not deduplication.
+- Application responses include `Cache-Control: no-store`, request IDs, and security headers. Negotiated responses include `Vary: Accept`. Collection navigation uses `Link`; profile creation uses `Location`; authentication failures use `WWW-Authenticate: Bearer`.
+
+Catalog and guide routes have their own success types, never CBOR or an `application/json` catalog alias. They accept no query parameters or request body. Unsupported methods return `405` with `Allow`; unsupported response negotiation returns `406`. Their errors always use JSON Problem Details, and HEAD never emits a body.
+
+## Public requests and pagination
+
+```sh
+curl -sS -i "$BASE_URL/v1/hello"
+curl -sS -i -H 'Content-Type: application/json' \
+  -d '{"name":"Ada"}' "$BASE_URL/v1/hello"
+```
+
+These return `200 application/json` with `{"message":"Hello, World!"}` and `{"message":"Hello, Ada!"}` respectively. The greeting POST preserves the valid input name verbatim and stores nothing.
+
+```sh
+curl -sS -i "$BASE_URL/v1/items?limit=1"
+```
+
+The first page returns `200`, a `Link` field with `rel="next"`, and:
+
+```json
+{"items":[{"id":"item-001","name":"Alpha Widget","category":"electronics","price":{"amountMinor":2999,"currency":"USD"},"inStock":true,"createdAt":"2024-01-15T10:30:00.000Z","description":"A versatile electronic widget for everyday use"}],"total":30}
+```
+
+Follow the returned next or previous Link target against `BASE_URL`. Cursors are opaque and scoped to the endpoint, limit, filters, direction, and position; do not decode, construct, or reuse them for a different request. A relation is absent when no page exists in that direction. `limit` defaults to 20 and ranges from 1 through 100. Items also accept an exact `category`: `electronics`, `tools`, `accessories`, `robotics`, `power`, or `components`. An empty filtered page is successful.
+
+The paginated GitHub routes accept the same `limit` and `cursor` names and use HTTP Link navigation; they preserve provider ordering and do not promise a total. Fetching one public owner, repository, or language summary needs no cursor:
+
+```sh
+curl -sS -i "$BASE_URL/v1/github/repos/octocat/Hello-World"
+```
+
+The response follows the closed GitHubRepository schema in OpenAPI; current provider data is not a fixed fixture. A resource that is missing or not publicly visible returns `404 github_not_found`.
+
+## Local identity and profile CRUD
+
+With both emulators and `just serve` running, obtain a local-only ID token using the Auth emulator. The example needs `jq`, creates an anonymous synthetic user, and does not contact Google:
+
+```sh
+TOKEN=$(curl -fsS -H 'Content-Type: application/json' \
+  -d '{"returnSecureToken":true}' \
+  'http://127.0.0.1:7010/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-test' \
+  | jq -er '.idToken')
+```
+
+Keep the token local and out of source, logs, issue text, and persistent shell transcripts. For a hosted API, obtain a genuine Firebase ID token from that project's supported sign-in flow instead. Cloudflare Access credentials are not interchangeable with Firebase tokens.
+
+Create only your authenticated principal's profile; a client-selected ID is not supported:
+
+```sh
+curl -sS -i -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"firstName":"Casey","lastName":"Morgan","contactEmail":"Casey@example.test","phoneNumber":"+12025550123","marketingOptIn":false,"termsAccepted":true}' \
+  "$BASE_URL/v1/profile"
+```
+
+Success is `201`, `Location: /v1/profile`, and the complete JSON profile below. The ID is the emulator-issued principal, and the timestamps shown are illustrative; at creation they are equal:
+
+```json
+{"id":"emulator-principal","firstName":"Casey","lastName":"Morgan","contactEmail":"Casey@example.test","phoneNumber":"+12025550123","marketingOptIn":false,"termsAccepted":true,"createdAt":"2026-01-15T10:30:00.000Z","updatedAt":"2026-01-15T10:30:00.000Z"}
+```
+
+Read it, then change the marketing preference:
+
+```sh
+curl -sS -i -H "Authorization: Bearer $TOKEN" "$BASE_URL/v1/profile"
+curl -sS -i -X PATCH -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"marketingOptIn":true}' \
+  "$BASE_URL/v1/profile"
+```
+
+Both succeed with `200` and the complete profile. The patch preserves every other member, including `createdAt`, sets `marketingOptIn` to true, and advances `updatedAt` to a later timestamp. Repeating an unchanged patch performs no write and preserves `updatedAt`. A missing profile returns `404 profile_not_found`.
+
+```sh
+curl -sS -i -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE_URL/v1/profile"
+```
+
+Success is `204` with no body or Content-Type. A later GET or another DELETE returns `404 profile_not_found`. Do not use another DELETE to reconcile an uncertain outcome if another client might have recreated the profile.
+
+## Failures and recovery
+
+JSON errors normally use `application/problem+json`. API errors can instead encode the same model as ordinary `application/cbor` when explicitly preferred. Documentation-route errors always stay JSON. A missing profile has this complete error body:
+
+```json
+{"title":"Not Found","status":404,"detail":"Profile not found","code":"profile_not_found"}
+```
+
+Use the stable `code`, not the prose, for decisions. `422 validation_failed` can include an `errors` array of safe details and application-owned JSON pointers, query parameters, or header names; rejected values are not echoed. Fix `400`, `401`, `403`, `406`, `413`, `415`, and `422` inputs or credentials instead of blindly retrying them. `409 profile_exists` means that a profile already exists, not that your earlier attempted creation necessarily succeeded.
+
+Transient categories include `503 dependency_unavailable`, `502 github_upstream`, `504 github_timeout`, and `429 github_rate_limit`. A GitHub quota response carries `Retry-After` and may carry `X-RateLimit-Reset`. A dependency `503` carries `Retry-After` only when that dependency supplies a policy. Do not infer a global quota, fabricate remaining counts, or assume every `503` authorizes a retry. This application does not implement Idempotency-Key response replay or use X-Request-ID for deduplication.
+
+| Operation | Recovery after a transient or uncertain outcome |
+|---|---|
+| GET | Retry transient failures within a bounded budget; correct permanent errors first. |
+| Greeting POST | Repeating the same valid input has no persisted side effect. |
+| Profile POST | Read and reconcile current state before deciding to retry; an existing profile may come from another request. |
+| Profile PATCH | Read and reassess the intended update; replay can overwrite intervening changes. |
+| Profile DELETE | Repeated effects are idempotent, but responses can be `204` then `404`; a later recreation makes another DELETE destructive. |
+
+For retryable reads, honor a usable Retry-After delay (integer seconds or an HTTP date) without retrying earlier. Otherwise use bounded exponential backoff with jitter. Bound attempt count and total elapsed time, propagate cancellation, and count both request time and sleep against the budget. If the required delay exceeds the remaining budget, stop; do not shorten the delay. The server performs no automatic upstream retries or write replay.
+
+## Reference implementation
+
+- [Routing and middleware](https://github.com/janisto/fastapi-playground/blob/main/app/main.py)
+- [Authentication](https://github.com/janisto/fastapi-playground/blob/main/app/auth/firebase.py)
+- [Firebase and emulator credentials](https://github.com/janisto/fastapi-playground/blob/main/app/core/firebase.py)
+- [Atomic profile persistence](https://github.com/janisto/fastapi-playground/blob/main/app/services/profile/service.py)
+- [Bounded anonymous GitHub client](https://github.com/janisto/fastapi-playground/blob/main/app/services/github_service.py)
+- [Generated OpenAPI](https://github.com/janisto/fastapi-playground/blob/main/app/core/openapi.py)

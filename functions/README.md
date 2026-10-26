@@ -1,13 +1,17 @@
 # Firebase Cloud Functions
 
-This independent Python 3.15 example exports one HTTP function, `dad_joke`, from `main.py`. Its future manual Firebase
-deployment targets `europe-west4` with `python315` in the repository `firebase.json`. This repository
-does not maintain a hosted endpoint or deploy the Function through PRs or merges. Isolated tests require no GCP account.
+This independent Python 3.15 example exports one HTTP function, `dad_joke`, from `main.py`. It is not deployed.
+Future manual Firebase deployment targets `europe-west4` with `python315` in the repository `firebase.json`.
+PRs and merges do not deploy it. Isolated tests require no GCP account, ADC, or Vertex AI calls.
 
-As of 2026-10-17, Python 3.15 is not a published Cloud Run functions runtime, and Firebase CLI 15.34.0 does not recognize
-`python315`. Deployment and Functions emulation are currently blocked. The commands below are preserved for use after
-support lands. Recheck the [platform runtime table](https://docs.cloud.google.com/functions/docs/runtime-support#python),
-update Firebase CLI, and confirm it recognizes `python315` before attempting discovery or deployment.
+The [published Functions runtime table](https://docs.cloud.google.com/functions/docs/runtime-support#python) and
+[Firebase CLI 15.34.0 runtime definitions](https://github.com/firebase/firebase-tools/blob/v15.34.0/src/deploy/functions/runtimes/supported/types.ts)
+currently stop at Python 3.14. Functions emulation requires CLI recognition of `python315`; deployment also needs
+a published platform runtime. Keep the repository's Python 3.15 target and recheck the relevant prerequisites
+before running either future workflow below.
+The Auth/Firestore emulators used by the FastAPI app are separate and work with `just emulators`.
+
+Commands below run from the repository root unless a snippet explicitly changes directory.
 
 ## Endpoint contract
 
@@ -18,6 +22,10 @@ optional `topic` query parameter accepts:
 - `tech`
 - `food`
 - `relationships`
+
+Topic matching is case-insensitive; an omitted or empty topic produces `topic: null`. The Function selects a style
+randomly from `pun`, `literal`, `homophone`, `anticlimax`, and `misunderstanding`. Repeating a successful GET can
+produce a different joke and consume more Vertex AI quota.
 
 Example response:
 
@@ -30,7 +38,8 @@ Example response:
 }
 ```
 
-Other HTTP methods return 405 without invoking the model. An invalid topic returns 400. Genkit, Vertex AI, or invalid
+Responses use `application/json`. Errors use `error` and `message` members. Other HTTP methods return 405 with
+`Allow: GET` without invoking the model; an invalid topic returns 400. Genkit, Vertex AI, or invalid
 model-output failures return a sanitized 503, and unexpected failures return a generic 500. Generated setup and
 punchline values must be non-blank strings no longer than 500 characters; missing, non-object, or additional output is
 rejected before constructing the public response.
@@ -57,14 +66,18 @@ values in additional logs.
 
 ## Dependency management
 
-Use the repository root commands for the locked development environment:
+Use the repository root commands for the independent locked development environment:
 
 ```bash
-just install-functions
-just typing-functions
-just test-functions
-just lint
+just install-functions   # Sync functions/.venv from functions/uv.lock
+just typing-functions    # Check the Function using its environment
+just test-functions      # Isolated handler/model/deployment-metadata tests
+just qa                  # Complete app and Functions quality gate
 ```
+
+`functions/.venv` is separate from the application `.venv`. From the root, `just test-all` includes these isolated
+Functions tests alongside application tests and the Auth/Firestore E2E suite; keep `just emulators` running for that
+suite. `just test-all` does not start the Functions emulator or call Vertex AI.
 
 `functions/pyproject.toml` and `functions/uv.lock` define the local environment. Firebase's Python deployment discovers
 dependencies through the intentionally lean `functions/requirements.txt`. It pins only the direct runtime packages to
@@ -75,9 +88,11 @@ update the exporter package list in `Justfile`, then run `just sync-functions-re
 
 ## Run with the Functions emulator
 
-Wait for Firebase CLI and platform Python 3.15 support before using these instructions.
+This future workflow waits on Firebase CLI recognition of `python315`. It is distinct from the working FastAPI
+Auth/Firestore emulator workflow. The separate `functions/venv` directory is for Firebase CLI discovery and deployment;
+ordinary locked development and tests use `functions/.venv`.
 
-Create the Firebase-compatible `venv`, then start the Functions emulator from the repository root:
+After CLI support is available, create that Firebase-compatible environment and start the Functions emulator:
 
 ```bash
 uv venv --python 3.15 functions/venv
@@ -98,10 +113,9 @@ Application Default Credentials, the enabled Vertex AI API, IAM permission, and 
 
 ## Deploy
 
-Wait for Firebase CLI and platform Python 3.15 support before using these instructions.
-
-This is an optional manual deployment to a project you control. Follow [GCP.md](../GCP.md) for project setup, billing,
-APIs, deployment permissions, and runtime IAM before running these commands.
+This optional manual workflow requires both Firebase CLI and platform Python 3.15 support and a project you control.
+Follow [GCP.md](../GCP.md) for project setup, billing, APIs, deployment permissions, and runtime IAM before running
+these commands.
 
 ```bash
 cd functions
