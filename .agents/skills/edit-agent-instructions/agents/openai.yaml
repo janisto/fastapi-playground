@@ -1,0 +1,4 @@
+interface:
+  display_name: "Edit Agent Instructions"
+  short_description: "Compact and scope AGENTS.md without losing intent"
+  default_prompt: "Use $edit-agent-instructions to review and improve the requested AGENTS.md files while preserving their rules and approval boundaries."
