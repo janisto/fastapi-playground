@@ -24,8 +24,8 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-httpx2>=1.0.0",
     "pytest-mock>=3.17.0",
-    "ruff>=0.17.1",
-    "ty>=0.0.89",
+    "ruff>=0.17.3",
+    "ty>=0.0.95",
     "zizmor>=1.31.1",
 ]
 
