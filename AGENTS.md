@@ -9,6 +9,13 @@ human users and contributors. Do not duplicate agent instructions into it.
 - Inspect the implementation, callers, and tests before changing behavior.
 - Prefer the smallest safe change; reuse or refactor local patterns and utilities
   before adding abstractions or dependencies.
+- Do not add dependency source patches, vendored dependency forks, or runtime
+  monkey-patches. Prefer supported native behavior and document non-blocking
+  upstream limitations. Keep ordinary installs and routine Dependabot updates
+  compatible with auto-merge, without manual patch cleanup. Reproduce failures
+  in core behavior and compare unpatched alternatives. If a solution changes
+  agreed guarantees or its ongoing maintenance cost is uncertain, present the
+  evidence and ask the user before implementation.
 - Validate review findings against requirements and reproducible behavior.
   Simplify unnecessary behavior instead of adding machinery to defend it.
 - State the failure mode before architectural, security, persistence, or
