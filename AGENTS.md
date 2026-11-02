@@ -116,9 +116,14 @@ This example is not deployed; GCP is a possible future target. Pushes, PRs, and 
 Keep cloud project aliases and MCP connections local and ignored; preserve manual deployment instructions and sample manifests for readers using
 their own projects. Do not require GCP access or deployed verification for repository changes.
 
-- Keep Dependabot security alerts and automated security updates disabled. Preserve scheduled version updates;
-  document upstream runtime or dependency constraints once and continue independent modernization. Do not downgrade
-  Python, force incompatible dependency overrides, or add replacement alert bots to work around upstream limitations.
+- Do not add or enable extra workflows, jobs, automated tasks, or scheduled
+  triggers without explicit user permission. Modernization, security work, and
+  consistency requests do not authorize extra automation. This repository
+  showcases conventions; minimize notifications and ongoing maintainer work.
+- Keep Dependabot security alerts and automated security updates disabled. Preserve quarterly Dependabot version
+  updates; document upstream runtime or dependency constraints once and continue independent modernization. Do not
+  downgrade Python, force incompatible dependency overrides, or add replacement alert bots to work around upstream
+  limitations. Do not add GitHub Actions schedules or increase update frequency without explicit user permission.
 - Keep auto-merge limited to verified Dependabot minor/patch updates behind required checks. Handle old excluded-tool
   PRs once; do not duplicate Dependabot ignore rules with package filters, enablement triggers, state queries, or
   revocation steps.
