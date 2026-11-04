@@ -108,9 +108,9 @@ def _known_source(location: tuple[str | int, ...], *, missing: bool = False) -> 
     if location[0] == "header" and safe_segments:
         return {"header": safe_segments[-1]}
     if location[0] == "body":
-        if missing:
-            return {"pointer": "/"}
-        return {"pointer": "/" + "/".join(safe_segments) if safe_segments else "/"}
+        if missing or not safe_segments:
+            return None
+        return {"pointer": "/" + "/".join(safe_segments)}
     return None
 
 
@@ -131,7 +131,7 @@ def validation_issues(
         location = tuple(item.get("loc", ()))
         if location_prefix is not None:
             location = (location_prefix, *location)
-        source = _known_source(location, missing=missing)
+        source = None if item.get("type") == "extra_forbidden" else _known_source(location, missing=missing)
         if source is not None:
             issue["source"] = source
         issues.append(issue)

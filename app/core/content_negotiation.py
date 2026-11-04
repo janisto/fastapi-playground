@@ -32,11 +32,11 @@ def strip_http_ows(value: str) -> str:
     return value.strip(_HTTP_OWS)
 
 
-def _split_quoted(value: str, separator: str) -> list[str] | None:
+def _split_quoted(value: str, separator: str, *, ignore_incomplete: bool = False) -> list[str] | None:
     """
     Split an HTTP field value without treating quoted separators as delimiters.
 
-    Return None when the quoted-string syntax is incomplete.
+    Incomplete quoted syntax is invalid; Accept lists may retain completed members.
     """
     parts: list[str] = []
     current: list[str] = []
@@ -60,7 +60,7 @@ def _split_quoted(value: str, separator: str) -> list[str] | None:
             current.append(character)
 
     if quoted or escaped:
-        return None
+        return parts if ignore_incomplete else None
 
     parts.append("".join(current))
     return parts
@@ -188,9 +188,7 @@ def _media_type_quality(
     best_specificity = (-1, -1)
     best_quality = 0.0
 
-    raw_items = _split_quoted(accept_header, ",")
-    if raw_items is None:
-        return None
+    raw_items = _split_quoted(accept_header, ",", ignore_incomplete=True) or []
 
     for raw_item in raw_items:
         item = strip_http_ows(raw_item)
