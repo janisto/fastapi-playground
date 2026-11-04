@@ -116,10 +116,10 @@ def test_hello_parser_validation_and_media_split(
         assert content.decode("utf-8", errors="ignore") not in str(body)
 
 
-def test_missing_member_points_only_to_the_existing_document(client: TestClient) -> None:
+def test_missing_member_omits_a_nonexistent_source(client: TestClient) -> None:
     response = client.post("/v1/hello", json={})
     body = _problem(response, 422, "validation_failed")
-    assert body["errors"] == [{"detail": "Request field is required", "source": {"pointer": "/"}}]
+    assert body["errors"] == [{"detail": "Request field is required"}]
 
 
 def test_json_quoted_charset_and_content_coding_are_strict(client: TestClient) -> None:
@@ -357,3 +357,60 @@ def test_public_local_families_do_not_invoke_authentication_or_external_services
         mock_github_service.list_owner_repositories,
     ):
         service_method.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("path", "accepted", "expected_media"),
+    [
+        ("/health", "application/json", "application/json"),
+        ("/health", "application/cbor", "application/cbor"),
+        ("/openapi.json", "application/json", "application/json"),
+        ("/llms.txt", "text/plain", "text/plain; charset=utf-8"),
+        (
+            "/.well-known/api-catalog",
+            'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"',
+            'application/linkset+json; profile="https://www.rfc-editor.org/info/rfc9727"',
+        ),
+    ],
+)
+@pytest.mark.parametrize("tail", ['text/plain;p="unfinished', 'text/plain;p="escaped\\'])
+def test_completed_accept_ranges_survive_an_incomplete_final_range(
+    client: TestClient, path: str, accepted: str, expected_media: str, tail: str
+) -> None:
+    response = client.get(path, headers={"Accept": f"{accepted}, {tail}"})
+    assert response.status_code == 200
+    assert response.headers["Content-Type"] == expected_media
+    if path == "/health":
+        body = cbor2.loads(response.content) if expected_media == "application/cbor" else response.json()
+        assert body == {"status": "healthy"}
+
+
+def test_incomplete_accept_tail_preserves_error_preferences_and_success_exclusions(client: TestClient) -> None:
+    error = client.get("/not-a-route", headers={"Accept": 'application/cbor, text/plain;p="unfinished'})
+    assert error.status_code == 404
+    assert error.headers["Content-Type"] == "application/cbor"
+    assert cbor2.loads(error.content)["code"] == "not_found"
+    rejected = client.get("/health", headers={"Accept": 'application/json;q=0, */*;q=1, text/plain;p="unfinished'})
+    _problem(rejected, 406, "not_acceptable")
+    _problem(client.get("/health", headers={"Accept": 'application/json;p="unfinished'}), 406, "not_acceptable")
+    _problem(
+        client.post(
+            "/v1/hello", content=b'{"name":"Ada"}', headers={"Content-Type": 'application/json;charset="utf-8'}
+        ),
+        415,
+        "unsupported_media_type",
+    )
+
+
+@pytest.mark.parametrize("payload", [{}, [], {"name": "Ada", "extra": True}, {"name": "Ada", "firstName": "private"}])
+def test_root_and_unknown_member_errors_omit_unusable_sources(client: TestClient, payload: object) -> None:
+    response = client.post("/v1/hello", json=payload)
+    problem = _problem(response, 422, "validation_failed")
+    assert all("source" not in issue for issue in cast("list[dict[str, object]]", problem["errors"]))
+    assert "private" not in response.text
+
+
+def test_present_invalid_member_keeps_its_resolvable_source(client: TestClient) -> None:
+    response = client.post("/v1/hello", json={"name": None})
+    problem = _problem(response, 422, "validation_failed")
+    assert problem["errors"] == [{"detail": "Request field is invalid", "source": {"pointer": "/name"}}]

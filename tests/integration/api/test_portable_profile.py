@@ -311,7 +311,7 @@ def test_numeric_unknown_members_are_redacted_bounded_and_side_effect_free(
         headers={"Authorization": "ignored", "Content-Type": content_type},
     )
     problem = _assert_problem(response, 422, "validation_failed")
-    assert problem["errors"] == [{"detail": "Request field is invalid", "source": {"pointer": "/"}}]
+    assert problem["errors"] == [{"detail": "Request field is invalid"}]
     assert rejected_member.encode() not in response.content
     assert len(response.content) < 512
     mock_profile_service.update_profile.assert_not_awaited()
