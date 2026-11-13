@@ -173,6 +173,9 @@ Use the stable `code`, not the prose, for decisions. `422 validation_failed` can
 
 Transient categories include `503 dependency_unavailable`, `502 github_upstream`, `504 github_timeout`, and `429 github_rate_limit`. A GitHub quota response carries `Retry-After` and may carry `X-RateLimit-Reset`. A dependency `503` carries `Retry-After` only when that dependency supplies a policy. Do not infer a global quota, fabricate remaining counts, or assume every `503` authorizes a retry. This application does not implement Idempotency-Key response replay or use X-Request-ID for deduplication.
 
+In-flight dependency calls can continue after the client disconnects. GitHub operations have a 10-second deadline.
+Treat a profile write interrupted by a disconnect as an uncertain outcome and use the recovery steps below.
+
 | Operation | Recovery after a transient or uncertain outcome |
 |---|---|
 | GET | Retry transient failures within a bounded budget; correct permanent errors first. |

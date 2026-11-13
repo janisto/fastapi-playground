@@ -297,6 +297,9 @@ All routes use paths without trailing slashes (`redirect_slashes=False`).
 Protected routes require `Authorization: Bearer <Firebase ID token>`. GitHub routes are deliberately anonymous: the
 application neither reads an ambient GitHub token nor forwards caller credentials.
 
+In-flight dependency calls can continue after the client disconnects. GitHub operations have a 10-second deadline.
+A profile write may still commit after a disconnect, so read the current profile before deciding whether to retry.
+
 ## Development
 
 ### Build and Test
